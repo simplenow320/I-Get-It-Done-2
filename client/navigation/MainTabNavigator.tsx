@@ -7,12 +7,15 @@ import { Platform, StyleSheet } from "react-native";
 import DashboardStackNavigator from "@/navigation/DashboardStackNavigator";
 import FocusStackNavigator from "@/navigation/FocusStackNavigator";
 import ProfileStackNavigator from "@/navigation/ProfileStackNavigator";
+import TeamStackNavigator from "@/navigation/TeamStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
+import { useTaskStore } from "@/stores/TaskStore";
 import { LaneColors } from "@/constants/theme";
 
 export type MainTabParamList = {
   DashboardTab: undefined;
   FocusTab: undefined;
+  TeamTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -20,6 +23,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainTabNavigator() {
   const { theme, isDark } = useTheme();
+  const { settings } = useTaskStore();
 
   return (
     <Tab.Navigator
@@ -67,6 +71,18 @@ export default function MainTabNavigator() {
           ),
         }}
       />
+      {settings.mode === "team" ? (
+        <Tab.Screen
+          name="TeamTab"
+          component={TeamStackNavigator}
+          options={{
+            title: "Team",
+            tabBarIcon: ({ color, size }) => (
+              <Feather name="users" size={size} color={color} />
+            ),
+          }}
+        />
+      ) : null}
       <Tab.Screen
         name="ProfileTab"
         component={ProfileStackNavigator}

@@ -10,9 +10,11 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import SubtaskItem from "@/components/SubtaskItem";
 import ProgressRing from "@/components/ProgressRing";
+import DelegateTaskModal from "@/components/DelegateTaskModal";
+import DelegationNotesModal from "@/components/DelegationNotesModal";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
-import { useTaskStore, Lane } from "@/stores/TaskStore";
+import { useTaskStore, Lane, DelegationStatus } from "@/stores/TaskStore";
 import { useGamification } from "@/stores/GamificationStore";
 
 type RouteParams = {
@@ -26,12 +28,32 @@ const lanes: { lane: Lane; label: string; icon: keyof typeof Feather.glyphMap }[
   { lane: "park", label: "Park", icon: "archive" },
 ];
 
+const STATUS_LABELS: Record<DelegationStatus, string> = {
+  assigned: "Assigned",
+  in_progress: "In Progress",
+  waiting: "Waiting",
+  needs_review: "Needs Review",
+  done: "Done",
+};
+
+const STATUS_COLORS: Record<DelegationStatus, string> = {
+  assigned: "#007AFF",
+  in_progress: "#FF9500",
+  waiting: "#AF52DE",
+  needs_review: "#FF3B30",
+  done: "#34C759",
+};
+
 export default function TaskDetailScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, "TaskDetail">>();
-  const { tasks, updateTask, deleteTask, moveTask, completeTask, addSubtask, toggleSubtask, deleteSubtask } = useTaskStore();
+  const { 
+    tasks, updateTask, deleteTask, moveTask, completeTask, 
+    addSubtask, toggleSubtask, deleteSubtask, 
+    getContactById, undelegateTask, settings
+  } = useTaskStore();
   const { recordSubtaskComplete, recordTaskComplete } = useGamification();
 
   const task = tasks.find((t) => t.id === route.params.taskId);
@@ -40,6 +62,8 @@ export default function TaskDetailScreen() {
   const [notes, setNotes] = useState(task?.notes || "");
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [showSubtaskInput, setShowSubtaskInput] = useState(false);
+  const [showDelegateModal, setShowDelegateModal] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
 
   const handleSave = () => {
     if (!task) return;
@@ -125,6 +149,24 @@ export default function TaskDetailScreen() {
     deleteSubtask(task.id, subtaskId);
   };
 
+  const handleUndelegate = () => {
+    if (!task) return;
+    Alert.alert(
+      "Remove Assignment",
+      "Unassign this task from the team member?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unassign",
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            undelegateTask(task.id);
+          },
+        },
+      ]
+    );
+  };
+
   if (!task) {
     return (
       <ThemedView style={styles.container}>
@@ -138,6 +180,8 @@ export default function TaskDetailScreen() {
   const completedSubtasks = subtasks.filter(s => s.completed).length;
   const progress = subtasks.length > 0 ? completedSubtasks / subtasks.length : 0;
   const laneColor = LaneColors[task.lane].primary;
+  const assignedContact = task.assignedTo ? getContactById(task.assignedTo) : undefined;
+  const isTeamMode = settings.mode === "team";
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -188,6 +232,71 @@ export default function TaskDetailScreen() {
             maxLength={500}
           />
         </View>
+
+        {assignedContact ? (
+          <View style={styles.section}>
+            <ThemedText type="h4" style={styles.sectionTitle}>
+              Delegated To
+            </ThemedText>
+            <View style={[styles.delegationCard, { backgroundColor: theme.backgroundDefault }]}>
+              <Pressable style={styles.delegationInfo} onPress={() => setShowNotesModal(true)}>
+                <View style={[styles.avatar, { backgroundColor: assignedContact.color }]}>
+                  <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600" }}>
+                    {assignedContact.name.charAt(0).toUpperCase()}
+                  </ThemedText>
+                </View>
+                <View style={styles.delegationText}>
+                  <ThemedText type="body" style={{ fontWeight: "500" }}>
+                    {assignedContact.name}
+                  </ThemedText>
+                  {task.delegationStatus ? (
+                    <View style={styles.statusRow}>
+                      <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[task.delegationStatus] }]} />
+                      <ThemedText type="small" style={{ color: STATUS_COLORS[task.delegationStatus] }}>
+                        {STATUS_LABELS[task.delegationStatus]}
+                      </ThemedText>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.notesCount}>
+                  <Feather name="message-circle" size={16} color={theme.textSecondary} />
+                  <ThemedText type="caption" secondary>
+                    {task.delegationNotes?.length || 0}
+                  </ThemedText>
+                </View>
+                <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+              </Pressable>
+              <Pressable
+                style={[styles.undelegateButton, { backgroundColor: theme.backgroundSecondary }]}
+                onPress={handleUndelegate}
+              >
+                <ThemedText type="small" secondary>
+                  Unassign
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        ) : isTeamMode ? (
+          <View style={styles.section}>
+            <Pressable
+              onPress={() => setShowDelegateModal(true)}
+              style={[styles.delegateButton, { backgroundColor: theme.backgroundDefault }]}
+            >
+              <View style={[styles.delegateIcon, { backgroundColor: "#007AFF" }]}>
+                <Feather name="user-plus" size={20} color="#FFFFFF" />
+              </View>
+              <View style={styles.delegateTextContainer}>
+                <ThemedText type="body" style={{ fontWeight: "600" }}>
+                  Hand Off
+                </ThemedText>
+                <ThemedText type="small" secondary>
+                  Delegate this task to a team member
+                </ThemedText>
+              </View>
+              <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+            </Pressable>
+          </View>
+        ) : null}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -319,6 +428,20 @@ export default function TaskDetailScreen() {
           </Pressable>
         </View>
       </KeyboardAwareScrollViewCompat>
+
+      <DelegateTaskModal
+        visible={showDelegateModal}
+        task={task}
+        onClose={() => setShowDelegateModal(false)}
+      />
+      
+      {assignedContact ? (
+        <DelegationNotesModal
+          visible={showNotesModal}
+          task={task}
+          onClose={() => setShowNotesModal(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -373,6 +496,63 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
+  },
+  delegationCard: {
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+  },
+  delegationInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    gap: Spacing.md,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  delegationText: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  notesCount: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  undelegateButton: {
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+  },
+  delegateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.md,
+  },
+  delegateIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  delegateTextContainer: {
+    flex: 1,
   },
   breakDownButton: {
     flexDirection: "row",
