@@ -77,6 +77,11 @@ export default function ProfileScreen() {
     navigation.navigate("ModeSettings");
   };
 
+  const handleHowItWorks = () => {
+    Haptics.selectionAsync();
+    navigation.navigate("HowItWorks");
+  };
+
   const handleThemeChange = (newMode: ThemeMode) => {
     Haptics.selectionAsync();
     setMode(newMode);
@@ -254,26 +259,49 @@ export default function ProfileScreen() {
         <ThemedText type="h4" style={styles.sectionTitle}>
           Quick Actions
         </ThemedText>
-        <Pressable
-          onPress={handleWeeklyReset}
-          style={({ pressed }) => [
-            styles.menuItem,
-            { backgroundColor: theme.backgroundDefault, opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <View style={[styles.menuIcon, { backgroundColor: LaneColors.soon.primary }]}>
-            <Feather name="refresh-cw" size={20} color="#FFFFFF" />
-          </View>
-          <View style={styles.menuContent}>
-            <ThemedText type="body" style={{ fontWeight: "500" }}>
-              Weekly Reset
-            </ThemedText>
-            <ThemedText type="small" secondary>
-              Review your progress
-            </ThemedText>
-          </View>
-          <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-        </Pressable>
+        <View style={[styles.menuGroup, { backgroundColor: theme.backgroundDefault }]}>
+          <Pressable
+            onPress={handleWeeklyReset}
+            style={({ pressed }) => [
+              styles.menuItemInGroup,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: LaneColors.soon.primary }]}>
+              <Feather name="refresh-cw" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.menuContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                Weekly Reset
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                Review your progress
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          </Pressable>
+          <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+          <Pressable
+            onPress={handleHowItWorks}
+            style={({ pressed }) => [
+              styles.menuItemInGroup,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: LaneColors.now.primary }]}>
+              <Feather name="help-circle" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.menuContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                How It Works
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                Features and FAQ
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          </Pressable>
+        </View>
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(400).duration(400)}>

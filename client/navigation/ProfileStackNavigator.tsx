@@ -5,6 +5,7 @@ import ProfileScreen from "@/screens/ProfileScreen";
 import WeeklyResetScreen from "@/screens/WeeklyResetScreen";
 import LaneTimingsSettingsScreen from "@/screens/LaneTimingsSettingsScreen";
 import ModeSettingsScreen from "@/screens/ModeSettingsScreen";
+import HowItWorksScreen from "@/screens/HowItWorksScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 
 export type ProfileStackParamList = {
@@ -12,6 +13,7 @@ export type ProfileStackParamList = {
   WeeklyReset: undefined;
   LaneTimingsSettings: undefined;
   ModeSettings: undefined;
+  HowItWorks: undefined;
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -47,6 +49,13 @@ export default function ProfileStackNavigator() {
         component={ModeSettingsScreen}
         options={{
           title: "Mode",
+        }}
+      />
+      <Stack.Screen
+        name="HowItWorks"
+        component={HowItWorksScreen}
+        options={{
+          title: "How It Works",
         }}
       />
     </Stack.Navigator>
