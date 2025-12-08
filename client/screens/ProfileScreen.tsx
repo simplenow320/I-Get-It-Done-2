@@ -7,6 +7,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
@@ -16,12 +17,13 @@ import { useTaskStore } from "@/stores/TaskStore";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<ProfileStackParamList, "Profile">;
+type ThemeMode = "light" | "dark" | "system";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
-  const { theme } = useTheme();
+  const { theme, isDark, mode, setMode } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const { getCompletedTasks, settings } = useTaskStore();
 
@@ -37,13 +39,24 @@ export default function ProfileScreen() {
     navigation.navigate("WeeklyReset");
   };
 
+  const handleThemeChange = (newMode: ThemeMode) => {
+    Haptics.selectionAsync();
+    setMode(newMode);
+  };
+
+  const themeOptions: { mode: ThemeMode; label: string; icon: string }[] = [
+    { mode: "light", label: "Light", icon: "sun" },
+    { mode: "dark", label: "Dark", icon: "moon" },
+    { mode: "system", label: "Auto", icon: "smartphone" },
+  ];
+
   return (
     <KeyboardAwareScrollViewCompat
       style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
       contentContainerStyle={[
         styles.content,
         {
-          paddingTop: headerHeight + Spacing.xl,
+          paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
         },
       ]}
@@ -76,11 +89,49 @@ export default function ProfileScreen() {
 
       <Animated.View entering={FadeInUp.delay(200).duration(400)}>
         <ThemedText type="h4" style={styles.sectionTitle}>
+          Appearance
+        </ThemedText>
+        <View style={[styles.themeSelector, { backgroundColor: theme.backgroundDefault }]}>
+          {themeOptions.map((option) => (
+            <Pressable
+              key={option.mode}
+              onPress={() => handleThemeChange(option.mode)}
+              style={[
+                styles.themeOption,
+                mode === option.mode && {
+                  backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
+                },
+              ]}
+            >
+              <Feather
+                name={option.icon as any}
+                size={20}
+                color={mode === option.mode ? LaneColors.now.primary : theme.textSecondary}
+              />
+              <ThemedText
+                type="small"
+                style={[
+                  styles.themeLabel,
+                  mode === option.mode && { color: LaneColors.now.primary, fontWeight: "600" },
+                ]}
+              >
+                {option.label}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+      </Animated.View>
+
+      <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+        <ThemedText type="h4" style={styles.sectionTitle}>
           Quick Actions
         </ThemedText>
         <Pressable
           onPress={handleWeeklyReset}
-          style={[styles.menuItem, { backgroundColor: theme.backgroundDefault }]}
+          style={({ pressed }) => [
+            styles.menuItem,
+            { backgroundColor: theme.backgroundDefault, opacity: pressed ? 0.8 : 1 },
+          ]}
         >
           <View style={[styles.menuIcon, { backgroundColor: LaneColors.soon.primary }]}>
             <Feather name="refresh-cw" size={20} color="#FFFFFF" />
@@ -97,12 +148,12 @@ export default function ProfileScreen() {
         </Pressable>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+      <Animated.View entering={FadeInUp.delay(400).duration(400)}>
         <ThemedText type="h4" style={styles.sectionTitle}>
           Settings
         </ThemedText>
         <View style={[styles.menuGroup, { backgroundColor: theme.backgroundDefault }]}>
-          <View style={styles.menuItem}>
+          <View style={styles.menuItemInGroup}>
             <View style={[styles.menuIcon, { backgroundColor: LaneColors.later.primary }]}>
               <Feather name="sliders" size={20} color="#FFFFFF" />
             </View>
@@ -117,7 +168,7 @@ export default function ProfileScreen() {
             <Feather name="chevron-right" size={20} color={theme.textSecondary} />
           </View>
           <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.menuItem}>
+          <View style={styles.menuItemInGroup}>
             <View style={[styles.menuIcon, { backgroundColor: LaneColors.park.primary }]}>
               <Feather name={settings.mode === "solo" ? "user" : "users"} size={20} color="#FFFFFF" />
             </View>
@@ -143,10 +194,10 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Spacing.lg,
+    gap: Spacing.lg,
   },
   statsCard: {
     alignItems: "center",
-    marginBottom: Spacing.xl,
   },
   avatarContainer: {
     width: 80,
@@ -174,16 +225,37 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginBottom: Spacing.sm,
   },
+  themeSelector: {
+    flexDirection: "row",
+    borderRadius: BorderRadius.md,
+    padding: Spacing.xs,
+    gap: Spacing.xs,
+  },
+  themeOption: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    gap: Spacing.xs,
+  },
+  themeLabel: {
+    fontSize: 12,
+  },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
+  },
+  menuItemInGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
   },
   menuGroup: {
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
     overflow: "hidden",
   },
   menuIcon: {

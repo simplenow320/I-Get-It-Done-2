@@ -186,12 +186,11 @@ const styles = StyleSheet.create({
   },
   laneGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: Spacing.sm,
     marginBottom: Spacing.lg,
   },
   laneOverviewCard: {
-    width: "48%",
+    flex: 1,
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     alignItems: "center",

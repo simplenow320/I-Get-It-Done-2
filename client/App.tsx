@@ -12,22 +12,36 @@ import { queryClient } from "@/lib/query-client";
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TaskStoreProvider } from "@/stores/TaskStore";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { useTheme } from "@/hooks/useTheme";
+
+function AppContent() {
+  const { isDark } = useTheme();
+  
+  return (
+    <>
+      <NavigationContainer>
+        <RootStackNavigator />
+      </NavigationContainer>
+      <StatusBar style={isDark ? "light" : "dark"} />
+    </>
+  );
+}
 
 export default function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TaskStoreProvider>
-          <SafeAreaProvider>
-            <GestureHandlerRootView style={styles.root}>
-              <KeyboardProvider>
-                <NavigationContainer>
-                  <RootStackNavigator />
-                </NavigationContainer>
-                <StatusBar style="auto" />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </SafeAreaProvider>
+          <ThemeProvider>
+            <SafeAreaProvider>
+              <GestureHandlerRootView style={styles.root}>
+                <KeyboardProvider>
+                  <AppContent />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </SafeAreaProvider>
+          </ThemeProvider>
         </TaskStoreProvider>
       </QueryClientProvider>
     </ErrorBoundary>

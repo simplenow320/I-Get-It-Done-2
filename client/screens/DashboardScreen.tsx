@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -36,32 +36,66 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-      <View
-        style={[
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
           styles.content,
           {
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
           },
         ]}
+        scrollIndicatorInsets={{ bottom: insets.bottom }}
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.grid}>
-          {lanes.map((lane, index) => (
+          <View style={styles.row}>
             <Animated.View
-              key={lane}
-              entering={FadeInUp.delay(index * 100).duration(400)}
+              entering={FadeInUp.delay(0).duration(400)}
               style={styles.cardWrapper}
             >
               <LaneCard
-                lane={lane}
-                count={getTasksByLane(lane).length}
-                onPress={() => handleLanePress(lane)}
+                lane="now"
+                count={getTasksByLane("now").length}
+                onPress={() => handleLanePress("now")}
               />
             </Animated.View>
-          ))}
+            <Animated.View
+              entering={FadeInUp.delay(100).duration(400)}
+              style={styles.cardWrapper}
+            >
+              <LaneCard
+                lane="soon"
+                count={getTasksByLane("soon").length}
+                onPress={() => handleLanePress("soon")}
+              />
+            </Animated.View>
+          </View>
+          <View style={styles.row}>
+            <Animated.View
+              entering={FadeInUp.delay(200).duration(400)}
+              style={styles.cardWrapper}
+            >
+              <LaneCard
+                lane="later"
+                count={getTasksByLane("later").length}
+                onPress={() => handleLanePress("later")}
+              />
+            </Animated.View>
+            <Animated.View
+              entering={FadeInUp.delay(300).duration(400)}
+              style={styles.cardWrapper}
+            >
+              <LaneCard
+                lane="park"
+                count={getTasksByLane("park").length}
+                onPress={() => handleLanePress("park")}
+              />
+            </Animated.View>
+          </View>
         </View>
-      </View>
-      <FloatingAddButton onPress={handleAddTask} bottom={tabBarHeight + Spacing.xl} />
+      </ScrollView>
+      <FloatingAddButton onPress={handleAddTask} bottom={tabBarHeight + Spacing.lg} />
     </View>
   );
 }
@@ -70,16 +104,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  content: {
     paddingHorizontal: Spacing.lg,
   },
   grid: {
+    gap: Spacing.md,
+  },
+  row: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
+    gap: Spacing.md,
   },
   cardWrapper: {
-    width: "48%",
+    flex: 1,
   },
 });
