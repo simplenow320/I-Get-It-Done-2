@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Pressable, Platform, Alert } from "react-native";
 import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from "expo-audio";
 import { File } from "expo-file-system/next";
+import { fetch as expoFetch } from "expo/fetch";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Animated, { 
@@ -142,7 +143,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
       
-      const response = await fetch(`${apiUrl}/api/transcribe`, {
+      // Use expo/fetch for proper File class handling on native
+      const response = await expoFetch(`${apiUrl}/api/transcribe`, {
         method: "POST",
         body: formData,
         signal: controller.signal,
