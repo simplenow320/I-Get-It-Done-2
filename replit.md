@@ -6,6 +6,7 @@ A premium ADHD-optimized mobile task management app that helps users stay focuse
 ## Current State
 - **Phase**: All 6 Phases Complete (Full MVP)
 - **Status**: Quick Dump, Break It Down, Focus Mode, Focus Timer, Gamification, Enhanced Weekly Reset, and Delegation all implemented
+- **Authentication**: Custom email/password auth with bcrypt hashing, show/hide password toggle, remember me functionality
 - **Design**: Premium iOS 26-inspired liquid glass design with bold gradients
 - **Gamification**: Streak tracking, points/XP system, level progression, achievement unlock notifications
 - **Weekly Reset**: Wins display, cleanup suggestions, future planning, gamification stats integration
@@ -41,12 +42,14 @@ A premium ADHD-optimized mobile task management app that helps users stay focuse
 ### Navigation Structure
 ```
 RootStackNavigator
-├── Landing (Marketing page)
-├── Onboarding
+├── Auth (Unauthenticated)
+│   ├── Login (Email/password with remember me)
+│   └── Register (Email/password with confirmation)
+├── Onboarding (Authenticated, not onboarded)
 │   ├── Welcome
 │   ├── LaneSetup
 │   └── ModeSelection
-└── Main (Tab Navigator)
+└── Main (Authenticated + Onboarded, Tab Navigator)
     ├── Dashboard Tab
     │   ├── Dashboard (4-lane overview + Quick Dump button)
     │   ├── LaneDetail
@@ -59,9 +62,16 @@ RootStackNavigator
     ├── Team Tab (Conditional - only in team mode)
     │   └── TeamHub (Delegation overview + contacts)
     └── Profile Tab
-        ├── Profile (Stats + Gamification)
+        ├── Profile (Stats + Gamification + Sign Out)
         └── WeeklyReset (Enhanced with wins)
 ```
+
+### Authentication System
+- **Login Screen**: Email/password with show/hide toggle, remember me checkbox
+- **Register Screen**: Email/password/confirm password with validation
+- **Password Security**: bcrypt hashing (10 salt rounds)
+- **Session Storage**: AsyncStorage for persistent auth state
+- **Profile Integration**: Email display and Sign Out button
 
 ## ADHD Feature Implementation Plan
 

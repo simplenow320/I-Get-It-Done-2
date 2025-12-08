@@ -44,10 +44,10 @@ export default function RootStackNavigator() {
         <Stack.Screen name="Main" component={MainTabNavigator} />
       ) : (
         <>
+          <Stack.Screen name="Onboarding" component={OnboardingStackNavigator} />
           <Stack.Screen name="Landing" component={LandingScreen} />
           <Stack.Screen name="LearnMore" component={LearnMoreScreen} />
           <Stack.Screen name="FAQ" component={FAQScreen} />
-          <Stack.Screen name="Onboarding" component={OnboardingStackNavigator} />
         </>
       )}
     </Stack.Navigator>
