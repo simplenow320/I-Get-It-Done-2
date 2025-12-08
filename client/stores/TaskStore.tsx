@@ -129,7 +129,12 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
-  const generateId = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+  const generateId = () => {
+    const timestamp = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).substring(2, 10);
+    const randomPart2 = Math.random().toString(36).substring(2, 10);
+    return `${timestamp}-${randomPart}-${randomPart2}`;
+  };
 
   useEffect(() => {
     loadState();
