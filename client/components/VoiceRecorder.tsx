@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Pressable, Platform, Alert } from "react-native";
 import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from "expo-audio";
-import { File } from "expo-file-system/next";
-import { fetch as expoFetch } from "expo/fetch";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Animated, { 
@@ -131,35 +130,49 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const transcribeAudio = async (uri: string) => {
     try {
       console.log("Starting transcription for:", uri);
-      const formData = new FormData();
       
-      // Use expo-file-system File class for proper React Native FormData handling
-      const file = new File(uri);
-      formData.append("audio", file);
-
-      const apiUrl = getApiUrl();
-      console.log("Sending to:", `${apiUrl}/api/transcribe`);
+      // Copy file from cache to documents directory for reliable access
+      const fileName = `recording-${Date.now()}.m4a`;
+      const permanentUri = FileSystem.documentDirectory + fileName;
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-      
-      // Use expo/fetch for proper File class handling on native
-      const response = await expoFetch(`${apiUrl}/api/transcribe`, {
-        method: "POST",
-        body: formData,
-        signal: controller.signal,
+      console.log("Copying to permanent location:", permanentUri);
+      await FileSystem.copyAsync({
+        from: uri,
+        to: permanentUri,
       });
       
-      clearTimeout(timeoutId);
-      console.log("Response status:", response.status);
+      // Verify file exists and has content
+      const fileInfo = await FileSystem.getInfoAsync(permanentUri);
+      console.log("File info:", JSON.stringify(fileInfo));
+      
+      if (!fileInfo.exists || fileInfo.size === 0) {
+        throw new Error("Recording file not found or empty");
+      }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+      const apiUrl = getApiUrl();
+      const uploadUrl = `${apiUrl}/api/transcribe`;
+      console.log("Uploading to:", uploadUrl);
+      
+      // Use FileSystem.uploadAsync for reliable file uploads on iOS/Android
+      const response = await FileSystem.uploadAsync(uploadUrl, permanentUri, {
+        fieldName: "audio",
+        httpMethod: "POST",
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        mimeType: "audio/m4a",
+      });
+      
+      console.log("Response status:", response.status);
+      
+      // Clean up the permanent file after upload
+      await FileSystem.deleteAsync(permanentUri, { idempotent: true });
+
+      if (response.status !== 200) {
+        const errorData = JSON.parse(response.body || "{}");
         console.error("Transcription API error:", errorData);
         throw new Error(errorData.error || "Transcription failed");
       }
 
-      const data = await response.json();
+      const data = JSON.parse(response.body);
       console.log("Transcription result:", data);
       
       if (data.text && data.text.trim()) {
@@ -170,11 +183,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       }
     } catch (error: any) {
       console.error("Transcription error:", error);
-      if (error.name === 'AbortError') {
-        onError?.("Request timed out");
-      } else {
-        onError?.("Couldn't understand audio");
-      }
+      onError?.("Couldn't understand audio");
     } finally {
       setState("idle");
     }
