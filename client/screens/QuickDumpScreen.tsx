@@ -10,6 +10,7 @@ import { useNavigation } from "@react-navigation/native";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import Button from "@/components/Button";
+import VoiceRecorder from "@/components/VoiceRecorder";
 import { useTheme } from "@/hooks/useTheme";
 import { useTaskStore, Lane, UnsortedTask } from "@/stores/TaskStore";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
@@ -34,6 +35,28 @@ export default function QuickDumpScreen() {
   
   const [phase, setPhase] = useState<Phase>("capture");
   const [inputValue, setInputValue] = useState("");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const handleVoiceTranscription = useCallback((text: string) => {
+    setVoiceError(null);
+    const lines = text.split(/[.,!?]\s+/).filter(line => line.trim().length > 0);
+    if (lines.length > 1) {
+      lines.forEach(line => {
+        if (line.trim()) {
+          addUnsortedTask(line.trim());
+        }
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (text.trim()) {
+      addUnsortedTask(text.trim());
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [addUnsortedTask]);
+
+  const handleVoiceError = useCallback((error: string) => {
+    setVoiceError(error);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  }, []);
 
   const handleAddTask = useCallback(() => {
     if (inputValue.trim()) {
@@ -159,6 +182,11 @@ export default function QuickDumpScreen() {
             onSubmitEditing={handleAddTask}
             blurOnSubmit={false}
           />
+          <VoiceRecorder
+            onTranscriptionComplete={handleVoiceTranscription}
+            onError={handleVoiceError}
+            compact
+          />
           <Pressable
             onPress={handleAddTask}
             disabled={!inputValue.trim()}
@@ -170,6 +198,13 @@ export default function QuickDumpScreen() {
             <Feather name="plus" size={24} color={inputValue.trim() ? "#FFFFFF" : theme.textSecondary} />
           </Pressable>
         </View>
+        {voiceError ? (
+          <Animated.View entering={FadeInUp.duration(200)} style={styles.errorContainer}>
+            <ThemedText type="small" style={{ color: LaneColors.now.primary }}>
+              {voiceError}
+            </ThemedText>
+          </Animated.View>
+        ) : null}
 
         {unsortedTasks.length > 0 ? (
           <>
@@ -315,5 +350,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: Spacing.md,
     marginTop: Spacing.md,
+  },
+  errorContainer: {
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
   },
 });

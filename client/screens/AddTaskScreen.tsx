@@ -8,6 +8,7 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import { LaneSelector } from "@/components/LaneSelector";
+import VoiceRecorder from "@/components/VoiceRecorder";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
@@ -26,9 +27,21 @@ export default function AddTaskScreen() {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedLane, setSelectedLane] = useState<Lane | null>(route.params?.defaultLane || null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const titleInputRef = useRef<TextInput>(null);
 
   const isValid = title.trim().length > 0 && selectedLane !== null;
+
+  const handleVoiceTranscription = (text: string) => {
+    setVoiceError(null);
+    setTitle(text);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleVoiceError = (error: string) => {
+    setVoiceError(error);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  };
 
   useEffect(() => {
     setTimeout(() => {
@@ -84,7 +97,21 @@ export default function AddTaskScreen() {
             multiline
             maxLength={200}
           />
+          <View style={styles.voiceContainer}>
+            <VoiceRecorder
+              onTranscriptionComplete={handleVoiceTranscription}
+              onError={handleVoiceError}
+              compact
+            />
+          </View>
         </View>
+        {voiceError ? (
+          <View style={styles.errorContainer}>
+            <ThemedText type="small" style={{ color: LaneColors.now.primary }}>
+              {voiceError}
+            </ThemedText>
+          </View>
+        ) : null}
 
         <View style={[styles.inputContainer, { backgroundColor: theme.backgroundDefault }]}>
           <TextInput
@@ -152,12 +179,23 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.md,
+    position: "relative",
   },
   titleInput: {
     fontSize: 20,
     fontWeight: "500",
     minHeight: 60,
     textAlignVertical: "top",
+    paddingRight: 50,
+  },
+  voiceContainer: {
+    position: "absolute",
+    right: Spacing.md,
+    top: Spacing.md,
+  },
+  errorContainer: {
+    paddingHorizontal: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   notesInput: {
     fontSize: 16,
