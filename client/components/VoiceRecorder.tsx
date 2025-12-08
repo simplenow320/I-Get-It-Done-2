@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Pressable, Platform, Alert } from "react-native";
 import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from "expo-audio";
+import { File } from "expo-file-system/next";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Animated, { 
@@ -93,53 +94,71 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   };
 
   const stopRecording = async () => {
-    try {
-      setState("processing");
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setState("processing");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    try {
       await audioRecorder.stop();
-      
+    } catch (error) {
+      console.error("Failed to stop recorder:", error);
+      onError?.("Couldn't stop recording");
+      setState("idle");
+      return;
+    }
+    
+    try {
       await setAudioModeAsync({
         allowsRecording: false,
       });
-      
-      const uri = audioRecorder.uri;
-
-      if (!uri) {
-        throw new Error("No recording URI");
-      }
-
-      await transcribeAudio(uri);
     } catch (error) {
-      console.error("Failed to stop recording:", error);
-      onError?.("Couldn't process audio");
-      setState("idle");
+      console.error("Failed to reset audio mode:", error);
     }
+    
+    const uri = audioRecorder.uri;
+    console.log("Recording URI:", uri);
+
+    if (!uri) {
+      console.error("No recording URI available");
+      onError?.("Recording failed");
+      setState("idle");
+      return;
+    }
+
+    await transcribeAudio(uri);
   };
 
   const transcribeAudio = async (uri: string) => {
     try {
+      console.log("Starting transcription for:", uri);
       const formData = new FormData();
       
-      const filename = uri.split("/").pop() || "recording.m4a";
-      formData.append("audio", {
-        uri: uri,
-        type: "audio/m4a",
-        name: filename,
-      } as any);
+      // Use expo-file-system File class for proper React Native FormData handling
+      const file = new File(uri);
+      formData.append("audio", file);
 
       const apiUrl = getApiUrl();
+      console.log("Sending to:", `${apiUrl}/api/transcribe`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const response = await fetch(`${apiUrl}/api/transcribe`, {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
+      console.log("Response status:", response.status);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error("Transcription API error:", errorData);
         throw new Error(errorData.error || "Transcription failed");
       }
 
       const data = await response.json();
+      console.log("Transcription result:", data);
       
       if (data.text && data.text.trim()) {
         onTranscriptionComplete(data.text.trim());
@@ -149,7 +168,11 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       }
     } catch (error: any) {
       console.error("Transcription error:", error);
-      onError?.("Couldn't understand audio");
+      if (error.name === 'AbortError') {
+        onError?.("Request timed out");
+      } else {
+        onError?.("Couldn't understand audio");
+      }
     } finally {
       setState("idle");
     }
