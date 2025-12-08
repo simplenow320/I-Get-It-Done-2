@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, Modal, TextInput, FlatList, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { StyleSheet, View, Pressable, Modal, TextInput, FlatList, KeyboardAvoidingView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -93,13 +93,10 @@ export default function DelegationNotesModal({ visible, task, onClose }: Delegat
       <KeyboardAvoidingView 
         style={styles.overlay} 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        <ScrollView 
-          style={{ flex: 1 }} 
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={[styles.content, { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.lg }]}>
+        <Pressable style={styles.overlayTouchable} onPress={onClose} />
+        <View style={[styles.content, { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.lg }]}>
             <View style={styles.header}>
               <View style={styles.headerLeft}>
                 <ThemedText type="h3">Delegation Log</ThemedText>
@@ -239,7 +236,6 @@ export default function DelegationNotesModal({ visible, task, onClose }: Delegat
               ) : null}
             </View>
           </View>
-        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -250,6 +246,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
+  },
+  overlayTouchable: {
+    flex: 1,
   },
   content: {
     borderTopLeftRadius: BorderRadius.xl,
