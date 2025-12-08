@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { StyleSheet, View, Pressable, Platform, Alert } from "react-native";
-import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from "expo-audio";
+import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -30,7 +30,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const [state, setState] = useState<RecordingState>("idle");
   const [permissionStatus, setPermissionStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recordingRef = useRef<Audio.Recording | null>(null);
   
   const pulseScale = useSharedValue(1);
   const buttonScale = useSharedValue(1);
@@ -56,11 +56,11 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const checkPermissionOnce = async () => {
     try {
-      const status = await AudioModule.getRecordingPermissionsAsync();
-      if (status.granted) {
+      const { status } = await Audio.getPermissionsAsync();
+      if (status === "granted") {
         setPermissionStatus("granted");
-      } else if (status.canAskAgain === false) {
-        setPermissionStatus("denied");
+      } else {
+        setPermissionStatus("unknown");
       }
     } catch (error) {
       console.error("Permission check error:", error);
@@ -70,8 +70,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const startRecording = async () => {
     try {
       if (permissionStatus !== "granted") {
-        const status = await AudioModule.requestRecordingPermissionsAsync();
-        if (!status.granted) {
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status !== "granted") {
           setPermissionStatus("denied");
           onError?.("Tap to allow mic access");
           return;
@@ -79,12 +79,16 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         setPermissionStatus("granted");
       }
 
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
       });
 
-      await audioRecorder.record();
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      
+      recordingRef.current = recording;
       setState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
@@ -97,8 +101,16 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     setState("processing");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    const recording = recordingRef.current;
+    if (!recording) {
+      console.error("No recording reference");
+      onError?.("Recording failed");
+      setState("idle");
+      return;
+    }
+
     try {
-      await audioRecorder.stop();
+      await recording.stopAndUnloadAsync();
     } catch (error) {
       console.error("Failed to stop recorder:", error);
       onError?.("Couldn't stop recording");
@@ -107,15 +119,16 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
     
     try {
-      await setAudioModeAsync({
-        allowsRecording: false,
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
       });
     } catch (error) {
       console.error("Failed to reset audio mode:", error);
     }
     
-    const uri = audioRecorder.uri;
+    const uri = recording.getURI();
     console.log("Recording URI:", uri);
+    recordingRef.current = null;
 
     if (!uri) {
       console.error("No recording URI available");
@@ -127,80 +140,20 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     await transcribeAudio(uri);
   };
 
-  const findActualRecordingFile = async (originalUri: string): Promise<string | null> => {
-    try {
-      // Extract the ExpoAudio directory from the original URI
-      const cacheDir = FileSystem.cacheDirectory;
-      if (!cacheDir) return null;
-      
-      const expoAudioDir = cacheDir + "ExpoAudio/";
-      console.log("Searching for recordings in:", expoAudioDir);
-      
-      // Check if directory exists
-      const dirInfo = await FileSystem.getInfoAsync(expoAudioDir);
-      if (!dirInfo.exists) {
-        console.log("ExpoAudio directory does not exist");
-        return null;
-      }
-      
-      // Read all files in the directory
-      const files = await FileSystem.readDirectoryAsync(expoAudioDir);
-      console.log("Files in ExpoAudio:", files);
-      
-      // Find the most recent non-zero file
-      let latestFile: string | null = null;
-      let latestTime = 0;
-      
-      for (const file of files) {
-        if (!file.endsWith(".m4a")) continue;
-        
-        const filePath = expoAudioDir + file;
-        const info = await FileSystem.getInfoAsync(filePath);
-        
-        if (info.exists && info.size && info.size > 0) {
-          const modTime = info.modificationTime || 0;
-          if (modTime > latestTime) {
-            latestTime = modTime;
-            latestFile = filePath;
-          }
-        }
-      }
-      
-      if (latestFile) {
-        console.log("Found actual recording file:", latestFile);
-      }
-      return latestFile;
-    } catch (error) {
-      console.error("Error finding recording file:", error);
-      return null;
-    }
-  };
-
   const transcribeAudio = async (uri: string) => {
     try {
       console.log("Starting transcription for:", uri);
       
-      // First check if the original URI works
-      let actualUri = uri;
-      const originalInfo = await FileSystem.getInfoAsync(uri);
-      
-      if (!originalInfo.exists || !originalInfo.size || originalInfo.size === 0) {
-        console.log("Original URI not accessible, searching for actual file...");
-        const foundUri = await findActualRecordingFile(uri);
-        if (!foundUri) {
-          throw new Error("Could not find recording file");
-        }
-        actualUri = foundUri;
-      }
-      
-      console.log("Using recording URI:", actualUri);
-      
-      // Verify file has content
-      const fileInfo = await FileSystem.getInfoAsync(actualUri);
+      // Verify file exists and has content
+      const fileInfo = await FileSystem.getInfoAsync(uri);
       console.log("File info:", JSON.stringify(fileInfo));
       
-      if (!fileInfo.exists || !fileInfo.size || fileInfo.size === 0) {
-        throw new Error("Recording file not found or empty");
+      if (!fileInfo.exists) {
+        throw new Error("Recording file not found");
+      }
+      
+      if (fileInfo.size === 0) {
+        throw new Error("Recording file is empty");
       }
 
       const apiUrl = getApiUrl();
@@ -208,7 +161,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       console.log("Uploading to:", uploadUrl);
       
       // Use FileSystem.uploadAsync for reliable file uploads on iOS/Android
-      const response = await FileSystem.uploadAsync(uploadUrl, actualUri, {
+      const response = await FileSystem.uploadAsync(uploadUrl, uri, {
         fieldName: "audio",
         httpMethod: "POST",
         uploadType: FileSystem.FileSystemUploadType.MULTIPART,
@@ -245,6 +198,14 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       buttonScale.value = withSpring(1);
     });
 
+    if (Platform.OS === "web") {
+      Alert.alert(
+        "Voice Recording",
+        "Voice recording works best in Expo Go. Open the app on your phone to use this feature."
+      );
+      return;
+    }
+
     if (state === "idle") {
       startRecording();
     } else if (state === "recording") {
@@ -252,60 +213,70 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
   };
 
-  const handleWebPress = () => {
-    onError?.("Use Expo Go for voice");
-  };
-
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
-    opacity: state === "recording" ? 0.3 : 0,
+    opacity: 2 - pulseScale.value,
   }));
 
-  const buttonStyle = useAnimatedStyle(() => ({
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: buttonScale.value }],
   }));
 
-  if (Platform.OS === "web") {
-    return (
-      <Pressable 
-        onPress={handleWebPress}
-        style={[styles.webButton, { backgroundColor: theme.backgroundSecondary }]}
-      >
-        <Feather name="mic-off" size={20} color={theme.textSecondary} />
-      </Pressable>
-    );
-  }
+  const size = compact ? 44 : 56;
+  const iconSize = compact ? 20 : 24;
 
-  const isDisabled = state === "processing";
-  const buttonColor = state === "recording" 
-    ? LaneColors.now.primary 
-    : state === "processing"
-    ? theme.backgroundSecondary
-    : LaneColors.soon.primary;
-
-  const buttonSize = compact ? 44 : 52;
+  const getButtonColor = () => {
+    if (state === "recording") return LaneColors.now.primary;
+    if (state === "processing") return theme.colors.textSecondary;
+    return LaneColors.soon.primary;
+  };
 
   return (
     <View style={styles.container}>
-      <Animated.View 
-        style={[
-          styles.pulse, 
-          { backgroundColor: LaneColors.now.primary, width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }, 
-          pulseStyle
-        ]} 
-      />
-      <Animated.View style={buttonStyle}>
+      {state === "recording" && (
+        <Animated.View
+          style={[
+            styles.pulse,
+            pulseStyle,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              backgroundColor: LaneColors.now.primary,
+            },
+          ]}
+        />
+      )}
+      
+      <Animated.View style={buttonAnimatedStyle}>
         <Pressable
           onPress={handlePress}
-          disabled={isDisabled}
-          style={[styles.button, { backgroundColor: buttonColor, width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
+          disabled={state === "processing"}
+          style={[
+            styles.button,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              backgroundColor: getButtonColor(),
+            },
+          ]}
         >
           {state === "processing" ? (
-            <Feather name="loader" size={compact ? 20 : 24} color={theme.textSecondary} />
-          ) : state === "recording" ? (
-            <Feather name="square" size={compact ? 16 : 20} color="#FFFFFF" />
+            <Animated.View
+              style={[
+                styles.processingDot,
+                {
+                  backgroundColor: theme.colors.background,
+                },
+              ]}
+            />
           ) : (
-            <Feather name="mic" size={compact ? 20 : 24} color="#FFFFFF" />
+            <Feather
+              name={state === "recording" ? "square" : "mic"}
+              size={iconSize}
+              color="#FFFFFF"
+            />
           )}
         </Pressable>
       </Animated.View>
@@ -325,11 +296,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  webButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+  processingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
 });
