@@ -69,7 +69,7 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
   { id: "first_task", title: "First Step", description: "Complete your first task", icon: "award" },
   { id: "streak_3", title: "On a Roll", description: "Maintain a 3-day streak", icon: "zap" },
   { id: "streak_7", title: "Week Warrior", description: "Maintain a 7-day streak", icon: "star" },
-  { id: "streak_30", title: "Month Master", description: "Maintain a 30-day streak", icon: "crown" },
+  { id: "streak_30", title: "Month Master", description: "Maintain a 30-day streak", icon: "award" },
   { id: "focus_60", title: "Deep Work", description: "Accumulate 60 focus minutes", icon: "target" },
   { id: "focus_300", title: "Flow State", description: "Accumulate 300 focus minutes", icon: "sun" },
   { id: "tasks_10", title: "Getting Things Done", description: "Complete 10 tasks", icon: "check-circle" },
