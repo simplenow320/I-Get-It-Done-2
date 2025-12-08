@@ -9,6 +9,8 @@ export const users = pgTable("users", {
     .default(sql`gen_random_uuid()::text`),
   email: varchar("email", { length: 255 }).unique(),
   deviceId: varchar("device_id", { length: 255 }),
+  pushToken: varchar("push_token", { length: 255 }),
+  notificationsEnabled: boolean("notifications_enabled").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

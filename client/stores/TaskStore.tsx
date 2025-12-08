@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest } from "@/lib/query-client";
+import { scheduleOverdueNotification } from "@/lib/notifications";
 
 export type Lane = "now" | "soon" | "later" | "park";
 export type ReminderType = "soft" | "strong" | "persistent" | "none";
@@ -75,6 +76,7 @@ interface TaskStoreContext {
   unsortedTasks: UnsortedTask[];
   contacts: Contact[];
   settings: UserSettings;
+  userId: string | null;
   addTask: (title: string, lane: Lane, notes?: string) => void;
   addUnsortedTask: (title: string) => void;
   addMultipleUnsortedTasks: (titles: string[]) => void;
@@ -277,6 +279,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     try {
       if (isNew) {
         await apiRequest("POST", "/api/tasks", {
+          id: task.id,
           userId,
           title: task.title,
           notes: task.notes,
@@ -318,6 +321,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     try {
       if (isNew) {
         await apiRequest("POST", "/api/subtasks", {
+          id: subtask.id,
           taskId,
           title: subtask.title,
         });
@@ -344,6 +348,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     if (!userId) return;
     try {
       await apiRequest("POST", "/api/contacts", {
+        id: contact.id,
         userId,
         name: contact.name,
         role: contact.role,
@@ -688,6 +693,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const checkOverdueTasks = useCallback((): { movedCount: number; tasks: Task[] } => {
     const now = new Date();
     const movedTasks: Task[] = [];
+    const newlyOverdueTasks: Task[] = [];
     
     setTasks((prev) =>
       prev.map((task) => {
@@ -705,6 +711,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           } else if (task.lane === "now" && !task.isOverdue) {
             const updated = { ...task, isOverdue: true };
             movedTasks.push(updated);
+            newlyOverdueTasks.push(updated);
             return updated;
           }
         }
@@ -713,6 +720,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     );
     
     movedTasks.forEach((task) => saveTaskToApi(task));
+    newlyOverdueTasks.forEach((task) => {
+      scheduleOverdueNotification(task.title, task.id);
+    });
     
     return { movedCount: movedTasks.length, tasks: movedTasks };
   }, [calculateDueDate]);
@@ -760,6 +770,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         getDelegatedTasks,
         getDelegatedTasksByContact,
         checkOverdueTasks,
+        userId,
       }}
     >
       {children}

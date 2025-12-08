@@ -13,6 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import StreakBadge from "@/components/StreakBadge";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore } from "@/stores/TaskStore";
@@ -44,7 +45,7 @@ export default function ProfileScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme, isDark, mode, setMode } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { settings } = useTaskStore();
+  const { settings, userId } = useTaskStore();
   const {
     currentStreak,
     longestStreak,
@@ -331,6 +332,13 @@ export default function ProfileScreen() {
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(400).duration(400)}>
+        <ThemedText type="h4" style={styles.sectionTitle}>
+          Notifications
+        </ThemedText>
+        {userId ? <NotificationSettings userId={userId} /> : null}
+      </Animated.View>
+
+      <Animated.View entering={FadeInUp.delay(450).duration(400)}>
         <ThemedText type="h4" style={styles.sectionTitle}>
           Settings
         </ThemedText>

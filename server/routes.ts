@@ -131,9 +131,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/tasks", async (req: Request, res: Response) => {
     try {
-      const { userId, title, notes, lane, reminderType, dueDate, assignedTo } = req.body;
+      const { id, userId, title, notes, lane, reminderType, dueDate, assignedTo } = req.body;
       
-      const result = await db.insert(tasks).values({
+      const taskValues: any = {
         userId,
         title,
         notes: notes || null,
@@ -141,7 +141,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reminderType: reminderType || "soft",
         dueDate: dueDate ? new Date(dueDate) : null,
         assignedTo: assignedTo || null,
-      }).returning();
+      };
+      
+      if (id) {
+        taskValues.id = id;
+      }
+      
+      const result = await db.insert(tasks).values(taskValues).returning();
       
       res.json({ task: { ...result[0], subtasks: [], delegationNotes: [] } });
     } catch (error) {
@@ -190,13 +196,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/subtasks", async (req: Request, res: Response) => {
     try {
-      const { taskId, title } = req.body;
+      const { id, taskId, title } = req.body;
       
-      const result = await db.insert(subtasks).values({
+      const subtaskValues: any = {
         taskId,
         title,
         completed: false,
-      }).returning();
+      };
+      
+      if (id) {
+        subtaskValues.id = id;
+      }
+      
+      const result = await db.insert(subtasks).values(subtaskValues).returning();
       
       res.json({ subtask: result[0] });
     } catch (error) {
@@ -247,14 +259,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/contacts", async (req: Request, res: Response) => {
     try {
-      const { userId, name, role, color } = req.body;
+      const { id, userId, name, role, color } = req.body;
       
-      const result = await db.insert(contacts).values({
+      const contactValues: any = {
         userId,
         name,
         role: role || null,
         color: color || "#007AFF",
-      }).returning();
+      };
+      
+      if (id) {
+        contactValues.id = id;
+      }
+      
+      const result = await db.insert(contacts).values(contactValues).returning();
       
       res.json({ contact: result[0] });
     } catch (error) {
@@ -288,6 +306,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Create delegation note error:", error);
       res.status(500).json({ error: "Failed to create delegation note" });
+    }
+  });
+
+  app.put("/api/users/:id/push-token", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { pushToken, notificationsEnabled } = req.body;
+      
+      const updates: any = {};
+      if (pushToken !== undefined) updates.pushToken = pushToken;
+      if (notificationsEnabled !== undefined) updates.notificationsEnabled = notificationsEnabled;
+      
+      const result = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+      
+      if (result.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      res.json({ user: result[0] });
+    } catch (error) {
+      console.error("Update push token error:", error);
+      res.status(500).json({ error: "Failed to update push token" });
     }
   });
 
