@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { supabase } from "@/lib/supabase";
+import { apiRequest } from "@/lib/query-client";
 
 export type Lane = "now" | "soon" | "later" | "park";
 export type ReminderType = "soft" | "strong" | "persistent" | "none";
@@ -173,7 +173,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         if (parsed.unsortedTasks) setUnsortedTasks(parsed.unsortedTasks);
       }
 
-      await loadFromSupabase();
+      await loadFromDatabase();
       setIsLoaded(true);
     } catch (error) {
       console.error("Failed to load task store:", error);
@@ -181,84 +181,79 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadFromSupabase = async () => {
+  const loadFromDatabase = async () => {
     try {
-      const { data: users } = await supabase.from("users").select("*").limit(1);
-      let currentUserId = users && users.length > 0 ? users[0].id : null;
+      const storedUserId = await AsyncStorage.getItem("@user_id");
+      let currentUserId = storedUserId;
       
       if (!currentUserId) {
-        const { data: newUser, error: userError } = await supabase
-          .from("users")
-          .insert({ email: "local@device.app" })
-          .select()
-          .single();
-        if (newUser) currentUserId = newUser.id;
+        const deviceId = await AsyncStorage.getItem("@device_id") || generateId();
+        await AsyncStorage.setItem("@device_id", deviceId);
+        
+        const response = await apiRequest("POST", "/api/users/init", { deviceId });
+        const data = await response.json();
+        currentUserId = data.user?.id;
+        
+        if (currentUserId) {
+          await AsyncStorage.setItem("@user_id", currentUserId);
+        }
       }
       
       if (currentUserId) {
         setUserId(currentUserId);
 
-        const { data: dbTasks } = await supabase
-          .from("tasks")
-          .select("*")
-          .eq("user_id", currentUserId)
-          .order("created_at", { ascending: false });
+        const tasksResponse = await apiRequest("GET", `/api/tasks/${currentUserId}`);
+        const tasksData = await tasksResponse.json();
 
-        if (dbTasks && dbTasks.length > 0) {
-          const taskIds = dbTasks.map(t => t.id);
-          const { data: dbSubtasks } = await supabase
-            .from("subtasks")
-            .select("*")
-            .in("task_id", taskIds);
-
-          const subtaskMap = new Map<string, Subtask[]>();
-          if (dbSubtasks) {
-            dbSubtasks.forEach(st => {
-              const existing = subtaskMap.get(st.task_id) || [];
-              existing.push({
-                id: st.id,
-                title: st.title,
-                completed: st.completed,
-              });
-              subtaskMap.set(st.task_id, existing);
-            });
-          }
-
-          const loadedTasks: Task[] = dbTasks.map(t => ({
+        if (tasksData.tasks && tasksData.tasks.length > 0) {
+          const loadedTasks: Task[] = tasksData.tasks.map((t: any) => ({
             id: t.id,
             title: t.title,
             notes: t.notes || undefined,
             lane: t.lane as Lane,
-            createdAt: new Date(t.created_at),
-            dueDate: t.due_date ? new Date(t.due_date) : undefined,
-            completedAt: t.completed_at ? new Date(t.completed_at) : undefined,
-            subtasks: subtaskMap.get(t.id) || [],
-            reminderType: (t.reminder_type || "soft") as ReminderType,
-            focusTimeMinutes: 0,
-            isOverdue: t.is_overdue || false,
+            createdAt: parseDate(t.createdAt),
+            dueDate: parseDateOptional(t.dueDate),
+            completedAt: parseDateOptional(t.completedAt),
+            subtasks: (t.subtasks || []).map((st: any) => ({
+              id: st.id,
+              title: st.title,
+              completed: st.completed,
+            })),
+            reminderType: (t.reminderType || "soft") as ReminderType,
+            focusTimeMinutes: t.focusTimeMinutes || 0,
+            isOverdue: t.isOverdue || false,
+            assignedTo: t.assignedTo || undefined,
+            delegationStatus: t.delegationStatus || undefined,
+            delegatedAt: parseDateOptional(t.delegatedAt),
+            lastDelegationUpdate: parseDateOptional(t.lastDelegationUpdate),
+            delegationNotes: (t.delegationNotes || []).map((n: any) => ({
+              id: n.id,
+              type: n.type,
+              text: n.text,
+              createdAt: parseDate(n.createdAt),
+              author: "owner" as const,
+            })),
           }));
 
           setTasks(loadedTasks);
         }
 
-        const { data: dbContacts } = await supabase
-          .from("contacts")
-          .select("*")
-          .eq("user_id", currentUserId);
+        const contactsResponse = await apiRequest("GET", `/api/contacts/${currentUserId}`);
+        const contactsData = await contactsResponse.json();
 
-        if (dbContacts && dbContacts.length > 0) {
-          const loadedContacts: Contact[] = dbContacts.map(c => ({
+        if (contactsData.contacts && contactsData.contacts.length > 0) {
+          const loadedContacts: Contact[] = contactsData.contacts.map((c: any) => ({
             id: c.id,
             name: c.name,
             role: c.role || undefined,
             color: c.color,
-            createdAt: new Date(),
+            createdAt: parseDate(c.createdAt),
           }));
           setContacts(loadedContacts);
         }
       }
     } catch (error) {
-      console.error("Failed to load from Supabase:", error);
+      console.error("Failed to load from database:", error);
     }
   };
 
@@ -276,75 +271,105 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveTaskToSupabase = async (task: Task) => {
+  const saveTaskToApi = async (task: Task, isNew: boolean = false) => {
     if (!userId) return;
     try {
-      await supabase.from("tasks").upsert({
-        id: task.id,
-        user_id: userId,
-        title: task.title,
-        notes: task.notes || null,
-        lane: task.lane,
-        reminder_type: task.reminderType,
-        is_overdue: task.isOverdue,
-        created_at: task.createdAt.toISOString(),
-        completed_at: task.completedAt ? task.completedAt.toISOString() : null,
-        due_date: task.dueDate ? task.dueDate.toISOString() : null,
-      });
+      if (isNew) {
+        await apiRequest("POST", "/api/tasks", {
+          userId,
+          title: task.title,
+          notes: task.notes,
+          lane: task.lane,
+          reminderType: task.reminderType,
+          dueDate: task.dueDate?.toISOString(),
+          assignedTo: task.assignedTo,
+        });
+      } else {
+        await apiRequest("PUT", `/api/tasks/${task.id}`, {
+          title: task.title,
+          notes: task.notes,
+          lane: task.lane,
+          reminderType: task.reminderType,
+          isOverdue: task.isOverdue,
+          completedAt: task.completedAt?.toISOString(),
+          dueDate: task.dueDate?.toISOString(),
+          focusTimeMinutes: task.focusTimeMinutes,
+          assignedTo: task.assignedTo,
+          delegationStatus: task.delegationStatus,
+          delegatedAt: task.delegatedAt?.toISOString(),
+          lastDelegationUpdate: task.lastDelegationUpdate?.toISOString(),
+        });
+      }
     } catch (error) {
-      console.error("Failed to save task to Supabase:", error);
+      console.error("Failed to save task:", error);
     }
   };
 
-  const deleteTaskFromSupabase = async (taskId: string) => {
+  const deleteTaskFromApi = async (taskId: string) => {
     try {
-      await supabase.from("tasks").delete().eq("id", taskId);
+      await apiRequest("DELETE", `/api/tasks/${taskId}`);
     } catch (error) {
-      console.error("Failed to delete task from Supabase:", error);
+      console.error("Failed to delete task:", error);
     }
   };
 
-  const saveSubtaskToSupabase = async (taskId: string, subtask: Subtask) => {
+  const saveSubtaskToApi = async (taskId: string, subtask: Subtask, isNew: boolean = false) => {
     try {
-      await supabase.from("subtasks").upsert({
-        id: subtask.id,
-        task_id: taskId,
-        title: subtask.title,
-        completed: subtask.completed,
-      });
+      if (isNew) {
+        await apiRequest("POST", "/api/subtasks", {
+          taskId,
+          title: subtask.title,
+        });
+      } else {
+        await apiRequest("PUT", `/api/subtasks/${subtask.id}`, {
+          completed: subtask.completed,
+          title: subtask.title,
+        });
+      }
     } catch (error) {
-      console.error("Failed to save subtask to Supabase:", error);
+      console.error("Failed to save subtask:", error);
     }
   };
 
-  const deleteSubtaskFromSupabase = async (subtaskId: string) => {
+  const deleteSubtaskFromApi = async (subtaskId: string) => {
     try {
-      await supabase.from("subtasks").delete().eq("id", subtaskId);
+      await apiRequest("DELETE", `/api/subtasks/${subtaskId}`);
     } catch (error) {
-      console.error("Failed to delete subtask from Supabase:", error);
+      console.error("Failed to delete subtask:", error);
     }
   };
 
-  const saveContactToSupabase = async (contact: Contact) => {
+  const saveContactToApi = async (contact: Contact) => {
     if (!userId) return;
     try {
-      await supabase.from("contacts").upsert({
-        id: contact.id,
-        user_id: userId,
+      await apiRequest("POST", "/api/contacts", {
+        userId,
         name: contact.name,
-        role: contact.role || null,
+        role: contact.role,
         color: contact.color,
       });
     } catch (error) {
-      console.error("Failed to save contact to Supabase:", error);
+      console.error("Failed to save contact:", error);
     }
   };
 
-  const deleteContactFromSupabase = async (contactId: string) => {
+  const deleteContactFromApi = async (contactId: string) => {
     try {
-      await supabase.from("contacts").delete().eq("id", contactId);
+      await apiRequest("DELETE", `/api/contacts/${contactId}`);
     } catch (error) {
-      console.error("Failed to delete contact from Supabase:", error);
+      console.error("Failed to delete contact:", error);
+    }
+  };
+
+  const saveDelegationNoteToApi = async (taskId: string, note: DelegationNote) => {
+    try {
+      await apiRequest("POST", "/api/delegation-notes", {
+        taskId,
+        type: note.type,
+        text: note.text,
+      });
+    } catch (error) {
+      console.error("Failed to save delegation note:", error);
     }
   };
 
@@ -380,7 +405,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       isOverdue: false,
     };
     setTasks((prev) => [newTask, ...prev]);
-    saveTaskToSupabase(newTask);
+    saveTaskToApi(newTask, true);
   }, [calculateDueDate, userId]);
 
   const addUnsortedTask = useCallback((title: string) => {
@@ -420,7 +445,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       };
       setTasks((prev) => [newTask, ...prev]);
       setUnsortedTasks((prev) => prev.filter((t) => t.id !== id));
-      saveTaskToSupabase(newTask);
+      saveTaskToApi(newTask, true);
     }
   }, [unsortedTasks, calculateDueDate, userId]);
 
@@ -434,14 +459,14 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         task.id === id ? { ...task, completedAt: new Date() } : task
       );
       const task = updated.find(t => t.id === id);
-      if (task) saveTaskToSupabase(task);
+      if (task) saveTaskToApi(task);
       return updated;
     });
   }, [userId]);
 
   const deleteTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((task) => task.id !== id));
-    deleteTaskFromSupabase(id);
+    deleteTaskFromApi(id);
   }, []);
 
   const moveTask = useCallback((id: string, newLane: Lane) => {
@@ -452,7 +477,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           : task
       );
       const task = updated.find(t => t.id === id);
-      if (task) saveTaskToSupabase(task);
+      if (task) saveTaskToApi(task);
       return updated;
     });
   }, [calculateDueDate, userId]);
@@ -461,7 +486,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     setTasks((prev) => {
       const updated = prev.map((task) => (task.id === id ? { ...task, ...updates } : task));
       const task = updated.find(t => t.id === id);
-      if (task) saveTaskToSupabase(task);
+      if (task) saveTaskToApi(task);
       return updated;
     });
   }, [userId]);
@@ -498,7 +523,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           : task
       )
     );
-    saveSubtaskToSupabase(taskId, newSubtask);
+    saveSubtaskToApi(taskId, newSubtask, true);
   }, []);
 
   const toggleSubtask = useCallback((taskId: string, subtaskId: string) => {
@@ -515,7 +540,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       );
       const task = updated.find(t => t.id === taskId);
       const subtask = task?.subtasks.find(st => st.id === subtaskId);
-      if (subtask) saveSubtaskToSupabase(taskId, subtask);
+      if (subtask) saveSubtaskToApi(taskId, subtask);
       return updated;
     });
   }, []);
@@ -528,7 +553,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           : task
       )
     );
-    deleteSubtaskFromSupabase(subtaskId);
+    deleteSubtaskFromApi(subtaskId);
   }, []);
 
   const getTaskProgress = useCallback((taskId: string): number => {
@@ -557,7 +582,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       createdAt: new Date(),
     };
     setContacts((prev) => [...prev, newContact]);
-    saveContactToSupabase(newContact);
+    saveContactToApi(newContact);
     return newContact;
   }, [contacts.length, userId]);
 
@@ -565,7 +590,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     setContacts((prev) => {
       const updated = prev.map((contact) => (contact.id === id ? { ...contact, ...updates } : contact));
       const contact = updated.find(c => c.id === id);
-      if (contact) saveContactToSupabase(contact);
+      if (contact) saveContactToApi(contact);
       return updated;
     });
   }, [userId]);
@@ -579,7 +604,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           : task
       )
     );
-    deleteContactFromSupabase(id);
+    deleteContactFromApi(id);
   }, []);
 
   const getContactById = useCallback((id: string): Contact | undefined => {
