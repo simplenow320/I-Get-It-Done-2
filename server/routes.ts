@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import multer from "multer";
-import OpenAI from "openai";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -11,38 +10,52 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Transcription endpoint
+  // Transcription endpoint using Deepgram
   app.post("/api/transcribe", upload.single("audio"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No audio file provided" });
       }
 
-      const apiKey = process.env.OPENAI_API_KEY;
+      const apiKey = process.env.DEEPGRAM_API_KEY;
       if (!apiKey) {
-        console.error("OPENAI_API_KEY not configured");
+        console.error("DEEPGRAM_API_KEY not configured");
         return res.status(500).json({ error: "Transcription service not configured" });
       }
 
-      const openai = new OpenAI({ apiKey });
-
-      // Read the uploaded file
       const audioFilePath = req.file.path;
-      const audioFile = fs.createReadStream(audioFilePath);
+      const audioBuffer = fs.readFileSync(audioFilePath);
+      
+      console.log("Sending audio to Deepgram, size:", audioBuffer.length, "bytes");
 
-      // Call OpenAI Whisper API
-      const transcription = await openai.audio.transcriptions.create({
-        model: "whisper-1",
-        file: audioFile,
-        response_format: "text",
+      // Call Deepgram API
+      const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true", {
+        method: "POST",
+        headers: {
+          "Authorization": `Token ${apiKey}`,
+          "Content-Type": "audio/m4a",
+        },
+        body: audioBuffer,
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Deepgram error:", response.status, errorText);
+        throw new Error(`Deepgram API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("Deepgram response:", JSON.stringify(result, null, 2));
 
       // Clean up the temp file
       fs.unlink(audioFilePath, (err) => {
         if (err) console.error("Failed to delete temp file:", err);
       });
 
-      res.json({ text: transcription });
+      // Extract transcript from Deepgram response
+      const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
+      
+      res.json({ text: transcript });
     } catch (error: any) {
       console.error("Transcription error:", error);
       
