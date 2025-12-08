@@ -62,15 +62,15 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   };
 
   const startRecording = async () => {
-    if (!permissionGranted) {
-      await checkPermission();
-      if (!permissionGranted) {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        setPermissionGranted(false);
         onError?.("Microphone permission required");
         return;
       }
-    }
+      setPermissionGranted(true);
 
-    try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
@@ -131,9 +131,6 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       const response = await fetch(`${apiUrl}/api/transcribe`, {
         method: "POST",
         body: formData,
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
       });
 
       if (!response.ok) {
