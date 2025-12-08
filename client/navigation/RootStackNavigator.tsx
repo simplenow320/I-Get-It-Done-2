@@ -1,34 +1,27 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
+import OnboardingStackNavigator from "@/navigation/OnboardingStackNavigator";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
-import ModalScreen from "@/screens/ModalScreen";
-import { useScreenOptions } from "@/hooks/useScreenOptions";
+import { useTaskStore } from "@/stores/TaskStore";
 
 export type RootStackParamList = {
+  Onboarding: undefined;
   Main: undefined;
-  Modal: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootStackNavigator() {
-  const screenOptions = useScreenOptions();
+  const { settings } = useTaskStore();
 
   return (
-    <Stack.Navigator screenOptions={screenOptions}>
-      <Stack.Screen
-        name="Main"
-        component={MainTabNavigator}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Modal"
-        component={ModalScreen}
-        options={{
-          presentation: "modal",
-          headerTitle: "Modal",
-        }}
-      />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {settings.onboardingComplete ? (
+        <Stack.Screen name="Main" component={MainTabNavigator} />
+      ) : (
+        <Stack.Screen name="Onboarding" component={OnboardingStackNavigator} />
+      )}
     </Stack.Navigator>
   );
 }

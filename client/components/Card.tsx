@@ -9,7 +9,7 @@ import Animated, {
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius, Colors } from "@/constants/theme";
 
 interface CardProps {
   elevation?: number;
@@ -25,12 +25,11 @@ const springConfig: WithSpringConfig = {
   mass: 0.3,
   stiffness: 150,
   overshootClamping: true,
-  energyThreshold: 0.001,
 };
 
 const getBackgroundColorForElevation = (
   elevation: number,
-  theme: any,
+  theme: typeof Colors.light,
 ): string => {
   switch (elevation) {
     case 1:
@@ -91,7 +90,7 @@ export function Card({
         </ThemedText>
       ) : null}
       {description ? (
-        <ThemedText type="small" style={styles.cardDescription}>
+        <ThemedText type="small" style={styles.cardDescription} secondary>
           {description}
         </ThemedText>
       ) : null}
@@ -102,13 +101,11 @@ export function Card({
 
 const styles = StyleSheet.create({
   card: {
-    padding: Spacing.xl,
-    borderRadius: BorderRadius["2xl"],
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
   },
   cardTitle: {
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
-  cardDescription: {
-    opacity: 0.7,
-  },
+  cardDescription: {},
 });

@@ -3,12 +3,16 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Platform, StyleSheet } from "react-native";
-import HomeStackNavigator from "@/navigation/HomeStackNavigator";
+
+import DashboardStackNavigator from "@/navigation/DashboardStackNavigator";
+import NowStackNavigator from "@/navigation/NowStackNavigator";
 import ProfileStackNavigator from "@/navigation/ProfileStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
+import { LaneColors } from "@/constants/theme";
 
 export type MainTabParamList = {
-  HomeTab: undefined;
+  DashboardTab: undefined;
+  NowTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -19,9 +23,9 @@ export default function MainTabNavigator() {
 
   return (
     <Tab.Navigator
-      initialRouteName="HomeTab"
+      initialRouteName="DashboardTab"
       screenOptions={{
-        tabBarActiveTintColor: theme.tabIconSelected,
+        tabBarActiveTintColor: LaneColors.now.primary,
         tabBarInactiveTintColor: theme.tabIconDefault,
         tabBarStyle: {
           position: "absolute",
@@ -44,12 +48,22 @@ export default function MainTabNavigator() {
       }}
     >
       <Tab.Screen
-        name="HomeTab"
-        component={HomeStackNavigator}
+        name="DashboardTab"
+        component={DashboardStackNavigator}
         options={{
-          title: "Home",
+          title: "Dashboard",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
+            <Feather name="grid" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="NowTab"
+        component={NowStackNavigator}
+        options={{
+          title: "Now",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="zap" size={size} color={color} />
           ),
         }}
       />
