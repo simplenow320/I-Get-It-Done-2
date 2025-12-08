@@ -1,29 +1,40 @@
-import React from "react";
-import { StyleSheet, View, ScrollView } from "react-native";
+import React, { useMemo } from "react";
+import { StyleSheet, View, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInUp, FadeInDown } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
-import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
-import { useTaskStore, Lane } from "@/stores/TaskStore";
+import { useTaskStore, Lane, Task } from "@/stores/TaskStore";
+import { useGamification, LEVELS } from "@/stores/GamificationStore";
+
+const STALE_DAYS_PARK = 14;
+const STALE_DAYS_SOON = 7;
 
 export default function WeeklyResetScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
-  const { getCompletedTasks, getTasksByLane } = useTaskStore();
+  const navigation = useNavigation();
+  const { getCompletedTasks, getTasksByLane, moveTask } = useTaskStore();
+  const { state: gamification, getDailyStats } = useGamification();
 
   const completedTasks = getCompletedTasks();
-  const thisWeekCompleted = completedTasks.filter((t) => {
-    if (!t.completedAt) return false;
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return new Date(t.completedAt) >= weekAgo;
-  });
+  const dailyStats = getDailyStats();
+  
+  const thisWeekCompleted = useMemo(() => {
+    return completedTasks.filter((t) => {
+      if (!t.completedAt) return false;
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return new Date(t.completedAt) >= weekAgo;
+    });
+  }, [completedTasks]);
 
   const lanes: { lane: Lane; label: string; icon: keyof typeof Feather.glyphMap }[] = [
     { lane: "now", label: "Now", icon: "zap" },
@@ -33,7 +44,37 @@ export default function WeeklyResetScreen() {
   ];
 
   const parkTasks = getTasksByLane("park");
-  const hasStuckTasks = parkTasks.length > 5;
+  const soonTasks = getTasksByLane("soon");
+  const nowTasks = getTasksByLane("now");
+  const laterTasks = getTasksByLane("later");
+
+  const staleParkTasks = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - STALE_DAYS_PARK);
+    return parkTasks.filter((t) => new Date(t.createdAt) < cutoff);
+  }, [parkTasks]);
+
+  const staleSoonTasks = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - STALE_DAYS_SOON);
+    return soonTasks.filter((t) => new Date(t.createdAt) < cutoff);
+  }, [soonTasks]);
+
+  const currentLevel = LEVELS.find((l) => l.name === gamification.level);
+  const nextLevel = LEVELS.find((l) => l.minPoints > (currentLevel?.minPoints || 0));
+  const progressToNext = nextLevel
+    ? ((gamification.points - (currentLevel?.minPoints || 0)) / (nextLevel.minPoints - (currentLevel?.minPoints || 0))) * 100
+    : 100;
+
+  const handleMoveToLater = (task: Task) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    moveTask(task.id, "later");
+  };
+
+  const handleMoveToNow = (task: Task) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    moveTask(task.id, "now");
+  };
 
   return (
     <ScrollView
@@ -66,7 +107,50 @@ export default function WeeklyResetScreen() {
         </ThemedText>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(200).duration(400)}>
+      <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.statsSection}>
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={[styles.statIcon, { backgroundColor: LaneColors.soon.primary }]}>
+              <Feather name="zap" size={16} color="#FFFFFF" />
+            </View>
+            <ThemedText type="h3">{gamification.currentStreak}</ThemedText>
+            <ThemedText type="small" secondary>Day Streak</ThemedText>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={[styles.statIcon, { backgroundColor: LaneColors.later.primary }]}>
+              <Feather name="star" size={16} color="#FFFFFF" />
+            </View>
+            <ThemedText type="h3">{gamification.points}</ThemedText>
+            <ThemedText type="small" secondary>Points</ThemedText>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={[styles.statIcon, { backgroundColor: LaneColors.park.primary }]}>
+              <Feather name="award" size={16} color="#FFFFFF" />
+            </View>
+            <ThemedText type="h3" numberOfLines={1} style={{ fontSize: 18 }}>{gamification.level}</ThemedText>
+            <ThemedText type="small" secondary>Level</ThemedText>
+          </View>
+        </View>
+        
+        {nextLevel ? (
+          <View style={[styles.progressContainer, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={styles.progressHeader}>
+              <ThemedText type="small" secondary>Progress to {nextLevel.name}</ThemedText>
+              <ThemedText type="small" secondary>{Math.round(progressToNext)}%</ThemedText>
+            </View>
+            <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.min(progressToNext, 100)}%`, backgroundColor: currentLevel?.color || theme.link },
+                ]}
+              />
+            </View>
+          </View>
+        ) : null}
+      </Animated.View>
+
+      <Animated.View entering={FadeInUp.delay(300).duration(400)}>
         <ThemedText type="h4" style={styles.sectionTitle}>
           Lane Overview
         </ThemedText>
@@ -76,7 +160,7 @@ export default function WeeklyResetScreen() {
             return (
               <Animated.View
                 key={item.lane}
-                entering={FadeInUp.delay(300 + index * 50).duration(300)}
+                entering={FadeInUp.delay(400 + index * 50).duration(300)}
                 style={[styles.laneOverviewCard, { backgroundColor: theme.backgroundDefault }]}
               >
                 <View style={[styles.laneOverviewIcon, { backgroundColor: LaneColors[item.lane].primary }]}>
@@ -92,27 +176,80 @@ export default function WeeklyResetScreen() {
         </View>
       </Animated.View>
 
-      {hasStuckTasks ? (
+      {staleSoonTasks.length > 0 ? (
         <Animated.View
           entering={FadeInUp.delay(500).duration(400)}
-          style={[styles.alertCard, { backgroundColor: `${LaneColors.park.primary}20` }]}
+          style={[styles.alertCard, { backgroundColor: `${LaneColors.soon.primary}15` }]}
         >
           <View style={styles.alertHeader}>
-            <Feather name="alert-circle" size={24} color={LaneColors.park.primary} />
-            <ThemedText type="h4" style={{ color: LaneColors.park.primary }}>
-              Items Piling Up
+            <Feather name="clock" size={24} color={LaneColors.soon.primary} />
+            <ThemedText type="h4" style={{ color: LaneColors.soon.primary }}>
+              Stuck in Soon
             </ThemedText>
           </View>
-          <ThemedText type="body" secondary>
-            You have {parkTasks.length} items in Park. Consider reviewing and cleaning up old ideas.
+          <ThemedText type="body" secondary style={{ marginBottom: Spacing.sm }}>
+            {staleSoonTasks.length} task{staleSoonTasks.length > 1 ? "s have" : " has"} been in Soon for over a week.
           </ThemedText>
+          {staleSoonTasks.slice(0, 3).map((task) => (
+            <View key={task.id} style={styles.staleTaskRow}>
+              <ThemedText type="body" numberOfLines={1} style={{ flex: 1 }}>
+                {task.title}
+              </ThemedText>
+              <View style={styles.staleActions}>
+                <Pressable
+                  onPress={() => handleMoveToNow(task)}
+                  style={[styles.staleButton, { backgroundColor: LaneColors.now.primary }]}
+                >
+                  <ThemedText type="small" lightColor="#FFFFFF" darkColor="#FFFFFF">Now</ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleMoveToLater(task)}
+                  style={[styles.staleButton, { backgroundColor: LaneColors.later.primary }]}
+                >
+                  <ThemedText type="small" lightColor="#FFFFFF" darkColor="#FFFFFF">Later</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </Animated.View>
+      ) : null}
+
+      {staleParkTasks.length > 0 ? (
+        <Animated.View
+          entering={FadeInUp.delay(600).duration(400)}
+          style={[styles.alertCard, { backgroundColor: `${LaneColors.park.primary}15` }]}
+        >
+          <View style={styles.alertHeader}>
+            <Feather name="archive" size={24} color={LaneColors.park.primary} />
+            <ThemedText type="h4" style={{ color: LaneColors.park.primary }}>
+              Old Parked Items
+            </ThemedText>
+          </View>
+          <ThemedText type="body" secondary style={{ marginBottom: Spacing.sm }}>
+            {staleParkTasks.length} item{staleParkTasks.length > 1 ? "s have" : " has"} been parked for 2+ weeks. Time to decide?
+          </ThemedText>
+          {staleParkTasks.slice(0, 3).map((task) => (
+            <View key={task.id} style={styles.staleTaskRow}>
+              <ThemedText type="body" numberOfLines={1} style={{ flex: 1 }}>
+                {task.title}
+              </ThemedText>
+              <View style={styles.staleActions}>
+                <Pressable
+                  onPress={() => handleMoveToLater(task)}
+                  style={[styles.staleButton, { backgroundColor: LaneColors.later.primary }]}
+                >
+                  <ThemedText type="small" lightColor="#FFFFFF" darkColor="#FFFFFF">Later</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          ))}
         </Animated.View>
       ) : null}
 
       {thisWeekCompleted.length > 0 ? (
-        <Animated.View entering={FadeInUp.delay(600).duration(400)}>
+        <Animated.View entering={FadeInUp.delay(700).duration(400)}>
           <ThemedText type="h4" style={styles.sectionTitle}>
-            Completed This Week
+            Wins This Week
           </ThemedText>
           <View style={[styles.completedList, { backgroundColor: theme.backgroundDefault }]}>
             {thisWeekCompleted.slice(0, 5).map((task, index) => (
@@ -134,14 +271,63 @@ export default function WeeklyResetScreen() {
             ))}
             {thisWeekCompleted.length > 5 ? (
               <ThemedText type="small" secondary style={styles.moreText}>
-                +{thisWeekCompleted.length - 5} more
+                +{thisWeekCompleted.length - 5} more wins
               </ThemedText>
             ) : null}
           </View>
         </Animated.View>
       ) : null}
 
-      <Animated.View entering={FadeInUp.delay(700).duration(400)} style={styles.motivationCard}>
+      <Animated.View entering={FadeInUp.delay(800).duration(400)}>
+        <ThemedText type="h4" style={styles.sectionTitle}>
+          Next Week
+        </ThemedText>
+        <View style={[styles.nextWeekCard, { backgroundColor: theme.backgroundDefault }]}>
+          <View style={styles.nextWeekRow}>
+            <View style={[styles.nextWeekIcon, { backgroundColor: LaneColors.now.primary }]}>
+              <Feather name="zap" size={18} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText type="body" style={{ fontWeight: "600" }}>
+                {nowTasks.length} task{nowTasks.length !== 1 ? "s" : ""} ready for Now
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                {nowTasks.length === 0 ? "Add tasks to get started" : "Focus on these first"}
+              </ThemedText>
+            </View>
+          </View>
+          <View style={[styles.nextWeekRow, { borderTopWidth: 1, borderTopColor: theme.border }]}>
+            <View style={[styles.nextWeekIcon, { backgroundColor: LaneColors.soon.primary }]}>
+              <Feather name="clock" size={18} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText type="body" style={{ fontWeight: "600" }}>
+                {soonTasks.length} task{soonTasks.length !== 1 ? "s" : ""} coming up Soon
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                {soonTasks.length === 0 ? "Move from Later when ready" : "These will need attention soon"}
+              </ThemedText>
+            </View>
+          </View>
+          <View style={[styles.nextWeekRow, { borderTopWidth: 1, borderTopColor: theme.border }]}>
+            <View style={[styles.nextWeekIcon, { backgroundColor: LaneColors.later.primary }]}>
+              <Feather name="target" size={18} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText type="body" style={{ fontWeight: "600" }}>
+                Weekly goal suggestion
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                {gamification.currentStreak > 0
+                  ? `Keep your ${gamification.currentStreak}-day streak alive`
+                  : "Complete 1 task to start a streak"}
+              </ThemedText>
+            </View>
+          </View>
+        </View>
+      </Animated.View>
+
+      <Animated.View entering={FadeInUp.delay(900).duration(400)} style={styles.motivationCard}>
         <ThemedText type="h3" style={styles.motivationText}>
           {thisWeekCompleted.length >= 10
             ? "Incredible week! Keep crushing it."
@@ -165,21 +351,61 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     alignItems: "center",
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   heroNumber: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.md,
   },
   heroText: {
-    fontSize: 56,
+    fontSize: 48,
   },
   heroLabel: {
     marginBottom: Spacing.xs,
+  },
+  statsSection: {
+    marginBottom: Spacing.lg,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+  },
+  statIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.xs,
+  },
+  progressContainer: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: Spacing.xs,
+  },
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 4,
   },
   sectionTitle: {
     marginBottom: Spacing.sm,
@@ -214,6 +440,21 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     marginBottom: Spacing.xs,
   },
+  staleTaskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  staleActions: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+  },
+  staleButton: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+  },
   completedList: {
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
@@ -231,6 +472,24 @@ const styles = StyleSheet.create({
   moreText: {
     textAlign: "center",
     marginTop: Spacing.sm,
+  },
+  nextWeekCard: {
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.lg,
+    overflow: "hidden",
+  },
+  nextWeekRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+  },
+  nextWeekIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
   },
   motivationCard: {
     alignItems: "center",
