@@ -1,0 +1,302 @@
+Here is the complete, clean MVP for I GET IT DONE.
+Straightforward. Human. Easy to follow. Built for short-term productivity.
+
+⸻
+
+I GET IT DONE – MVP DOCUMENT
+
+App Purpose
+
+I GET IT DONE helps people finish what matters today by sorting tasks into four simple lanes: Now, Soon, Later, Park.
+The app removes overwhelm, keeps the list short, and builds a rhythm of daily action.
+
+This MVP focuses on fast input, smart sorting, automatic timing, and clear follow-through.
+
+⸻
+
+Core Problem
+
+Most people get stuck because they treat every task like it’s urgent. This leads to long lists, lost priorities, and low follow-through.
+
+I GET IT DONE solves that with a simple question:
+“When do you want to handle this?”
+
+⸻
+
+Core Concept
+
+Every task in life falls into one of four lanes:
+
+Now
+Do it today.
+
+Soon
+Do it in the next few days.
+
+Later
+Do it in the next few weeks.
+
+Park
+Set it aside until it’s useful.
+
+Users define how fast each lane moves so the app matches their pace.
+
+⸻
+
+MVP Goals
+	1.	Help users make decisions fast
+	2.	Make daily lists short
+	3.	Avoid clutter and overwhelm
+	4.	Automate timing
+	5.	Support optional delegation
+	6.	Keep focus on short-term wins
+
+⸻
+
+Main Features
+
+1. Onboarding Setup
+
+Fast and simple.
+
+User sets default timing for each lane:
+
+• Now → Same day or 24 hours
+• Soon → 2–3 days, end of week, or custom
+• Later → 1 week, 2 weeks, or custom
+• Park → Monthly check, quarterly check, or manual only
+
+User chooses:
+
+• Solo mode
+• Or Team mode (for handing off tasks)
+
+Onboarding ends with a clean dashboard.
+
+⸻
+
+2. Add Task + Smart Sorter
+
+User taps Add Task
+Enters a title (and optional note)
+
+App asks one question:
+“When do you want to handle this?”
+
+User taps:
+Now / Soon / Later / Park
+
+The app automatically gives the task a due window based on their chosen defaults.
+
+⸻
+
+3. Auto-Move System
+
+Tasks shift forward automatically.
+
+Examples
+
+• A Soon task becomes Now when its time window hits.
+• A Later task becomes Soon when the next week arrives.
+• Park stays where it is until user checks or the reminder hits.
+
+This keeps the list fresh without manual updates.
+
+⸻
+
+4. Dashboard (Home Screen)
+
+Four bold buttons:
+
+Now
+
+Shows today’s tasks only. Clean. Short. Actionable.
+
+Soon
+
+Tasks coming up based on settings.
+
+Later
+
+Future tasks that still matter but don’t crowd today.
+
+Park
+
+Ideas, low priority tasks, and “not right now” items.
+
+User taps any lane to view or adjust tasks inside.
+
+⸻
+
+5. Daily Focus Mode
+
+When the user taps Now, they see a simple list.
+
+Features:
+• One-tap complete
+• Swipe to add notes
+• Button to push task to Soon or Later
+
+Clean, fast, no overwhelm.
+
+⸻
+
+6. Hand-Off (Optional)
+
+If a user adds team members, they can assign tasks.
+
+Flow:
+	1.	Open a task
+	2.	Tap Hand-off
+	3.	Choose a person
+	4.	Add a quick note
+	5.	Hit send
+
+The other person gets:
+• A task card
+• Due window
+• Notes
+• Status updates
+
+The app tracks completion for the user.
+
+⸻
+
+7. Weekly Reset
+
+Once a week the app shows a simple review:
+
+• What you completed
+• What moved from Later to Soon
+• What moved from Soon to Now
+• What’s stuck in Park
+• Suggested clean-up
+
+This helps the user reset and stay sharp.
+
+⸻
+
+App Flow (Step-by-Step)
+
+1. Open App → Dashboard
+
+User sees: Now, Soon, Later, Park.
+
+2. Add Task
+
+Tap +
+Type task
+Tap one of the four lanes
+Done.
+
+3. Work From “Now”
+
+Everything due today shows here.
+Short list. Easy to complete.
+
+4. Review “Soon”
+
+Check what’s coming next.
+Tasks auto-shift to Now when time hits.
+
+5. View “Later”
+
+Tasks in the next few weeks.
+Organized but not noisy.
+
+6. Check “Park”
+
+Long-hold items or ideas.
+Get reviewed when chosen reminders fire.
+
+7. Weekly Reset
+
+Review → Clean-up → Reset for next week.
+
+8. Optional Delegation
+
+User assigns tasks to others and gets progress updates.
+
+⸻
+
+Use Cases
+
+1. Busy Leader
+
+A pastor or business owner has 20 things on their mind.
+Instead of juggling everything, they drop each item into a lane:
+
+• Write message → Now
+• Meet with volunteer → Soon
+• Plan retreat → Later
+• New outreach idea → Park
+
+Their day instantly becomes clear.
+
+⸻
+
+2. Parent with Heavy Schedule
+
+Parent sorts tasks while sitting in the car:
+
+• Pay field trip fee → Now
+• Order groceries → Soon
+• Research summer camps → Later
+• Idea for birthday → Park
+
+No chaos. No forgetting.
+
+⸻
+
+3. Student
+
+A college student uses the lanes:
+
+• Assignment due today → Now
+• Prep study group → Soon
+• Register next semester → Later
+• Explore internship options → Park
+
+Their semester stays organized.
+
+⸻
+
+4. Solo Entrepreneur
+
+A business owner uses the defaults:
+
+Now = Today
+Soon = This week
+Later = Next week
+Park = Monthly ideas
+
+Tasks flow automatically.
+No more clutter or stress.
+
+⸻
+
+Why the System Works
+
+• Human brains think in time windows
+• Four words are easy to understand instantly
+• Automatic movement keeps lists fresh
+• No complex planning required
+• The app pushes action instead of long-term storage
+
+The entire design is built to help users finish more in less time.
+
+⸻
+
+If you want next:
+
+I can create:
+
+✓ Full wireframe layout
+✓ UI design direction
+✓ Replit build prompts
+✓ A product pitch deck
+✓ Logo ideas and brand feel
+✓ User stories for development
+✓ Technical doc for engineers
+
+Just tell me what you want.
