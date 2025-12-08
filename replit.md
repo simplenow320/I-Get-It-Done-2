@@ -311,6 +311,12 @@ CREATE TABLE focus_sessions (
 - **Dec 8, 2025**: Initial MVP with 4-lane system, onboarding, dashboard
 - **Dec 8, 2025**: Added light/dark mode toggle with persistence
 - **Dec 8, 2025**: Created marketing landing page
+- **Dec 8, 2025**: Voice-to-task capture implemented:
+  - VoiceRecorder component using expo-audio for audio recording
+  - Backend /api/transcribe endpoint using OpenAI Whisper API
+  - Quick Dump: Voice input adds tasks directly to unsorted list (splits sentences into multiple tasks)
+  - Add Task: Voice input populates title field for editing before creation
+  - Web fallback directs users to use Expo Go for voice features
 - **Dec 8, 2025**: Implemented ADHD-optimized features:
   - Quick Dump: Brain dump screen for rapid task capture with sorting flow
   - Break It Down: Subtask management with progress ring visualization

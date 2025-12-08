@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { StyleSheet, View, Pressable, Platform } from "react-native";
-import { Audio } from "expo-av";
+import { useAudioRecorder, RecordingPresets, AudioModule } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Animated, { 
@@ -29,7 +29,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const { theme } = useTheme();
   const [state, setState] = useState<RecordingState>("idle");
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   
   const pulseScale = useSharedValue(1);
   const buttonScale = useSharedValue(1);
@@ -53,8 +54,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const checkPermission = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      setPermissionGranted(status === "granted");
+      const status = await AudioModule.requestRecordingPermissionsAsync();
+      setPermissionGranted(status.granted);
     } catch (error) {
       console.error("Permission check error:", error);
       setPermissionGranted(false);
@@ -63,24 +64,15 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const startRecording = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
+      const status = await AudioModule.requestRecordingPermissionsAsync();
+      if (!status.granted) {
         setPermissionGranted(false);
         onError?.("Microphone permission required");
         return;
       }
       setPermissionGranted(true);
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      
-      recordingRef.current = recording;
+      await audioRecorder.record();
       setState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
@@ -90,23 +82,16 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   };
 
   const stopRecording = async () => {
-    if (!recordingRef.current) return;
-
     try {
       setState("processing");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
 
       if (!uri) {
         throw new Error("No recording URI");
       }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
 
       await transcribeAudio(uri);
     } catch (error) {
