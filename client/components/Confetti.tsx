@@ -119,22 +119,30 @@ interface ConfettiProps {
 }
 
 export default function Confetti({ visible, onComplete, count = 50 }: ConfettiProps) {
+  const [triggerKey, setTriggerKey] = React.useState(0);
+  
+  React.useEffect(() => {
+    if (visible) {
+      setTriggerKey((prev) => prev + 1);
+    }
+  }, [visible]);
+  
   const pieces = useMemo(() => {
     if (!visible) return [];
     
     return Array.from({ length: count }, (_, i) => ({
-      id: i,
+      id: `${triggerKey}-${i}`,
       color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
       startX: Math.random() * SCREEN_WIDTH,
       endX: Math.random() * SCREEN_WIDTH,
       delay: Math.random() * 300,
     }));
-  }, [visible, count]);
+  }, [visible, count, triggerKey]);
 
   if (!visible || pieces.length === 0) return null;
 
   return (
-    <View style={styles.container} pointerEvents="none">
+    <View key={triggerKey} style={styles.container} pointerEvents="none">
       {pieces.map((piece, index) => (
         <ConfettiPiece
           key={piece.id}

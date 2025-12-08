@@ -274,7 +274,7 @@ export function GamificationProvider({ children }: { children: ReactNode }) {
         level: newLevel,
       };
 
-      setTimeout(() => checkAndUnlockAchievements(newState), 0);
+      checkAndUnlockAchievements(newState);
       return newState;
     });
 
@@ -285,6 +285,8 @@ export function GamificationProvider({ children }: { children: ReactNode }) {
   }, [updateStreak, updateDailyStats, calculateLevel, checkAndUnlockAchievements]);
 
   const recordSubtaskComplete = useCallback(() => {
+    updateStreak();
+    
     setState((prev) => {
       const newPoints = prev.points + POINTS.subtaskComplete;
       const newLevel = calculateLevel(newPoints);
@@ -301,7 +303,7 @@ export function GamificationProvider({ children }: { children: ReactNode }) {
       ...stats,
       subtasksCompleted: stats.subtasksCompleted + 1,
     }));
-  }, [updateDailyStats, calculateLevel]);
+  }, [updateStreak, updateDailyStats, calculateLevel]);
 
   const recordFocusSession = useCallback((minutes: number) => {
     updateStreak();
