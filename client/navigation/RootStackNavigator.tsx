@@ -3,9 +3,11 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import OnboardingStackNavigator from "@/navigation/OnboardingStackNavigator";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
+import LandingScreen from "@/screens/LandingScreen";
 import { useTaskStore } from "@/stores/TaskStore";
 
 export type RootStackParamList = {
+  Landing: undefined;
   Onboarding: undefined;
   Main: undefined;
 };
@@ -20,7 +22,10 @@ export default function RootStackNavigator() {
       {settings.onboardingComplete ? (
         <Stack.Screen name="Main" component={MainTabNavigator} />
       ) : (
-        <Stack.Screen name="Onboarding" component={OnboardingStackNavigator} />
+        <>
+          <Stack.Screen name="Landing" component={LandingScreen} />
+          <Stack.Screen name="Onboarding" component={OnboardingStackNavigator} />
+        </>
       )}
     </Stack.Navigator>
   );
