@@ -12,11 +12,13 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
+import { DashboardStackParamList } from "@/navigation/DashboardStackNavigator";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 type RootNavigation = NativeStackNavigationProp<RootStackParamList, "LearnMore">;
 type ProfileNavigation = NativeStackNavigationProp<ProfileStackParamList, "TourLearnMore">;
+type DashboardNavigation = NativeStackNavigationProp<DashboardStackParamList, "TourLearnMore">;
 
 interface SlideData {
   id: string;

@@ -13,9 +13,11 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
+import { DashboardStackParamList } from "@/navigation/DashboardStackNavigator";
 
 type RootNavigation = NativeStackNavigationProp<RootStackParamList, "FAQ">;
 type ProfileNavigation = NativeStackNavigationProp<ProfileStackParamList, "TourFAQ">;
+type DashboardNavigation = NativeStackNavigationProp<DashboardStackParamList, "TourFAQ">;
 
 interface FAQItem {
   question: string;
@@ -98,7 +100,8 @@ export default function FAQScreen() {
 
   const handleGetStarted = () => {
     if (isTourMode) {
-      (navigation as ProfileNavigation).navigate("Profile");
+      // Pop all tour screens to return to the main screen (Dashboard or Profile)
+      navigation.popToTop();
     } else {
       (navigation as RootNavigation).navigate("Onboarding");
     }

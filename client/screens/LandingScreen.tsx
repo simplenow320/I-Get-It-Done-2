@@ -12,9 +12,11 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
+import { DashboardStackParamList } from "@/navigation/DashboardStackNavigator";
 
 type RootNavigation = NativeStackNavigationProp<RootStackParamList, "Landing">;
 type ProfileNavigation = NativeStackNavigationProp<ProfileStackParamList, "TourLanding">;
+type DashboardNavigation = NativeStackNavigationProp<DashboardStackParamList, "TourLanding">;
 
 export default function LandingScreen() {
   const insets = useSafeAreaInsets();
@@ -26,7 +28,7 @@ export default function LandingScreen() {
 
   const handleGetStarted = () => {
     if (isTourMode) {
-      navigation.goBack();
+      navigation.popToTop();
     } else {
       (navigation as RootNavigation).navigate("Onboarding");
     }
