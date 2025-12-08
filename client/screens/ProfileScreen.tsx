@@ -67,6 +67,16 @@ export default function ProfileScreen() {
     navigation.navigate("WeeklyReset");
   };
 
+  const handleLaneTimings = () => {
+    Haptics.selectionAsync();
+    navigation.navigate("LaneTimingsSettings");
+  };
+
+  const handleModeSettings = () => {
+    Haptics.selectionAsync();
+    navigation.navigate("ModeSettings");
+  };
+
   const handleThemeChange = (newMode: ThemeMode) => {
     Haptics.selectionAsync();
     setMode(newMode);
@@ -271,7 +281,13 @@ export default function ProfileScreen() {
           Settings
         </ThemedText>
         <View style={[styles.menuGroup, { backgroundColor: theme.backgroundDefault }]}>
-          <View style={styles.menuItemInGroup}>
+          <Pressable
+            onPress={handleLaneTimings}
+            style={({ pressed }) => [
+              styles.menuItemInGroup,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
             <View style={[styles.menuIcon, { backgroundColor: LaneColors.later.primary }]}>
               <Feather name="sliders" size={20} color="#FFFFFF" />
             </View>
@@ -284,9 +300,15 @@ export default function ProfileScreen() {
               </ThemedText>
             </View>
             <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-          </View>
+          </Pressable>
           <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.menuItemInGroup}>
+          <Pressable
+            onPress={handleModeSettings}
+            style={({ pressed }) => [
+              styles.menuItemInGroup,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
             <View style={[styles.menuIcon, { backgroundColor: LaneColors.park.primary }]}>
               <Feather name={settings.mode === "solo" ? "user" : "users"} size={20} color="#FFFFFF" />
             </View>
@@ -299,7 +321,7 @@ export default function ProfileScreen() {
               </ThemedText>
             </View>
             <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-          </View>
+          </Pressable>
         </View>
       </Animated.View>
     </KeyboardAwareScrollViewCompat>
