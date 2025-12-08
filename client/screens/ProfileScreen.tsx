@@ -19,6 +19,7 @@ import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore } from "@/stores/TaskStore";
 import { useGamification, Level } from "@/stores/GamificationStore";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
+import { useAuth } from "@/contexts/AuthContext";
 
 type NavigationProp = NativeStackNavigationProp<ProfileStackParamList, "Profile">;
 type ThemeMode = "light" | "dark" | "system";
@@ -46,6 +47,7 @@ export default function ProfileScreen() {
   const { theme, isDark, mode, setMode } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const { settings, userId } = useTaskStore();
+  const { logout, user } = useAuth();
   const {
     currentStreak,
     longestStreak,
@@ -91,6 +93,11 @@ export default function ProfileScreen() {
   const handleThemeChange = (newMode: ThemeMode) => {
     Haptics.selectionAsync();
     setMode(newMode);
+  };
+
+  const handleLogout = async () => {
+    Haptics.selectionAsync();
+    await logout();
   };
 
   const themeOptions: { mode: ThemeMode; label: string; icon: string }[] = [
@@ -386,6 +393,26 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
       </Animated.View>
+
+      <Animated.View entering={FadeInUp.delay(700).duration(400)}>
+        <View style={[styles.accountSection, { backgroundColor: theme.backgroundSecondary }]}>
+          {user?.email ? (
+            <View style={styles.accountInfo}>
+              <Feather name="user" size={16} color={theme.textSecondary} />
+              <ThemedText type="small" secondary>{user.email}</ThemedText>
+            </View>
+          ) : null}
+          <Pressable
+            style={[styles.logoutButton, { backgroundColor: LaneColors.now.primary + "15" }]}
+            onPress={handleLogout}
+          >
+            <Feather name="log-out" size={18} color={LaneColors.now.primary} />
+            <ThemedText style={[styles.logoutText, { color: LaneColors.now.primary }]}>
+              Sign Out
+            </ThemedText>
+          </Pressable>
+        </View>
+      </Animated.View>
     </KeyboardAwareScrollViewCompat>
   );
 }
@@ -531,5 +558,29 @@ const styles = StyleSheet.create({
   menuDivider: {
     height: 1,
     marginLeft: 56,
+  },
+  accountSection: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.md,
+    alignItems: "center",
+  },
+  accountInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.md,
+  },
+  logoutText: {
+    fontWeight: "600",
+    fontSize: 16,
   },
 });

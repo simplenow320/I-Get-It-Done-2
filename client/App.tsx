@@ -15,6 +15,7 @@ import { AchievementUnlockModal } from "@/components/AchievementUnlockModal";
 import { TaskStoreProvider } from "@/stores/TaskStore";
 import { GamificationProvider } from "@/stores/GamificationStore";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 
 function AppContent() {
@@ -35,19 +36,21 @@ export default function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <TaskStoreProvider>
-          <GamificationProvider>
-            <ThemeProvider>
-              <SafeAreaProvider>
-                <GestureHandlerRootView style={styles.root}>
-                  <KeyboardProvider>
-                    <AppContent />
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </SafeAreaProvider>
-            </ThemeProvider>
-          </GamificationProvider>
-        </TaskStoreProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <TaskStoreProvider>
+              <GamificationProvider>
+                <SafeAreaProvider>
+                  <GestureHandlerRootView style={styles.root}>
+                    <KeyboardProvider>
+                      <AppContent />
+                    </KeyboardProvider>
+                  </GestureHandlerRootView>
+                </SafeAreaProvider>
+              </GamificationProvider>
+            </TaskStoreProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

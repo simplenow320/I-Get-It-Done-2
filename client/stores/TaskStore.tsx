@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest } from "@/lib/query-client";
 import { scheduleOverdueNotification } from "@/lib/notifications";
+import { useAuth } from "@/contexts/AuthContext";
 
 export type Lane = "now" | "soon" | "later" | "park";
 export type ReminderType = "soft" | "strong" | "persistent" | "none";
@@ -125,12 +126,13 @@ const SETTINGS_STORAGE_KEY = "@user_settings";
 const TaskStoreContext = createContext<TaskStoreContext | null>(null);
 
 export function TaskStoreProvider({ children }: { children: ReactNode }) {
+  const { user, isAuthenticated } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [unsortedTasks, setUnsortedTasks] = useState<UnsortedTask[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const userId = user?.id || null;
 
   const generateId = () => {
     const timestamp = Date.now().toString(36);
@@ -140,8 +142,10 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    loadState();
-  }, []);
+    if (isAuthenticated && userId) {
+      loadState();
+    }
+  }, [isAuthenticated, userId]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -186,74 +190,56 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const loadFromDatabase = async () => {
     try {
-      const storedUserId = await AsyncStorage.getItem("@user_id");
-      let currentUserId = storedUserId;
-      
-      if (!currentUserId) {
-        const deviceId = await AsyncStorage.getItem("@device_id") || generateId();
-        await AsyncStorage.setItem("@device_id", deviceId);
-        
-        const response = await apiRequest("POST", "/api/users/init", { deviceId });
-        const data = await response.json();
-        currentUserId = data.user?.id;
-        
-        if (currentUserId) {
-          await AsyncStorage.setItem("@user_id", currentUserId);
-        }
+      if (!userId) return;
+
+      const tasksResponse = await apiRequest("GET", `/api/tasks/${userId}`);
+      const tasksData = await tasksResponse.json();
+
+      if (tasksData.tasks && tasksData.tasks.length > 0) {
+        const loadedTasks: Task[] = tasksData.tasks.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          notes: t.notes || undefined,
+          lane: t.lane as Lane,
+          createdAt: parseDate(t.createdAt),
+          dueDate: parseDateOptional(t.dueDate),
+          completedAt: parseDateOptional(t.completedAt),
+          subtasks: (t.subtasks || []).map((st: any) => ({
+            id: st.id,
+            title: st.title,
+            completed: st.completed,
+          })),
+          reminderType: (t.reminderType || "soft") as ReminderType,
+          focusTimeMinutes: t.focusTimeMinutes || 0,
+          isOverdue: t.isOverdue || false,
+          assignedTo: t.assignedTo || undefined,
+          delegationStatus: t.delegationStatus || undefined,
+          delegatedAt: parseDateOptional(t.delegatedAt),
+          lastDelegationUpdate: parseDateOptional(t.lastDelegationUpdate),
+          delegationNotes: (t.delegationNotes || []).map((n: any) => ({
+            id: n.id,
+            type: n.type,
+            text: n.text,
+            createdAt: parseDate(n.createdAt),
+            author: "owner" as const,
+          })),
+        }));
+
+        setTasks(loadedTasks);
       }
-      
-      if (currentUserId) {
-        setUserId(currentUserId);
 
-        const tasksResponse = await apiRequest("GET", `/api/tasks/${currentUserId}`);
-        const tasksData = await tasksResponse.json();
+      const contactsResponse = await apiRequest("GET", `/api/contacts/${userId}`);
+      const contactsData = await contactsResponse.json();
 
-        if (tasksData.tasks && tasksData.tasks.length > 0) {
-          const loadedTasks: Task[] = tasksData.tasks.map((t: any) => ({
-            id: t.id,
-            title: t.title,
-            notes: t.notes || undefined,
-            lane: t.lane as Lane,
-            createdAt: parseDate(t.createdAt),
-            dueDate: parseDateOptional(t.dueDate),
-            completedAt: parseDateOptional(t.completedAt),
-            subtasks: (t.subtasks || []).map((st: any) => ({
-              id: st.id,
-              title: st.title,
-              completed: st.completed,
-            })),
-            reminderType: (t.reminderType || "soft") as ReminderType,
-            focusTimeMinutes: t.focusTimeMinutes || 0,
-            isOverdue: t.isOverdue || false,
-            assignedTo: t.assignedTo || undefined,
-            delegationStatus: t.delegationStatus || undefined,
-            delegatedAt: parseDateOptional(t.delegatedAt),
-            lastDelegationUpdate: parseDateOptional(t.lastDelegationUpdate),
-            delegationNotes: (t.delegationNotes || []).map((n: any) => ({
-              id: n.id,
-              type: n.type,
-              text: n.text,
-              createdAt: parseDate(n.createdAt),
-              author: "owner" as const,
-            })),
-          }));
-
-          setTasks(loadedTasks);
-        }
-
-        const contactsResponse = await apiRequest("GET", `/api/contacts/${currentUserId}`);
-        const contactsData = await contactsResponse.json();
-
-        if (contactsData.contacts && contactsData.contacts.length > 0) {
-          const loadedContacts: Contact[] = contactsData.contacts.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            role: c.role || undefined,
-            color: c.color,
-            createdAt: parseDate(c.createdAt),
-          }));
-          setContacts(loadedContacts);
-        }
+      if (contactsData.contacts && contactsData.contacts.length > 0) {
+        const loadedContacts: Contact[] = contactsData.contacts.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          role: c.role || undefined,
+          color: c.color,
+          createdAt: parseDate(c.createdAt),
+        }));
+        setContacts(loadedContacts);
       }
     } catch (error) {
       console.error("Failed to load from database:", error);

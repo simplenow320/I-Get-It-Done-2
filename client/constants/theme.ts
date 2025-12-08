@@ -62,6 +62,7 @@ export const Spacing = {
   md: 16,
   lg: 24,
   xl: 40,
+  xxl: 48,
   inputHeight: 48,
   buttonHeight: 52,
 };
