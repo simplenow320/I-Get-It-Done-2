@@ -138,27 +138,40 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [tasks, unsortedTasks, contacts, settings, isLoaded]);
 
+  const parseDate = (value: unknown): Date => {
+    if (value instanceof Date) return value;
+    if (typeof value === "string") return new Date(value);
+    return new Date();
+  };
+
+  const parseDateOptional = (value: unknown): Date | undefined => {
+    if (!value) return undefined;
+    if (value instanceof Date) return value;
+    if (typeof value === "string") return new Date(value);
+    return undefined;
+  };
+
   const loadState = async () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.tasks) setTasks(parsed.tasks.map((t: Task) => ({
+        if (parsed.tasks) setTasks(parsed.tasks.map((t: Record<string, unknown>) => ({
           ...t,
-          createdAt: new Date(t.createdAt),
-          dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
-          completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
-          delegatedAt: t.delegatedAt ? new Date(t.delegatedAt) : undefined,
-          lastDelegationUpdate: t.lastDelegationUpdate ? new Date(t.lastDelegationUpdate) : undefined,
-          delegationNotes: t.delegationNotes?.map((n: DelegationNote) => ({
+          createdAt: parseDate(t.createdAt),
+          dueDate: parseDateOptional(t.dueDate),
+          completedAt: parseDateOptional(t.completedAt),
+          delegatedAt: parseDateOptional(t.delegatedAt),
+          lastDelegationUpdate: parseDateOptional(t.lastDelegationUpdate),
+          delegationNotes: Array.isArray(t.delegationNotes) ? t.delegationNotes.map((n: Record<string, unknown>) => ({
             ...n,
-            createdAt: new Date(n.createdAt),
-          })),
+            createdAt: parseDate(n.createdAt),
+          })) : undefined,
         })));
         if (parsed.unsortedTasks) setUnsortedTasks(parsed.unsortedTasks);
-        if (parsed.contacts) setContacts(parsed.contacts.map((c: Contact) => ({
+        if (parsed.contacts) setContacts(parsed.contacts.map((c: Record<string, unknown>) => ({
           ...c,
-          createdAt: new Date(c.createdAt),
+          createdAt: parseDate(c.createdAt),
         })));
         if (parsed.settings) setSettings({ ...defaultSettings, ...parsed.settings });
       }
@@ -169,12 +182,35 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const serializeDate = (date: Date | undefined): string | undefined => {
+    if (!date) return undefined;
+    return date instanceof Date ? date.toISOString() : String(date);
+  };
+
   const saveState = async () => {
     try {
+      const serializedTasks = tasks.map(task => ({
+        ...task,
+        createdAt: serializeDate(task.createdAt),
+        dueDate: serializeDate(task.dueDate),
+        completedAt: serializeDate(task.completedAt),
+        delegatedAt: serializeDate(task.delegatedAt),
+        lastDelegationUpdate: serializeDate(task.lastDelegationUpdate),
+        delegationNotes: task.delegationNotes?.map(note => ({
+          ...note,
+          createdAt: serializeDate(note.createdAt),
+        })),
+      }));
+      
+      const serializedContacts = contacts.map(contact => ({
+        ...contact,
+        createdAt: serializeDate(contact.createdAt),
+      }));
+
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
-        tasks,
+        tasks: serializedTasks,
         unsortedTasks,
-        contacts,
+        contacts: serializedContacts,
         settings,
       }));
     } catch (error) {
