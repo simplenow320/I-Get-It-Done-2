@@ -11,10 +11,18 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane, Task } from "@/stores/TaskStore";
-import { useGamification, LEVELS } from "@/stores/GamificationStore";
+import { useGamification, Level } from "@/stores/GamificationStore";
 
 const STALE_DAYS_PARK = 14;
 const STALE_DAYS_SOON = 7;
+
+const LEVELS: { name: Level; minPoints: number; color: string }[] = [
+  { name: "starter", minPoints: 0, color: "#8E8E93" },
+  { name: "focused", minPoints: 100, color: "#007AFF" },
+  { name: "productive", minPoints: 500, color: "#34C759" },
+  { name: "unstoppable", minPoints: 1500, color: "#FF9500" },
+  { name: "legendary", minPoints: 5000, color: "#AF52DE" },
+];
 
 export default function WeeklyResetScreen() {
   const insets = useSafeAreaInsets();
@@ -22,10 +30,9 @@ export default function WeeklyResetScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation();
   const { getCompletedTasks, getTasksByLane, moveTask } = useTaskStore();
-  const { state: gamification, getDailyStats } = useGamification();
+  const gamification = useGamification();
 
   const completedTasks = getCompletedTasks();
-  const dailyStats = getDailyStats();
   
   const thisWeekCompleted = useMemo(() => {
     return completedTasks.filter((t) => {
@@ -59,6 +66,15 @@ export default function WeeklyResetScreen() {
     cutoff.setDate(cutoff.getDate() - STALE_DAYS_SOON);
     return soonTasks.filter((t) => new Date(t.createdAt) < cutoff);
   }, [soonTasks]);
+
+  const recentAchievements = useMemo(() => {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return gamification.achievements.filter((a) => {
+      if (!a.unlockedAt) return false;
+      return new Date(a.unlockedAt) >= weekAgo;
+    });
+  }, [gamification.achievements]);
 
   const currentLevel = LEVELS.find((l) => l.name === gamification.level);
   const nextLevel = LEVELS.find((l) => l.minPoints > (currentLevel?.minPoints || 0));
@@ -147,7 +163,16 @@ export default function WeeklyResetScreen() {
               />
             </View>
           </View>
-        ) : null}
+        ) : (
+          <View style={[styles.progressContainer, { backgroundColor: `${LEVELS[4].color}20` }]}>
+            <View style={styles.maxLevelRow}>
+              <Feather name="award" size={20} color={LEVELS[4].color} />
+              <ThemedText type="body" style={{ color: LEVELS[4].color, fontWeight: "600" }}>
+                You reached Legendary status!
+              </ThemedText>
+            </View>
+          </View>
+        )}
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(300).duration(400)}>
@@ -246,35 +271,69 @@ export default function WeeklyResetScreen() {
         </Animated.View>
       ) : null}
 
-      {thisWeekCompleted.length > 0 ? (
+      {(thisWeekCompleted.length > 0 || recentAchievements.length > 0 || gamification.currentStreak >= 3) ? (
         <Animated.View entering={FadeInUp.delay(700).duration(400)}>
           <ThemedText type="h4" style={styles.sectionTitle}>
             Wins This Week
           </ThemedText>
-          <View style={[styles.completedList, { backgroundColor: theme.backgroundDefault }]}>
-            {thisWeekCompleted.slice(0, 5).map((task, index) => (
-              <View
-                key={task.id}
-                style={[
-                  styles.completedItem,
-                  index < Math.min(thisWeekCompleted.length, 5) - 1 && {
-                    borderBottomWidth: 1,
-                    borderBottomColor: theme.border,
-                  },
-                ]}
-              >
-                <Feather name="check-circle" size={20} color={theme.success} />
-                <ThemedText type="body" numberOfLines={1} style={styles.completedText}>
-                  {task.title}
+          
+          {gamification.currentStreak >= 3 ? (
+            <View style={[styles.streakHighlight, { backgroundColor: `${LaneColors.soon.primary}20` }]}>
+              <Feather name="zap" size={24} color={LaneColors.soon.primary} />
+              <View style={{ flex: 1 }}>
+                <ThemedText type="body" style={{ fontWeight: "600", color: LaneColors.soon.primary }}>
+                  {gamification.currentStreak}-Day Streak!
+                </ThemedText>
+                <ThemedText type="small" secondary>
+                  You're on fire! Keep it going.
                 </ThemedText>
               </View>
-            ))}
-            {thisWeekCompleted.length > 5 ? (
-              <ThemedText type="small" secondary style={styles.moreText}>
-                +{thisWeekCompleted.length - 5} more wins
+            </View>
+          ) : null}
+          
+          {recentAchievements.length > 0 ? (
+            <View style={[styles.achievementsList, { backgroundColor: `${LaneColors.park.primary}15` }]}>
+              <ThemedText type="body" style={{ fontWeight: "600", marginBottom: Spacing.xs }}>
+                New Achievements
               </ThemedText>
-            ) : null}
-          </View>
+              {recentAchievements.map((achievement) => (
+                <View key={achievement.id} style={styles.achievementItem}>
+                  <Feather name={achievement.icon as keyof typeof Feather.glyphMap} size={18} color={LaneColors.park.primary} />
+                  <View style={{ flex: 1 }}>
+                    <ThemedText type="body" style={{ fontWeight: "500" }}>{achievement.title}</ThemedText>
+                    <ThemedText type="small" secondary>{achievement.description}</ThemedText>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          
+          {thisWeekCompleted.length > 0 ? (
+            <View style={[styles.completedList, { backgroundColor: theme.backgroundDefault }]}>
+              {thisWeekCompleted.slice(0, 5).map((task, index) => (
+                <View
+                  key={task.id}
+                  style={[
+                    styles.completedItem,
+                    index < Math.min(thisWeekCompleted.length, 5) - 1 && {
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.border,
+                    },
+                  ]}
+                >
+                  <Feather name="check-circle" size={20} color={theme.success} />
+                  <ThemedText type="body" numberOfLines={1} style={styles.completedText}>
+                    {task.title}
+                  </ThemedText>
+                </View>
+              ))}
+              {thisWeekCompleted.length > 5 ? (
+                <ThemedText type="small" secondary style={styles.moreText}>
+                  +{thisWeekCompleted.length - 5} more wins
+                </ThemedText>
+              ) : null}
+            </View>
+          ) : null}
         </Animated.View>
       ) : null}
 
@@ -407,6 +466,11 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 4,
   },
+  maxLevelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
   sectionTitle: {
     marginBottom: Spacing.sm,
   },
@@ -454,6 +518,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.sm,
+  },
+  streakHighlight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+  },
+  achievementsList: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+  },
+  achievementItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
   },
   completedList: {
     borderRadius: BorderRadius.md,
