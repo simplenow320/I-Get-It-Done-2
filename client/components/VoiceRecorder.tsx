@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Pressable, Platform, Alert } from "react-native";
-import { useAudioRecorder, RecordingPresets, AudioModule } from "expo-audio";
+import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Animated, { 
@@ -78,6 +78,11 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         setPermissionStatus("granted");
       }
 
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+
       await audioRecorder.record();
       setState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -93,6 +98,11 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
       await audioRecorder.stop();
+      
+      await setAudioModeAsync({
+        allowsRecording: false,
+      });
+      
       const uri = audioRecorder.uri;
 
       if (!uri) {
