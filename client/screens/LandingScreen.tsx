@@ -14,49 +14,34 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, "Landing">;
 
-const features = [
-  {
-    icon: "zap" as const,
-    title: "Now",
-    description: "Today's focus",
-    color: LaneColors.now.primary,
-  },
+const painPoints = [
   {
     icon: "clock" as const,
-    title: "Soon",
-    description: "Next few days",
-    color: LaneColors.soon.primary,
+    problem: "Time blindness",
+    solution: "Visual timers that keep you anchored",
   },
   {
-    icon: "calendar" as const,
-    title: "Later",
-    description: "This week",
-    color: LaneColors.later.primary,
+    icon: "play" as const,
+    problem: "Can't start tasks",
+    solution: "Break It Down makes starting easy",
   },
   {
-    icon: "archive" as const,
-    title: "Park",
-    description: "Ideas to revisit",
-    color: LaneColors.park.primary,
+    icon: "layers" as const,
+    problem: "Overwhelmed by big tasks",
+    solution: "Small steps with instant progress",
+  },
+  {
+    icon: "zap" as const,
+    problem: "Low motivation",
+    solution: "Streaks and wins that fuel your brain",
   },
 ];
 
-const benefits = [
-  {
-    icon: "target" as const,
-    title: "Stay Focused",
-    description: "Know exactly what to work on right now",
-  },
-  {
-    icon: "trending-up" as const,
-    title: "Track Progress",
-    description: "Watch your productivity grow each week",
-  },
-  {
-    icon: "refresh-cw" as const,
-    title: "Weekly Reset",
-    description: "Review accomplishments and plan ahead",
-  },
+const lanes = [
+  { title: "Now", desc: "Today's focus", color: LaneColors.now.primary },
+  { title: "Soon", desc: "Next few days", color: LaneColors.soon.primary },
+  { title: "Later", desc: "This week", color: LaneColors.later.primary },
+  { title: "Park", desc: "Safe for ideas", color: LaneColors.park.primary },
 ];
 
 export default function LandingScreen() {
@@ -87,85 +72,126 @@ export default function LandingScreen() {
           I GET IT DONE
         </ThemedText>
         <ThemedText type="h1" style={styles.heroTagline}>
-          Finish what matters.{"\n"}Today.
-        </ThemedText>
-        <ThemedText type="body" secondary style={styles.heroDescription}>
-          A simple 4-lane system that helps you prioritize tasks and crush your goals.
+          Your brain works different.{"\n"}This app does too.
         </ThemedText>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(300).duration(600)} style={styles.lanesSection}>
+      <Animated.View entering={FadeInUp.delay(200).duration(600)} style={styles.truthSection}>
+        <View style={[styles.truthCard, { backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)" }]}>
+          <ThemedText type="body" style={styles.truthText}>
+            Whether you have been diagnosed with ADHD or you just struggle to finish what you start...
+          </ThemedText>
+          <ThemedText type="h3" style={styles.truthHighlight}>
+            Every single feature in this app was built with you in mind.
+          </ThemedText>
+          <ThemedText type="small" secondary style={styles.truthSubtext}>
+            Research-backed. Clinically informed. Built for brains that work fast, think big, and need things simple.
+          </ThemedText>
+        </View>
+      </Animated.View>
+
+      <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.problemSection}>
         <ThemedText type="h3" style={styles.sectionTitle}>
-          The 4-Lane System
+          We Know Your Struggle
         </ThemedText>
+        <ThemedText type="body" secondary style={styles.sectionSubtitle}>
+          And we built solutions for each one
+        </ThemedText>
+        
+        {painPoints.map((item, index) => (
+          <Animated.View
+            key={item.problem}
+            entering={FadeInUp.delay(500 + index * 80).duration(400)}
+            style={[styles.painCard, { backgroundColor: theme.backgroundDefault }]}
+          >
+            <View style={[styles.painIcon, { backgroundColor: LaneColors.now.primary }]}>
+              <Feather name={item.icon} size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.painContent}>
+              <ThemedText type="body" style={styles.painProblem}>
+                {item.problem}
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                {item.solution}
+              </ThemedText>
+            </View>
+            <Feather name="check" size={20} color={LaneColors.now.primary} />
+          </Animated.View>
+        ))}
+      </Animated.View>
+
+      <Animated.View entering={FadeInUp.delay(800).duration(600)} style={styles.systemSection}>
+        <ThemedText type="h3" style={styles.sectionTitle}>
+          A System That Actually Works
+        </ThemedText>
+        <ThemedText type="body" secondary style={styles.sectionSubtitle}>
+          Four lanes. Zero confusion. No more chaos.
+        </ThemedText>
+        
         <View style={styles.lanesGrid}>
           <View style={styles.lanesRow}>
-            {features.slice(0, 2).map((feature, index) => (
+            {lanes.slice(0, 2).map((lane, index) => (
               <Animated.View
-                key={feature.title}
-                entering={FadeInUp.delay(400 + index * 100).duration(400)}
+                key={lane.title}
+                entering={FadeInUp.delay(900 + index * 100).duration(400)}
                 style={[styles.laneCard, { backgroundColor: theme.backgroundDefault }]}
               >
-                <View style={[styles.laneIconContainer, { backgroundColor: feature.color }]}>
-                  <Feather name={feature.icon} size={20} color="#FFFFFF" />
-                </View>
-                <ThemedText type="h4" style={styles.laneTitle}>
-                  {feature.title}
-                </ThemedText>
-                <ThemedText type="small" secondary style={styles.laneDescription}>
-                  {feature.description}
-                </ThemedText>
+                <View style={[styles.laneDot, { backgroundColor: lane.color }]} />
+                <ThemedText type="h4">{lane.title}</ThemedText>
+                <ThemedText type="small" secondary>{lane.desc}</ThemedText>
               </Animated.View>
             ))}
           </View>
           <View style={styles.lanesRow}>
-            {features.slice(2, 4).map((feature, index) => (
+            {lanes.slice(2, 4).map((lane, index) => (
               <Animated.View
-                key={feature.title}
-                entering={FadeInUp.delay(600 + index * 100).duration(400)}
+                key={lane.title}
+                entering={FadeInUp.delay(1100 + index * 100).duration(400)}
                 style={[styles.laneCard, { backgroundColor: theme.backgroundDefault }]}
               >
-                <View style={[styles.laneIconContainer, { backgroundColor: feature.color }]}>
-                  <Feather name={feature.icon} size={20} color="#FFFFFF" />
-                </View>
-                <ThemedText type="h4" style={styles.laneTitle}>
-                  {feature.title}
-                </ThemedText>
-                <ThemedText type="small" secondary style={styles.laneDescription}>
-                  {feature.description}
-                </ThemedText>
+                <View style={[styles.laneDot, { backgroundColor: lane.color }]} />
+                <ThemedText type="h4">{lane.title}</ThemedText>
+                <ThemedText type="small" secondary>{lane.desc}</ThemedText>
               </Animated.View>
             ))}
           </View>
         </View>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(800).duration(600)} style={styles.benefitsSection}>
+      <Animated.View entering={FadeInUp.delay(1200).duration(600)} style={styles.featuresSection}>
         <ThemedText type="h3" style={styles.sectionTitle}>
-          Why It Works
+          Built From Research
         </ThemedText>
-        {benefits.map((benefit, index) => (
-          <Animated.View
-            key={benefit.title}
-            entering={FadeInUp.delay(900 + index * 100).duration(400)}
-            style={[styles.benefitRow, { backgroundColor: theme.backgroundDefault }]}
-          >
-            <View style={[styles.benefitIcon, { backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)" }]}>
-              <Feather name={benefit.icon} size={24} color={LaneColors.now.primary} />
-            </View>
-            <View style={styles.benefitContent}>
-              <ThemedText type="body" style={{ fontWeight: "600" }}>
-                {benefit.title}
-              </ThemedText>
-              <ThemedText type="small" secondary>
-                {benefit.description}
-              </ThemedText>
-            </View>
-          </Animated.View>
-        ))}
+        
+        <View style={styles.featuresList}>
+          <View style={styles.featureRow}>
+            <Feather name="check-circle" size={18} color={LaneColors.now.primary} />
+            <ThemedText type="body" style={styles.featureText}>Quick Dump for rapid brain capture</ThemedText>
+          </View>
+          <View style={styles.featureRow}>
+            <Feather name="check-circle" size={18} color={LaneColors.now.primary} />
+            <ThemedText type="body" style={styles.featureText}>Break It Down to make starting easy</ThemedText>
+          </View>
+          <View style={styles.featureRow}>
+            <Feather name="check-circle" size={18} color={LaneColors.now.primary} />
+            <ThemedText type="body" style={styles.featureText}>Focus Timer to beat time blindness</ThemedText>
+          </View>
+          <View style={styles.featureRow}>
+            <Feather name="check-circle" size={18} color={LaneColors.now.primary} />
+            <ThemedText type="body" style={styles.featureText}>Streaks and wins for dopamine boost</ThemedText>
+          </View>
+          <View style={styles.featureRow}>
+            <Feather name="check-circle" size={18} color={LaneColors.now.primary} />
+            <ThemedText type="body" style={styles.featureText}>Weekly Reset to prevent chaos buildup</ThemedText>
+          </View>
+          <View style={styles.featureRow}>
+            <Feather name="check-circle" size={18} color={LaneColors.now.primary} />
+            <ThemedText type="body" style={styles.featureText}>Hand-off mode to reduce mental load</ThemedText>
+          </View>
+        </View>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(1200).duration(600)} style={styles.ctaSection}>
+      <Animated.View entering={FadeInUp.delay(1400).duration(600)} style={styles.ctaSection}>
         <LinearGradient
           colors={LaneColors.now.gradient as [string, string]}
           start={{ x: 0, y: 0 }}
@@ -178,7 +204,15 @@ export default function LandingScreen() {
             lightColor="#FFFFFF"
             darkColor="#FFFFFF"
           >
-            Ready to get things done?
+            Stop fighting your brain.
+          </ThemedText>
+          <ThemedText
+            type="h2"
+            style={styles.ctaTitle}
+            lightColor="#FFFFFF"
+            darkColor="#FFFFFF"
+          >
+            Start working with it.
           </ThemedText>
           <ThemedText
             type="body"
@@ -186,7 +220,7 @@ export default function LandingScreen() {
             lightColor="rgba(255,255,255,0.9)"
             darkColor="rgba(255,255,255,0.9)"
           >
-            Start organizing your tasks in minutes
+            Simple. Fast. Doable. Built for brains like yours.
           </ThemedText>
           <Pressable
             onPress={handleGetStarted}
@@ -200,16 +234,16 @@ export default function LandingScreen() {
             ]}
           >
             <ThemedText type="body" style={[styles.ctaButtonText, { color: LaneColors.now.primary }]}>
-              Get Started Free
+              Get Started Now
             </ThemedText>
             <Feather name="arrow-right" size={20} color={LaneColors.now.primary} />
           </Pressable>
         </LinearGradient>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(1300).duration(400)} style={styles.footer}>
+      <Animated.View entering={FadeInUp.delay(1500).duration(400)} style={styles.footer}>
         <ThemedText type="small" secondary style={styles.footerText}>
-          No account required. Your data stays on your device.
+          No account needed. Your data stays private on your device.
         </ThemedText>
       </Animated.View>
     </ScrollView>
@@ -225,12 +259,12 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     alignItems: "center",
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
+    width: 72,
+    height: 72,
+    borderRadius: 18,
     marginBottom: Spacing.md,
   },
   heroTitle: {
@@ -239,18 +273,65 @@ const styles = StyleSheet.create({
   },
   heroTagline: {
     textAlign: "center",
-    marginBottom: Spacing.md,
+    lineHeight: 38,
   },
-  heroDescription: {
-    textAlign: "center",
-    maxWidth: 320,
-  },
-  lanesSection: {
+  truthSection: {
     marginBottom: Spacing.xl,
+  },
+  truthCard: {
+    borderRadius: BorderRadius.md,
+    padding: Spacing.lg,
+    alignItems: "center",
+  },
+  truthText: {
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+    lineHeight: 24,
+  },
+  truthHighlight: {
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+    lineHeight: 28,
+  },
+  truthSubtext: {
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+  problemSection: {
+    marginBottom: Spacing.xl,
+    gap: Spacing.sm,
   },
   sectionTitle: {
     textAlign: "center",
+    marginBottom: Spacing.xs,
+  },
+  sectionSubtitle: {
+    textAlign: "center",
     marginBottom: Spacing.md,
+  },
+  painCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.md,
+  },
+  painIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  painContent: {
+    flex: 1,
+  },
+  painProblem: {
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  systemSection: {
+    marginBottom: Spacing.xl,
   },
   lanesGrid: {
     gap: Spacing.sm,
@@ -264,40 +345,27 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     alignItems: "center",
+    gap: Spacing.xs,
   },
-  laneIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.sm,
-  },
-  laneTitle: {
+  laneDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     marginBottom: Spacing.xs,
   },
-  laneDescription: {
-    textAlign: "center",
-  },
-  benefitsSection: {
+  featuresSection: {
     marginBottom: Spacing.xl,
-    gap: Spacing.sm,
   },
-  benefitRow: {
+  featuresList: {
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  featureRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
-  benefitIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  benefitContent: {
+  featureText: {
     flex: 1,
   },
   ctaSection: {
@@ -310,10 +378,11 @@ const styles = StyleSheet.create({
   },
   ctaTitle: {
     textAlign: "center",
-    marginBottom: Spacing.sm,
+    lineHeight: 32,
   },
   ctaDescription: {
     textAlign: "center",
+    marginTop: Spacing.sm,
     marginBottom: Spacing.lg,
   },
   ctaButton: {
