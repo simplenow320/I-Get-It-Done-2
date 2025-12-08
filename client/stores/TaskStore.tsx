@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "@/lib/supabase";
 
 export type Lane = "now" | "soon" | "later" | "park";
 export type ReminderType = "soft" | "strong" | "persistent" | "none";
@@ -116,6 +117,7 @@ const defaultSettings: UserSettings = {
 };
 
 const STORAGE_KEY = "@task_store";
+const SETTINGS_STORAGE_KEY = "@user_settings";
 
 const TaskStoreContext = createContext<TaskStoreContext | null>(null);
 
@@ -125,8 +127,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const generateId = () => Math.random().toString(36).substring(2, 15);
+  const generateId = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
 
   useEffect(() => {
     loadState();
@@ -153,32 +156,104 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const loadState = async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.tasks) setTasks(parsed.tasks.map((t: Record<string, unknown>) => ({
-          ...t,
-          createdAt: parseDate(t.createdAt),
-          dueDate: parseDateOptional(t.dueDate),
-          completedAt: parseDateOptional(t.completedAt),
-          delegatedAt: parseDateOptional(t.delegatedAt),
-          lastDelegationUpdate: parseDateOptional(t.lastDelegationUpdate),
-          delegationNotes: Array.isArray(t.delegationNotes) ? t.delegationNotes.map((n: Record<string, unknown>) => ({
-            ...n,
-            createdAt: parseDate(n.createdAt),
-          })) : undefined,
-        })));
-        if (parsed.unsortedTasks) setUnsortedTasks(parsed.unsortedTasks);
-        if (parsed.contacts) setContacts(parsed.contacts.map((c: Record<string, unknown>) => ({
-          ...c,
-          createdAt: parseDate(c.createdAt),
-        })));
-        if (parsed.settings) setSettings({ ...defaultSettings, ...parsed.settings });
+      const storedSettings = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (storedSettings) {
+        const parsedSettings = JSON.parse(storedSettings);
+        setSettings({ ...defaultSettings, ...parsedSettings });
       }
+
+      const storedUnsorted = await AsyncStorage.getItem(STORAGE_KEY);
+      if (storedUnsorted) {
+        const parsed = JSON.parse(storedUnsorted);
+        if (parsed.unsortedTasks) setUnsortedTasks(parsed.unsortedTasks);
+      }
+
+      await loadFromSupabase();
       setIsLoaded(true);
     } catch (error) {
       console.error("Failed to load task store:", error);
       setIsLoaded(true);
+    }
+  };
+
+  const loadFromSupabase = async () => {
+    try {
+      const { data: users } = await supabase.from("users").select("*").limit(1);
+      let currentUserId = users && users.length > 0 ? users[0].id : null;
+      
+      if (!currentUserId) {
+        const { data: newUser, error: userError } = await supabase
+          .from("users")
+          .insert({ email: "local@device.app" })
+          .select()
+          .single();
+        if (newUser) currentUserId = newUser.id;
+      }
+      
+      if (currentUserId) {
+        setUserId(currentUserId);
+
+        const { data: dbTasks } = await supabase
+          .from("tasks")
+          .select("*")
+          .eq("user_id", currentUserId)
+          .order("created_at", { ascending: false });
+
+        if (dbTasks && dbTasks.length > 0) {
+          const taskIds = dbTasks.map(t => t.id);
+          const { data: dbSubtasks } = await supabase
+            .from("subtasks")
+            .select("*")
+            .in("task_id", taskIds);
+
+          const subtaskMap = new Map<string, Subtask[]>();
+          if (dbSubtasks) {
+            dbSubtasks.forEach(st => {
+              const existing = subtaskMap.get(st.task_id) || [];
+              existing.push({
+                id: st.id,
+                title: st.title,
+                completed: st.completed,
+              });
+              subtaskMap.set(st.task_id, existing);
+            });
+          }
+
+          const loadedTasks: Task[] = dbTasks.map(t => ({
+            id: t.id,
+            title: t.title,
+            notes: t.notes || undefined,
+            lane: t.lane as Lane,
+            createdAt: new Date(t.created_at),
+            dueDate: t.due_date ? new Date(t.due_date) : undefined,
+            completedAt: t.completed_at ? new Date(t.completed_at) : undefined,
+            subtasks: subtaskMap.get(t.id) || [],
+            reminderType: (t.reminder_type || "soft") as ReminderType,
+            focusTimeMinutes: 0,
+            isOverdue: t.is_overdue || false,
+          }));
+
+          setTasks(loadedTasks);
+        }
+
+        const { data: dbContacts } = await supabase
+          .from("contacts")
+          .select("*")
+          .eq("user_id", currentUserId);
+
+        if (dbContacts && dbContacts.length > 0) {
+          const loadedContacts: Contact[] = dbContacts.map(c => ({
+            id: c.id,
+            name: c.name,
+            role: c.role || undefined,
+            color: c.color,
+            createdAt: new Date(),
+          }));
+          setContacts(loadedContacts);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load from Supabase:", error);
     }
   };
 
@@ -189,32 +264,82 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const saveState = async () => {
     try {
-      const serializedTasks = tasks.map(task => ({
-        ...task,
-        createdAt: serializeDate(task.createdAt),
-        dueDate: serializeDate(task.dueDate),
-        completedAt: serializeDate(task.completedAt),
-        delegatedAt: serializeDate(task.delegatedAt),
-        lastDelegationUpdate: serializeDate(task.lastDelegationUpdate),
-        delegationNotes: task.delegationNotes?.map(note => ({
-          ...note,
-          createdAt: serializeDate(note.createdAt),
-        })),
-      }));
-      
-      const serializedContacts = contacts.map(contact => ({
-        ...contact,
-        createdAt: serializeDate(contact.createdAt),
-      }));
-
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
-        tasks: serializedTasks,
-        unsortedTasks,
-        contacts: serializedContacts,
-        settings,
-      }));
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ unsortedTasks }));
+      await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     } catch (error) {
-      console.error("Failed to save task store:", error);
+      console.error("Failed to save local state:", error);
+    }
+  };
+
+  const saveTaskToSupabase = async (task: Task) => {
+    if (!userId) return;
+    try {
+      await supabase.from("tasks").upsert({
+        id: task.id,
+        user_id: userId,
+        title: task.title,
+        notes: task.notes || null,
+        lane: task.lane,
+        reminder_type: task.reminderType,
+        is_overdue: task.isOverdue,
+        created_at: task.createdAt.toISOString(),
+        completed_at: task.completedAt ? task.completedAt.toISOString() : null,
+        due_date: task.dueDate ? task.dueDate.toISOString() : null,
+      });
+    } catch (error) {
+      console.error("Failed to save task to Supabase:", error);
+    }
+  };
+
+  const deleteTaskFromSupabase = async (taskId: string) => {
+    try {
+      await supabase.from("tasks").delete().eq("id", taskId);
+    } catch (error) {
+      console.error("Failed to delete task from Supabase:", error);
+    }
+  };
+
+  const saveSubtaskToSupabase = async (taskId: string, subtask: Subtask) => {
+    try {
+      await supabase.from("subtasks").upsert({
+        id: subtask.id,
+        task_id: taskId,
+        title: subtask.title,
+        completed: subtask.completed,
+      });
+    } catch (error) {
+      console.error("Failed to save subtask to Supabase:", error);
+    }
+  };
+
+  const deleteSubtaskFromSupabase = async (subtaskId: string) => {
+    try {
+      await supabase.from("subtasks").delete().eq("id", subtaskId);
+    } catch (error) {
+      console.error("Failed to delete subtask from Supabase:", error);
+    }
+  };
+
+  const saveContactToSupabase = async (contact: Contact) => {
+    if (!userId) return;
+    try {
+      await supabase.from("contacts").upsert({
+        id: contact.id,
+        user_id: userId,
+        name: contact.name,
+        role: contact.role || null,
+        color: contact.color,
+      });
+    } catch (error) {
+      console.error("Failed to save contact to Supabase:", error);
+    }
+  };
+
+  const deleteContactFromSupabase = async (contactId: string) => {
+    try {
+      await supabase.from("contacts").delete().eq("id", contactId);
+    } catch (error) {
+      console.error("Failed to delete contact from Supabase:", error);
     }
   };
 
@@ -250,7 +375,8 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       isOverdue: false,
     };
     setTasks((prev) => [newTask, ...prev]);
-  }, [calculateDueDate]);
+    saveTaskToSupabase(newTask);
+  }, [calculateDueDate, userId]);
 
   const addUnsortedTask = useCallback((title: string) => {
     const newTask: UnsortedTask = {
@@ -289,40 +415,51 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       };
       setTasks((prev) => [newTask, ...prev]);
       setUnsortedTasks((prev) => prev.filter((t) => t.id !== id));
+      saveTaskToSupabase(newTask);
     }
-  }, [unsortedTasks, calculateDueDate]);
+  }, [unsortedTasks, calculateDueDate, userId]);
 
   const removeUnsortedTask = useCallback((id: string) => {
     setUnsortedTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const completeTask = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
+    setTasks((prev) => {
+      const updated = prev.map((task) =>
         task.id === id ? { ...task, completedAt: new Date() } : task
-      )
-    );
-  }, []);
+      );
+      const task = updated.find(t => t.id === id);
+      if (task) saveTaskToSupabase(task);
+      return updated;
+    });
+  }, [userId]);
 
   const deleteTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((task) => task.id !== id));
+    deleteTaskFromSupabase(id);
   }, []);
 
   const moveTask = useCallback((id: string, newLane: Lane) => {
-    setTasks((prev) =>
-      prev.map((task) =>
+    setTasks((prev) => {
+      const updated = prev.map((task) =>
         task.id === id
           ? { ...task, lane: newLane, dueDate: calculateDueDate(newLane), isOverdue: false }
           : task
-      )
-    );
-  }, [calculateDueDate]);
+      );
+      const task = updated.find(t => t.id === id);
+      if (task) saveTaskToSupabase(task);
+      return updated;
+    });
+  }, [calculateDueDate, userId]);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, ...updates } : task))
-    );
-  }, []);
+    setTasks((prev) => {
+      const updated = prev.map((task) => (task.id === id ? { ...task, ...updates } : task));
+      const task = updated.find(t => t.id === id);
+      if (task) saveTaskToSupabase(task);
+      return updated;
+    });
+  }, [userId]);
 
   const updateSettings = useCallback((updates: Partial<UserSettings>) => {
     setSettings((prev) => ({ ...prev, ...updates }));
@@ -356,11 +493,12 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           : task
       )
     );
+    saveSubtaskToSupabase(taskId, newSubtask);
   }, []);
 
   const toggleSubtask = useCallback((taskId: string, subtaskId: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
+    setTasks((prev) => {
+      const updated = prev.map((task) =>
         task.id === taskId
           ? {
               ...task,
@@ -369,8 +507,12 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
               ),
             }
           : task
-      )
-    );
+      );
+      const task = updated.find(t => t.id === taskId);
+      const subtask = task?.subtasks.find(st => st.id === subtaskId);
+      if (subtask) saveSubtaskToSupabase(taskId, subtask);
+      return updated;
+    });
   }, []);
 
   const deleteSubtask = useCallback((taskId: string, subtaskId: string) => {
@@ -381,6 +523,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           : task
       )
     );
+    deleteSubtaskFromSupabase(subtaskId);
   }, []);
 
   const getTaskProgress = useCallback((taskId: string): number => {
@@ -409,14 +552,18 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       createdAt: new Date(),
     };
     setContacts((prev) => [...prev, newContact]);
+    saveContactToSupabase(newContact);
     return newContact;
-  }, [contacts.length]);
+  }, [contacts.length, userId]);
 
   const updateContact = useCallback((id: string, updates: Partial<Contact>) => {
-    setContacts((prev) =>
-      prev.map((contact) => (contact.id === id ? { ...contact, ...updates } : contact))
-    );
-  }, []);
+    setContacts((prev) => {
+      const updated = prev.map((contact) => (contact.id === id ? { ...contact, ...updates } : contact));
+      const contact = updated.find(c => c.id === id);
+      if (contact) saveContactToSupabase(contact);
+      return updated;
+    });
+  }, [userId]);
 
   const deleteContact = useCallback((id: string) => {
     setContacts((prev) => prev.filter((contact) => contact.id !== id));
@@ -427,6 +574,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           : task
       )
     );
+    deleteContactFromSupabase(id);
   }, []);
 
   const getContactById = useCallback((id: string): Contact | undefined => {
