@@ -1,0 +1,220 @@
+Here is a full Test & Debug Prompt you can paste directly into Replit AI Agent.
+It is written in your voice, simple, clear, and forces the AI to actually inspect the entire codebase, compare your real app against every feature in the ADHD-optimized MVP, list what is missing, and give you a clean plan to finish the app.
+
+This is the exact kind of prompt that keeps the AI honest, thorough, and on task.
+
+⸻
+
+✅ TEST & DEBUG PROMPT FOR REPLIT AI AGENT
+
+“I GET IT DONE – ADHD Productivity App”
+
+Copy/paste everything below into Replit when you’re ready:
+
+⸻
+
+BEGIN PROMPT
+
+You are the lead engineer and QA inspector for the I GET IT DONE ADHD-optimized productivity app.
+Your job is to:
+	1.	Scan and examine the entire codebase.
+	2.	Map every file, function, component, route, and system.
+	3.	Compare the real build to the full feature list and flow below.
+	4.	Tell me which features are:
+• Fully built
+• Partially built
+• Missing
+• Buggy
+• Out of alignment with our MVP
+	5.	Run a complete test + debug pass on everything currently in the codebase.
+	6.	Produce a clear report showing:
+• What is working 100 percent
+• What is not working
+• What needs to be added
+• What needs to be rewritten
+• All errors found
+	7.	Then create a step-by-step completion plan to finish the entire app.
+	8.	After that, generate a clean checklist we will use to track completion.
+
+Do NOT make any changes until after you have completed your full report.
+First: scan, compare, test, debug, report.
+
+⸻
+
+APP FEATURE REQUIREMENTS (ALL MUST BE PRESENT)
+
+1. Core Lanes
+	•	Now
+	•	Soon
+	•	Later
+	•	Park
+
+2. Custom Time Windows
+
+User-defined defaults for each lane based on days or weeks.
+
+3. Smart Task Sorter
+
+Sorts tasks into lanes based on user selection.
+
+4. Quick Capture / Brain Dump
+
+Rapid text entry + voice input → sorted later.
+
+5. Task Chunking
+
+“Break It Down” button
+Auto-suggest small steps
+Manual editing
+Progress bar for chunk completion
+
+6. Focus Timer (Sprint Mode)
+
+10, 15, 25 minute presets
+Custom timer
+Visual countdown ring
+End-of-sprint prompt
+
+7. Auto-Move System
+
+Soon → Now
+Later → Soon
+Overdue flags
+Park stays untouched unless user reviews
+
+8. Reminders System
+
+Soft reminders
+Strong alerts
+Persistent reminders
+Daily summary
+Lock-screen Now count
+
+9. Daily Focus Mode
+
+Shows only Now tasks
+Optional one-task-at-a-time mode
+Ability to start sprint timers
+Swipe to complete or move tasks
+
+10. Weekly Reset
+
+Wins summary
+Auto-move review
+Park review
+Cleanup suggestions
+Next-week setup
+
+11. Light Gamification
+
+Streaks
+Points for chunks
+Task-complete celebration
+Level badges
+
+12. Delegation / Hand-Off
+
+Add team members
+Send task card
+Track progress
+Delegation reminders
+
+13. Accountability (V1.5)
+
+Optional sharing of Now list
+Focus session partner mode
+Check-in prompts
+
+14. UI Structure
+
+Dashboard with 4 lanes
+Quick Dump button
+Clear lane views
+Task detail view
+Chunk view
+Timer view
+Weekly reset view
+Delegation view
+
+15. Data Storage
+
+Persistent tasks
+Chunk progress
+Timers
+Streaks
+User settings
+Reminders
+Delegation assignments
+Park reminders
+
+16. Error Handling
+
+Every screen must fail safely.
+Form checks, empty-state checks, etc.
+
+⸻
+
+APP FLOW (MUST MATCH)
+	1.	Open app → Dashboard
+	2.	Add Task → Choose lane → Auto-timing assigned
+	3.	Optional: Break It Down → create chunks → progress bar
+	4.	Work from Now → Focus Mode → sprint timer
+	5.	Tasks auto-move with time
+	6.	Quick Capture → Later sorting
+	7.	Weekly Reset → Wins → Cleanup → Reset
+	8.	Delegation → tracking
+	9.	Gamification → streaks + task rewards
+
+⸻
+
+WHAT I WANT FROM YOU NOW
+
+STEP 1 — Scan Everything
+
+Review every file, function, component, and route.
+
+STEP 2 — Create a Detailed Report
+
+For each feature listed above, tell me:
+
+• Present and working
+• Present but buggy
+• Present but incomplete
+• Missing entirely
+• Out of scope or incorrectly implemented
+
+STEP 3 — Bug List
+
+List ALL errors, warnings, bad patterns, unused imports, broken logic, poor state management, performance issues, or missing dependencies.
+
+STEP 4 — Completion Roadmap
+
+Lay out a phase-by-phase development plan to bring the app to full MVP completion:
+
+Phase 1 – Must fix now
+Phase 2 – Core missing features
+Phase 3 – ADHD optimization layer
+Phase 4 – Testing, polish, deployment prep
+
+STEP 5 — Checklist
+
+Generate a clear master checklist with every item required for full completion.
+
+STEP 6 — WAIT
+
+Do NOT modify code until I approve.
+
+⸻
+
+END PROMPT
+
+⸻
+
+If you want, I can also make:
+
+• A version of this prompt for continuous testing
+• A version for unit test generation
+• A version for post-build performance optimization
+• A version for deployment readiness
+
+Just tell me the next step.
