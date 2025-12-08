@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import multer from "multer";
 import * as fs from "fs";
+import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { users, tasks, subtasks, contacts, delegationNotes, userStats } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
@@ -67,6 +68,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.status(500).json({ error: "Failed to transcribe audio" });
+    }
+  });
+
+  app.post("/api/auth/register", async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+      
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+      
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
+      if (existing.length > 0) {
+        return res.status(400).json({ error: "An account with this email already exists" });
+      }
+      
+      const passwordHash = await bcrypt.hash(password, 10);
+      
+      const result = await db.insert(users).values({
+        email: normalizedEmail,
+        passwordHash,
+      }).returning();
+      
+      const user = result[0];
+      
+      await db.insert(userStats).values({
+        userId: user.id,
+      });
+      
+      res.json({ 
+        user: { 
+          id: user.id, 
+          email: user.email,
+          createdAt: user.createdAt,
+        } 
+      });
+    } catch (error) {
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Failed to create account" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+      
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
+      if (existing.length === 0) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+      
+      const user = existing[0];
+      
+      if (!user.passwordHash) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+      
+      const validPassword = await bcrypt.compare(password, user.passwordHash);
+      if (!validPassword) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+      
+      res.json({ 
+        user: { 
+          id: user.id, 
+          email: user.email,
+          createdAt: user.createdAt,
+        } 
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Failed to login" });
     }
   });
 
