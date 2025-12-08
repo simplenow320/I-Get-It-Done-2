@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Pressable, Platform } from "react-native";
 import { useAudioRecorder, RecordingPresets, AudioModule } from "expo-audio";
 import * as Haptics from "expo-haptics";
@@ -12,10 +12,9 @@ import Animated, {
   cancelAnimation 
 } from "react-native-reanimated";
 
-import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { getApiUrl } from "@/lib/query-client";
-import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
+import { LaneColors } from "@/constants/theme";
 
 interface VoiceRecorderProps {
   onTranscriptionComplete: (text: string) => void;
@@ -28,7 +27,7 @@ type RecordingState = "idle" | "recording" | "processing";
 export default function VoiceRecorder({ onTranscriptionComplete, onError, compact = false }: VoiceRecorderProps) {
   const { theme } = useTheme();
   const [state, setState] = useState<RecordingState>("idle");
-  const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   
@@ -36,7 +35,9 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const buttonScale = useSharedValue(1);
 
   useEffect(() => {
-    checkPermission();
+    if (Platform.OS !== "web") {
+      checkPermissionOnce();
+    }
   }, []);
 
   useEffect(() => {
@@ -52,32 +53,37 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
   }, [state]);
 
-  const checkPermission = async () => {
+  const checkPermissionOnce = async () => {
     try {
-      const status = await AudioModule.requestRecordingPermissionsAsync();
-      setPermissionGranted(status.granted);
+      const status = await AudioModule.getRecordingPermissionsAsync();
+      if (status.granted) {
+        setPermissionStatus("granted");
+      } else if (status.canAskAgain === false) {
+        setPermissionStatus("denied");
+      }
     } catch (error) {
       console.error("Permission check error:", error);
-      setPermissionGranted(false);
     }
   };
 
   const startRecording = async () => {
     try {
-      const status = await AudioModule.requestRecordingPermissionsAsync();
-      if (!status.granted) {
-        setPermissionGranted(false);
-        onError?.("Microphone permission required");
-        return;
+      if (permissionStatus !== "granted") {
+        const status = await AudioModule.requestRecordingPermissionsAsync();
+        if (!status.granted) {
+          setPermissionStatus("denied");
+          onError?.("Tap to allow mic access");
+          return;
+        }
+        setPermissionStatus("granted");
       }
-      setPermissionGranted(true);
 
       await audioRecorder.record();
       setState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       console.error("Failed to start recording:", error);
-      onError?.("Failed to start recording");
+      onError?.("Couldn't start recording");
     }
   };
 
@@ -96,7 +102,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       await transcribeAudio(uri);
     } catch (error) {
       console.error("Failed to stop recording:", error);
-      onError?.("Failed to process recording");
+      onError?.("Couldn't process audio");
       setState("idle");
     }
   };
@@ -129,11 +135,11 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         onTranscriptionComplete(data.text.trim());
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        onError?.("No speech detected");
+        onError?.("Didn't catch that");
       }
     } catch (error: any) {
       console.error("Transcription error:", error);
-      onError?.(error.message || "Failed to transcribe");
+      onError?.("Couldn't understand audio");
     } finally {
       setState("idle");
     }
@@ -162,23 +168,9 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   if (Platform.OS === "web") {
     return (
-      <View style={[styles.webFallback, { backgroundColor: theme.backgroundSecondary }]}>
-        <Feather name="mic-off" size={18} color={theme.textSecondary} />
-        <ThemedText type="small" secondary style={styles.webText}>
-          Voice in Expo Go
-        </ThemedText>
+      <View style={[styles.webButton, { backgroundColor: theme.backgroundSecondary }]}>
+        <Feather name="mic-off" size={20} color={theme.textSecondary} />
       </View>
-    );
-  }
-
-  if (permissionGranted === false) {
-    return (
-      <Pressable 
-        onPress={checkPermission}
-        style={[styles.permissionButton, { backgroundColor: theme.backgroundSecondary }]}
-      >
-        <Feather name="mic-off" size={18} color={theme.textSecondary} />
-      </Pressable>
     );
   }
 
@@ -215,15 +207,6 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
           )}
         </Pressable>
       </Animated.View>
-      {!compact && state === "recording" ? (
-        <ThemedText type="small" style={styles.stateText}>
-          Tap to stop
-        </ThemedText>
-      ) : !compact && state === "processing" ? (
-        <ThemedText type="small" secondary style={styles.stateText}>
-          Processing...
-        </ThemedText>
-      ) : null}
     </View>
   );
 }
@@ -240,21 +223,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stateText: {
-    marginTop: Spacing.xs,
-    textAlign: "center",
-  },
-  webFallback: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    gap: Spacing.xs,
-  },
-  webText: {
-    flex: 1,
-  },
-  permissionButton: {
+  webButton: {
     width: 44,
     height: 44,
     borderRadius: 12,
