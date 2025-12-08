@@ -11,9 +11,11 @@ export function getApiUrl(): string {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  let url = new URL(`https://${host}`);
+  // Remove port suffix if present - Replit's proxy handles routing internally
+  host = host.replace(/:5000$/, '');
 
-  return url.href;
+  // Return URL without trailing slash to prevent double slashes
+  return `https://${host}`;
 }
 
 async function throwIfResNotOk(res: Response) {
