@@ -11,10 +11,8 @@ export function getApiUrl(): string {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  // Remove port suffix if present - Replit's proxy handles routing internally
-  host = host.replace(/:5000$/, '');
-
   // Return URL without trailing slash to prevent double slashes
+  // Keep port 5000 - external requests need it to reach Express server
   return `https://${host}`;
 }
 
