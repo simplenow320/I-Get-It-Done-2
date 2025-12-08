@@ -3,7 +3,7 @@ import { StyleSheet, View, Pressable, Dimensions, FlatList } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -11,10 +11,12 @@ import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, "LearnMore">;
+import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+type RootNavigation = NativeStackNavigationProp<RootStackParamList, "LearnMore">;
+type ProfileNavigation = NativeStackNavigationProp<ProfileStackParamList, "TourLearnMore">;
 
 interface SlideData {
   id: string;
@@ -65,9 +67,12 @@ const slides: SlideData[] = [
 export default function LearnMoreScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useNavigation<RootNavigation | ProfileNavigation>();
+  const route = useRoute();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+
+  const isTourMode = (route.params as { isTour?: boolean })?.isTour === true;
 
   const handleBack = () => {
     navigation.goBack();
@@ -79,12 +84,20 @@ export default function LearnMoreScreen() {
       setCurrentIndex(nextIndex);
       flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
     } else {
-      navigation.navigate("FAQ");
+      if (isTourMode) {
+        (navigation as ProfileNavigation).navigate("TourFAQ", { isTour: true });
+      } else {
+        (navigation as RootNavigation).navigate("FAQ");
+      }
     }
   };
 
   const handleSkip = () => {
-    navigation.navigate("FAQ");
+    if (isTourMode) {
+      (navigation as ProfileNavigation).navigate("TourFAQ", { isTour: true });
+    } else {
+      (navigation as RootNavigation).navigate("FAQ");
+    }
   };
 
   const renderSlide = ({ item, index }: { item: SlideData; index: number }) => (
@@ -212,7 +225,7 @@ const styles = StyleSheet.create({
   },
   slideNumber: {
     color: "#FFFFFF",
-    fontSize: 28,
+    fontWeight: "700",
   },
   slideTitle: {
     textAlign: "center",
@@ -225,18 +238,19 @@ const styles = StyleSheet.create({
   pointsList: {
     width: "100%",
     gap: Spacing.sm,
+    maxWidth: 340,
   },
   pointCard: {
     flexDirection: "row",
     alignItems: "center",
+    gap: Spacing.md,
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
-    gap: Spacing.md,
   },
   pointIcon: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -267,6 +281,6 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: "#FFFFFF",
-    fontWeight: "700",
+    fontWeight: "600",
   },
 });

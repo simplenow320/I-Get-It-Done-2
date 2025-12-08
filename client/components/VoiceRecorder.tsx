@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, View, Pressable, Platform } from "react-native";
+import { StyleSheet, View, Pressable, Platform, Alert } from "react-native";
 import { useAudioRecorder, RecordingPresets, AudioModule } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -157,6 +157,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
   };
 
+  const handleWebPress = () => {
+    onError?.("Use Expo Go for voice");
+  };
+
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
     opacity: state === "recording" ? 0.3 : 0,
@@ -168,9 +172,12 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   if (Platform.OS === "web") {
     return (
-      <View style={[styles.webButton, { backgroundColor: theme.backgroundSecondary }]}>
+      <Pressable 
+        onPress={handleWebPress}
+        style={[styles.webButton, { backgroundColor: theme.backgroundSecondary }]}
+      >
         <Feather name="mic-off" size={20} color={theme.textSecondary} />
-      </View>
+      </Pressable>
     );
   }
 

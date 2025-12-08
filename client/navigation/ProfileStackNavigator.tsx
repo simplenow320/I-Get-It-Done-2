@@ -6,6 +6,9 @@ import WeeklyResetScreen from "@/screens/WeeklyResetScreen";
 import LaneTimingsSettingsScreen from "@/screens/LaneTimingsSettingsScreen";
 import ModeSettingsScreen from "@/screens/ModeSettingsScreen";
 import HowItWorksScreen from "@/screens/HowItWorksScreen";
+import LandingScreen from "@/screens/LandingScreen";
+import LearnMoreScreen from "@/screens/LearnMoreScreen";
+import FAQScreen from "@/screens/FAQScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 
 export type ProfileStackParamList = {
@@ -14,6 +17,9 @@ export type ProfileStackParamList = {
   LaneTimingsSettings: undefined;
   ModeSettings: undefined;
   HowItWorks: undefined;
+  TourLanding: { isTour: boolean };
+  TourLearnMore: { isTour: boolean };
+  TourFAQ: { isTour: boolean };
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -56,6 +62,30 @@ export default function ProfileStackNavigator() {
         component={HowItWorksScreen}
         options={{
           title: "How It Works",
+        }}
+      />
+      <Stack.Screen
+        name="TourLanding"
+        component={LandingScreen}
+        options={{
+          headerShown: false,
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
+        name="TourLearnMore"
+        component={LearnMoreScreen}
+        options={{
+          headerShown: false,
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
+        name="TourFAQ"
+        component={FAQScreen}
+        options={{
+          headerShown: false,
+          presentation: "modal",
         }}
       />
     </Stack.Navigator>

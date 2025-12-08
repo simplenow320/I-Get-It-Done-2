@@ -82,6 +82,11 @@ export default function ProfileScreen() {
     navigation.navigate("HowItWorks");
   };
 
+  const handleShowTour = () => {
+    Haptics.selectionAsync();
+    navigation.navigate("TourLanding", { isTour: true });
+  };
+
   const handleThemeChange = (newMode: ThemeMode) => {
     Haptics.selectionAsync();
     setMode(newMode);
@@ -297,6 +302,27 @@ export default function ProfileScreen() {
               </ThemedText>
               <ThemedText type="small" secondary>
                 Features and FAQ
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          </Pressable>
+          <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+          <Pressable
+            onPress={handleShowTour}
+            style={({ pressed }) => [
+              styles.menuItemInGroup,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: LaneColors.later.primary }]}>
+              <Feather name="play" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.menuContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                See the Tour
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                Watch the intro again
               </ThemedText>
             </View>
             <Feather name="chevron-right" size={20} color={theme.textSecondary} />

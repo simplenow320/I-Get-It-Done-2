@@ -4,31 +4,59 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, "Landing">;
+type RootNavigation = NativeStackNavigationProp<RootStackParamList, "Landing">;
+type ProfileNavigation = NativeStackNavigationProp<ProfileStackParamList, "TourLanding">;
 
 export default function LandingScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useNavigation<RootNavigation | ProfileNavigation>();
+  const route = useRoute();
+
+  const isTourMode = (route.params as { isTour?: boolean })?.isTour === true;
 
   const handleGetStarted = () => {
-    navigation.navigate("Onboarding");
+    if (isTourMode) {
+      navigation.goBack();
+    } else {
+      (navigation as RootNavigation).navigate("Onboarding");
+    }
   };
 
   const handleLearnMore = () => {
-    navigation.navigate("LearnMore");
+    if (isTourMode) {
+      (navigation as ProfileNavigation).navigate("TourLearnMore", { isTour: true });
+    } else {
+      (navigation as RootNavigation).navigate("LearnMore");
+    }
+  };
+
+  const handleClose = () => {
+    navigation.goBack();
   };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      {isTourMode ? (
+        <Pressable 
+          onPress={handleClose} 
+          style={[styles.closeButton, { top: insets.top + Spacing.sm }]}
+          hitSlop={12}
+        >
+          <View style={[styles.closeIcon, { backgroundColor: theme.backgroundDefault }]}>
+            <Feather name="x" size={20} color={theme.text} />
+          </View>
+        </Pressable>
+      ) : null}
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -86,9 +114,9 @@ export default function LandingScreen() {
               style={styles.buttonGradient}
             >
               <ThemedText type="body" style={styles.primaryButtonText}>
-                Get Started
+                {isTourMode ? "Back to App" : "Get Started"}
               </ThemedText>
-              <Feather name="arrow-right" size={20} color="#FFFFFF" />
+              <Feather name={isTourMode ? "arrow-left" : "arrow-right"} size={20} color="#FFFFFF" />
             </LinearGradient>
           </Pressable>
 
@@ -121,6 +149,18 @@ export default function LandingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  closeButton: {
+    position: "absolute",
+    right: Spacing.lg,
+    zIndex: 10,
+  },
+  closeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
   content: {
     paddingHorizontal: Spacing.lg,

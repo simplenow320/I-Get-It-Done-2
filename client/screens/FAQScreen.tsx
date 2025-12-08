@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -12,8 +12,10 @@ import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, "FAQ">;
+type RootNavigation = NativeStackNavigationProp<RootStackParamList, "FAQ">;
+type ProfileNavigation = NativeStackNavigationProp<ProfileStackParamList, "TourFAQ">;
 
 interface FAQItem {
   question: string;
@@ -84,15 +86,22 @@ function FAQItemComponent({ item, isOpen, onToggle }: { item: FAQItem; isOpen: b
 export default function FAQScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useNavigation<RootNavigation | ProfileNavigation>();
+  const route = useRoute();
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+
+  const isTourMode = (route.params as { isTour?: boolean })?.isTour === true;
 
   const handleBack = () => {
     navigation.goBack();
   };
 
   const handleGetStarted = () => {
-    navigation.navigate("Onboarding");
+    if (isTourMode) {
+      (navigation as ProfileNavigation).navigate("Profile");
+    } else {
+      (navigation as RootNavigation).navigate("Onboarding");
+    }
   };
 
   return (
@@ -146,9 +155,9 @@ export default function FAQScreen() {
             style={styles.ctaGradient}
           >
             <ThemedText type="body" style={styles.ctaText}>
-              Ready? Let's Go!
+              {isTourMode ? "Back to Profile" : "Ready? Let's Go!"}
             </ThemedText>
-            <Feather name="arrow-right" size={20} color="#FFFFFF" />
+            <Feather name={isTourMode ? "arrow-left" : "arrow-right"} size={20} color="#FFFFFF" />
           </LinearGradient>
         </Pressable>
       </View>
@@ -222,6 +231,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: Spacing.sm,
     paddingVertical: Spacing.md + 4,
+    paddingHorizontal: Spacing.xl,
   },
   ctaText: {
     color: "#FFFFFF",
