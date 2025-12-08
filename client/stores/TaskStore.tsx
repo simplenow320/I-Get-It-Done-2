@@ -712,31 +712,17 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       })
     );
     
+    movedTasks.forEach((task) => saveTaskToApi(task));
+    
     return { movedCount: movedTasks.length, tasks: movedTasks };
   }, [calculateDueDate]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = new Date();
-      setTasks((prev) =>
-        prev.map((task) => {
-          if (task.completedAt || !task.dueDate) return task;
-          const dueTime = new Date(task.dueDate).getTime();
-          if (now.getTime() >= dueTime) {
-            if (task.lane === "later") {
-              return { ...task, lane: "soon" as Lane, dueDate: calculateDueDate("soon") };
-            } else if (task.lane === "soon") {
-              return { ...task, lane: "now" as Lane, dueDate: calculateDueDate("now") };
-            } else if (task.lane === "now") {
-              return { ...task, isOverdue: true };
-            }
-          }
-          return task;
-        })
-      );
+      checkOverdueTasks();
     }, 60000);
     return () => clearInterval(interval);
-  }, [calculateDueDate]);
+  }, [checkOverdueTasks]);
 
   return (
     <TaskStoreContext.Provider
