@@ -10,8 +10,10 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import TimerRing from "@/components/TimerRing";
 import Button from "@/components/Button";
+import Confetti from "@/components/Confetti";
 import { useTheme } from "@/hooks/useTheme";
 import { useTaskStore } from "@/stores/TaskStore";
+import { useGamification } from "@/stores/GamificationStore";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { FocusStackParamList } from "@/navigation/FocusStackNavigator";
 
@@ -33,11 +35,13 @@ export default function FocusTimerScreen() {
   const { taskId } = route.params;
 
   const { tasks, addFocusTime, completeTask } = useTaskStore();
+  const { recordFocusSession, recordTaskComplete } = useGamification();
   const task = tasks.find((t) => t.id === taskId);
 
   const [selectedMinutes, setSelectedMinutes] = useState(15);
   const [timeRemaining, setTimeRemaining] = useState(selectedMinutes * 60);
   const [timerState, setTimerState] = useState<TimerState>("idle");
+  const [showConfetti, setShowConfetti] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
   const elapsedRef = useRef<number>(0);
@@ -67,8 +71,10 @@ export default function FocusTimerScreen() {
         if (prev <= 1) {
           if (intervalRef.current) clearInterval(intervalRef.current);
           setTimerState("complete");
+          setShowConfetti(true);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           addFocusTime(taskId, selectedMinutes);
+          recordFocusSession(selectedMinutes);
           return 0;
         }
         if (prev === 60 || prev === 30 || prev === 10) {
@@ -77,7 +83,7 @@ export default function FocusTimerScreen() {
         return prev - 1;
       });
     }, 1000);
-  }, [selectedMinutes, taskId, addFocusTime]);
+  }, [selectedMinutes, taskId, addFocusTime, recordFocusSession]);
 
   const pauseTimer = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -95,14 +101,16 @@ export default function FocusTimerScreen() {
         if (prev <= 1) {
           if (intervalRef.current) clearInterval(intervalRef.current);
           setTimerState("complete");
+          setShowConfetti(true);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           addFocusTime(taskId, selectedMinutes);
+          recordFocusSession(selectedMinutes);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-  }, [selectedMinutes, taskId, addFocusTime]);
+  }, [selectedMinutes, taskId, addFocusTime, recordFocusSession]);
 
   const resetTimer = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -113,11 +121,15 @@ export default function FocusTimerScreen() {
 
   const handleCompleteTask = useCallback(() => {
     if (task) {
+      const hasSubtasks = (task.subtasks?.length || 0) > 0;
+      const subtaskCount = task.subtasks?.length || 0;
+      
       completeTask(task.id);
+      recordTaskComplete(hasSubtasks, subtaskCount);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
     }
-  }, [task, completeTask, navigation]);
+  }, [task, completeTask, recordTaskComplete, navigation]);
 
   const handleAnotherSprint = useCallback(() => {
     setTimerState("idle");
@@ -144,6 +156,7 @@ export default function FocusTimerScreen() {
   if (timerState === "complete") {
     return (
       <ThemedView style={styles.container}>
+        <Confetti visible={showConfetti} onComplete={() => setShowConfetti(false)} count={50} />
         <View style={[styles.content, { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl }]}>
           <Animated.View entering={FadeIn.duration(500)} style={styles.completeContainer}>
             <View style={[styles.completeIcon, { backgroundColor: LaneColors.now.primary }]}>
@@ -153,7 +166,7 @@ export default function FocusTimerScreen() {
               You did it!
             </ThemedText>
             <ThemedText type="body" secondary style={styles.completeSubtitle}>
-              {selectedMinutes} minutes of focused work
+              {selectedMinutes} minutes of focused work (+15 points)
             </ThemedText>
           </Animated.View>
 

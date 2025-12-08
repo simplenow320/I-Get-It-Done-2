@@ -12,6 +12,7 @@ import { queryClient } from "@/lib/query-client";
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TaskStoreProvider } from "@/stores/TaskStore";
+import { GamificationProvider } from "@/stores/GamificationStore";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -33,15 +34,17 @@ export default function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TaskStoreProvider>
-          <ThemeProvider>
-            <SafeAreaProvider>
-              <GestureHandlerRootView style={styles.root}>
-                <KeyboardProvider>
-                  <AppContent />
-                </KeyboardProvider>
-              </GestureHandlerRootView>
-            </SafeAreaProvider>
-          </ThemeProvider>
+          <GamificationProvider>
+            <ThemeProvider>
+              <SafeAreaProvider>
+                <GestureHandlerRootView style={styles.root}>
+                  <KeyboardProvider>
+                    <AppContent />
+                  </KeyboardProvider>
+                </GestureHandlerRootView>
+              </SafeAreaProvider>
+            </ThemeProvider>
+          </GamificationProvider>
         </TaskStoreProvider>
       </QueryClientProvider>
     </ErrorBoundary>

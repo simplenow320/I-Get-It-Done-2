@@ -15,8 +15,10 @@ import { ThemedView } from "@/components/ThemedView";
 import ProgressRing from "@/components/ProgressRing";
 import Button from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
+import Confetti from "@/components/Confetti";
 import { useTheme } from "@/hooks/useTheme";
 import { useTaskStore, Task } from "@/stores/TaskStore";
+import { useGamification } from "@/stores/GamificationStore";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { FocusStackParamList } from "@/navigation/FocusStackNavigator";
 
@@ -33,8 +35,10 @@ export default function FocusModeScreen() {
   const navigation = useNavigation<NavigationProp>();
   
   const { getTasksByLane, completeTask, moveTask, getTaskProgress } = useTaskStore();
+  const { recordTaskComplete, recordNowCleared } = useGamification();
   
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
   const translateX = useSharedValue(0);
 
   const nowTasks = getTasksByLane("now");
@@ -43,10 +47,20 @@ export default function FocusModeScreen() {
 
   const handleComplete = useCallback(() => {
     if (!currentTask) return;
+    const hasSubtasks = (currentTask.subtasks?.length || 0) > 0;
+    const subtaskCount = currentTask.subtasks?.length || 0;
+    
     completeTask(currentTask.id);
+    recordTaskComplete(hasSubtasks, subtaskCount);
+    
+    setShowConfetti(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setCurrentIndex((prev) => Math.min(prev, Math.max(0, nowTasks.length - 2)));
-  }, [currentTask, completeTask, nowTasks.length]);
+    
+    if (nowTasks.length <= 1) {
+      recordNowCleared();
+    }
+  }, [currentTask, completeTask, recordTaskComplete, recordNowCleared, nowTasks.length]);
 
   const handleDefer = useCallback(() => {
     if (!currentTask) return;
@@ -105,6 +119,7 @@ export default function FocusModeScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <Confetti visible={showConfetti} onComplete={() => setShowConfetti(false)} count={40} />
       <View style={[styles.content, { paddingTop: headerHeight + Spacing.lg, paddingBottom: tabBarHeight + Spacing.xl }]}>
         <Animated.View entering={FadeInUp.duration(300)} style={styles.header}>
           <ThemedText type="h3">Focus Mode</ThemedText>

@@ -10,10 +10,12 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { LaneCard } from "@/components/LaneCard";
 import { FloatingAddButton } from "@/components/FloatingAddButton";
 import QuickDumpButton from "@/components/QuickDumpButton";
+import StreakBadge from "@/components/StreakBadge";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
+import { useGamification } from "@/stores/GamificationStore";
 import { DashboardStackParamList } from "@/navigation/DashboardStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<DashboardStackParamList, "Dashboard">;
@@ -25,6 +27,7 @@ export default function DashboardScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const { getTasksByLane, unsortedTasks } = useTaskStore();
+  const { currentStreak } = useGamification();
 
   const handleLanePress = (lane: Lane) => {
     navigation.navigate("LaneDetail", { lane });
@@ -57,7 +60,13 @@ export default function DashboardScreen() {
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeInUp.delay(0).duration(400)}>
+        {currentStreak > 0 ? (
+          <Animated.View entering={FadeInUp.delay(0).duration(400)} style={styles.streakContainer}>
+            <StreakBadge streak={currentStreak} compact />
+          </Animated.View>
+        ) : null}
+
+        <Animated.View entering={FadeInUp.delay(50).duration(400)}>
           <QuickDumpButton onPress={handleQuickDump} />
           {unsortedTasks.length > 0 ? (
             <View style={styles.unsortedBadge}>
@@ -133,6 +142,10 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Spacing.lg,
+  },
+  streakContainer: {
+    alignItems: "flex-end",
+    marginBottom: Spacing.sm,
   },
   unsortedBadge: {
     alignItems: "center",

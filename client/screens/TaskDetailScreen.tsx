@@ -13,6 +13,7 @@ import ProgressRing from "@/components/ProgressRing";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
+import { useGamification } from "@/stores/GamificationStore";
 
 type RouteParams = {
   TaskDetail: { taskId: string };
@@ -31,6 +32,7 @@ export default function TaskDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, "TaskDetail">>();
   const { tasks, updateTask, deleteTask, moveTask, completeTask, addSubtask, toggleSubtask, deleteSubtask } = useTaskStore();
+  const { recordSubtaskComplete, recordTaskComplete } = useGamification();
 
   const task = tasks.find((t) => t.id === route.params.taskId);
 
@@ -63,8 +65,12 @@ export default function TaskDetailScreen() {
 
   const handleComplete = () => {
     if (!task) return;
+    const hasSubtasks = (task.subtasks?.length || 0) > 0;
+    const subtaskCount = task.subtasks?.length || 0;
+    
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     completeTask(task.id);
+    recordTaskComplete(hasSubtasks, subtaskCount);
     navigation.goBack();
   };
 
@@ -102,8 +108,15 @@ export default function TaskDetailScreen() {
 
   const handleToggleSubtask = (subtaskId: string) => {
     if (!task) return;
+    const subtask = task.subtasks?.find((s) => s.id === subtaskId);
+    const wasCompleted = subtask?.completed || false;
+    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleSubtask(task.id, subtaskId);
+    
+    if (!wasCompleted) {
+      recordSubtaskComplete();
+    }
   };
 
   const handleDeleteSubtask = (subtaskId: string) => {
