@@ -127,25 +127,79 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     await transcribeAudio(uri);
   };
 
+  const findActualRecordingFile = async (originalUri: string): Promise<string | null> => {
+    try {
+      // Extract the ExpoAudio directory from the original URI
+      const cacheDir = FileSystem.cacheDirectory;
+      if (!cacheDir) return null;
+      
+      const expoAudioDir = cacheDir + "ExpoAudio/";
+      console.log("Searching for recordings in:", expoAudioDir);
+      
+      // Check if directory exists
+      const dirInfo = await FileSystem.getInfoAsync(expoAudioDir);
+      if (!dirInfo.exists) {
+        console.log("ExpoAudio directory does not exist");
+        return null;
+      }
+      
+      // Read all files in the directory
+      const files = await FileSystem.readDirectoryAsync(expoAudioDir);
+      console.log("Files in ExpoAudio:", files);
+      
+      // Find the most recent non-zero file
+      let latestFile: string | null = null;
+      let latestTime = 0;
+      
+      for (const file of files) {
+        if (!file.endsWith(".m4a")) continue;
+        
+        const filePath = expoAudioDir + file;
+        const info = await FileSystem.getInfoAsync(filePath);
+        
+        if (info.exists && info.size && info.size > 0) {
+          const modTime = info.modificationTime || 0;
+          if (modTime > latestTime) {
+            latestTime = modTime;
+            latestFile = filePath;
+          }
+        }
+      }
+      
+      if (latestFile) {
+        console.log("Found actual recording file:", latestFile);
+      }
+      return latestFile;
+    } catch (error) {
+      console.error("Error finding recording file:", error);
+      return null;
+    }
+  };
+
   const transcribeAudio = async (uri: string) => {
     try {
       console.log("Starting transcription for:", uri);
       
-      // Copy file from cache to documents directory for reliable access
-      const fileName = `recording-${Date.now()}.m4a`;
-      const permanentUri = FileSystem.documentDirectory + fileName;
+      // First check if the original URI works
+      let actualUri = uri;
+      const originalInfo = await FileSystem.getInfoAsync(uri);
       
-      console.log("Copying to permanent location:", permanentUri);
-      await FileSystem.copyAsync({
-        from: uri,
-        to: permanentUri,
-      });
+      if (!originalInfo.exists || !originalInfo.size || originalInfo.size === 0) {
+        console.log("Original URI not accessible, searching for actual file...");
+        const foundUri = await findActualRecordingFile(uri);
+        if (!foundUri) {
+          throw new Error("Could not find recording file");
+        }
+        actualUri = foundUri;
+      }
       
-      // Verify file exists and has content
-      const fileInfo = await FileSystem.getInfoAsync(permanentUri);
+      console.log("Using recording URI:", actualUri);
+      
+      // Verify file has content
+      const fileInfo = await FileSystem.getInfoAsync(actualUri);
       console.log("File info:", JSON.stringify(fileInfo));
       
-      if (!fileInfo.exists || fileInfo.size === 0) {
+      if (!fileInfo.exists || !fileInfo.size || fileInfo.size === 0) {
         throw new Error("Recording file not found or empty");
       }
 
@@ -154,7 +208,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       console.log("Uploading to:", uploadUrl);
       
       // Use FileSystem.uploadAsync for reliable file uploads on iOS/Android
-      const response = await FileSystem.uploadAsync(uploadUrl, permanentUri, {
+      const response = await FileSystem.uploadAsync(uploadUrl, actualUri, {
         fieldName: "audio",
         httpMethod: "POST",
         uploadType: FileSystem.FileSystemUploadType.MULTIPART,
@@ -162,9 +216,6 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       });
       
       console.log("Response status:", response.status);
-      
-      // Clean up the permanent file after upload
-      await FileSystem.deleteAsync(permanentUri, { idempotent: true });
 
       if (response.status !== 200) {
         const errorData = JSON.parse(response.body || "{}");
