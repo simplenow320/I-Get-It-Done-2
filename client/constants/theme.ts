@@ -23,6 +23,7 @@ export const Colors = {
   light: {
     text: "#000000",
     textSecondary: "#8E8E93",
+    textTertiary: "#C7C7CC",
     buttonText: "#FFFFFF",
     tabIconDefault: "#8E8E93",
     tabIconSelected: "#007AFF",
@@ -39,6 +40,7 @@ export const Colors = {
   dark: {
     text: "#FFFFFF",
     textSecondary: "#AEAEB2",
+    textTertiary: "#636366",
     buttonText: "#FFFFFF",
     tabIconDefault: "#AEAEB2",
     tabIconSelected: "#0A84FF",
@@ -78,6 +80,11 @@ export const Typography = {
     fontSize: 72,
     fontWeight: "700" as const,
     letterSpacing: -2,
+  },
+  heroNumber: {
+    fontSize: 48,
+    fontWeight: "700" as const,
+    letterSpacing: -1,
   },
   largeTitle: {
     fontSize: 34,

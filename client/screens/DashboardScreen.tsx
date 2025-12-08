@@ -9,6 +9,8 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { LaneCard } from "@/components/LaneCard";
 import { FloatingAddButton } from "@/components/FloatingAddButton";
+import QuickDumpButton from "@/components/QuickDumpButton";
+import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
@@ -22,9 +24,7 @@ export default function DashboardScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { getTasksByLane } = useTaskStore();
-
-  const lanes: Lane[] = ["now", "soon", "later", "park"];
+  const { getTasksByLane, unsortedTasks } = useTaskStore();
 
   const handleLanePress = (lane: Lane) => {
     navigation.navigate("LaneDetail", { lane });
@@ -33,6 +33,15 @@ export default function DashboardScreen() {
   const handleAddTask = () => {
     navigation.navigate("AddTask");
   };
+
+  const handleQuickDump = () => {
+    navigation.navigate("QuickDump");
+  };
+
+  const totalNowTasks = getTasksByLane("now").length;
+  const totalSoonTasks = getTasksByLane("soon").length;
+  const totalLaterTasks = getTasksByLane("later").length;
+  const totalParkTasks = getTasksByLane("park").length;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -48,25 +57,40 @@ export default function DashboardScreen() {
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
+        <Animated.View entering={FadeInUp.delay(0).duration(400)}>
+          <QuickDumpButton onPress={handleQuickDump} />
+          {unsortedTasks.length > 0 ? (
+            <View style={styles.unsortedBadge}>
+              <ThemedText type="small" secondary>
+                {unsortedTasks.length} task{unsortedTasks.length > 1 ? "s" : ""} to sort
+              </ThemedText>
+            </View>
+          ) : null}
+        </Animated.View>
+
+        <View style={styles.sectionHeader}>
+          <ThemedText type="h4">Your Lanes</ThemedText>
+        </View>
+
         <View style={styles.grid}>
           <View style={styles.row}>
-            <Animated.View
-              entering={FadeInUp.delay(0).duration(400)}
-              style={styles.cardWrapper}
-            >
-              <LaneCard
-                lane="now"
-                count={getTasksByLane("now").length}
-                onPress={() => handleLanePress("now")}
-              />
-            </Animated.View>
             <Animated.View
               entering={FadeInUp.delay(100).duration(400)}
               style={styles.cardWrapper}
             >
               <LaneCard
+                lane="now"
+                count={totalNowTasks}
+                onPress={() => handleLanePress("now")}
+              />
+            </Animated.View>
+            <Animated.View
+              entering={FadeInUp.delay(150).duration(400)}
+              style={styles.cardWrapper}
+            >
+              <LaneCard
                 lane="soon"
-                count={getTasksByLane("soon").length}
+                count={totalSoonTasks}
                 onPress={() => handleLanePress("soon")}
               />
             </Animated.View>
@@ -78,17 +102,17 @@ export default function DashboardScreen() {
             >
               <LaneCard
                 lane="later"
-                count={getTasksByLane("later").length}
+                count={totalLaterTasks}
                 onPress={() => handleLanePress("later")}
               />
             </Animated.View>
             <Animated.View
-              entering={FadeInUp.delay(300).duration(400)}
+              entering={FadeInUp.delay(250).duration(400)}
               style={styles.cardWrapper}
             >
               <LaneCard
                 lane="park"
-                count={getTasksByLane("park").length}
+                count={totalParkTasks}
                 onPress={() => handleLanePress("park")}
               />
             </Animated.View>
@@ -109,6 +133,14 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Spacing.lg,
+  },
+  unsortedBadge: {
+    alignItems: "center",
+    marginTop: Spacing.sm,
+  },
+  sectionHeader: {
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   grid: {
     gap: Spacing.md,

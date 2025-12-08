@@ -5,6 +5,7 @@ import DashboardScreen from "@/screens/DashboardScreen";
 import LaneDetailScreen from "@/screens/LaneDetailScreen";
 import AddTaskScreen from "@/screens/AddTaskScreen";
 import TaskDetailScreen from "@/screens/TaskDetailScreen";
+import QuickDumpScreen from "@/screens/QuickDumpScreen";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { Lane } from "@/stores/TaskStore";
@@ -14,6 +15,7 @@ export type DashboardStackParamList = {
   LaneDetail: { lane: Lane };
   AddTask: { defaultLane?: Lane } | undefined;
   TaskDetail: { taskId: string };
+  QuickDump: undefined;
 };
 
 const Stack = createNativeStackNavigator<DashboardStackParamList>();
@@ -58,6 +60,14 @@ export default function DashboardStackNavigator() {
         options={{
           presentation: "modal",
           headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="QuickDump"
+        component={QuickDumpScreen}
+        options={{
+          headerTitle: "Quick Dump",
+          presentation: "modal",
         }}
       />
     </Stack.Navigator>

@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 
 export type Lane = "now" | "soon" | "later" | "park";
+export type ReminderType = "soft" | "strong" | "persistent" | "none";
+
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
 
 export interface Task {
   id: string;
@@ -11,6 +18,10 @@ export interface Task {
   dueDate?: Date;
   completedAt?: Date;
   assignedTo?: string;
+  subtasks: Subtask[];
+  reminderType: ReminderType;
+  focusTimeMinutes: number;
+  isOverdue: boolean;
 }
 
 export interface LaneTimings {
@@ -26,10 +37,20 @@ export interface UserSettings {
   onboardingComplete: boolean;
 }
 
+export interface UnsortedTask {
+  id: string;
+  title: string;
+}
+
 interface TaskStoreContext {
   tasks: Task[];
+  unsortedTasks: UnsortedTask[];
   settings: UserSettings;
   addTask: (title: string, lane: Lane, notes?: string) => void;
+  addUnsortedTask: (title: string) => void;
+  addMultipleUnsortedTasks: (titles: string[]) => void;
+  sortUnsortedTask: (id: string, lane: Lane) => void;
+  removeUnsortedTask: (id: string) => void;
   completeTask: (id: string) => void;
   deleteTask: (id: string) => void;
   moveTask: (id: string, newLane: Lane) => void;
@@ -38,6 +59,11 @@ interface TaskStoreContext {
   getTasksByLane: (lane: Lane) => Task[];
   getCompletedTasks: () => Task[];
   completeOnboarding: () => void;
+  addSubtask: (taskId: string, title: string) => void;
+  toggleSubtask: (taskId: string, subtaskId: string) => void;
+  deleteSubtask: (taskId: string, subtaskId: string) => void;
+  getTaskProgress: (taskId: string) => number;
+  addFocusTime: (taskId: string, minutes: number) => void;
 }
 
 const defaultSettings: UserSettings = {
@@ -55,6 +81,7 @@ const TaskStoreContext = createContext<TaskStoreContext | null>(null);
 
 export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [unsortedTasks, setUnsortedTasks] = useState<UnsortedTask[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
 
   const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -85,9 +112,57 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       lane,
       createdAt: new Date(),
       dueDate: calculateDueDate(lane),
+      subtasks: [],
+      reminderType: "soft",
+      focusTimeMinutes: 0,
+      isOverdue: false,
     };
     setTasks((prev) => [newTask, ...prev]);
   }, [calculateDueDate]);
+
+  const addUnsortedTask = useCallback((title: string) => {
+    const newTask: UnsortedTask = {
+      id: generateId(),
+      title: title.trim(),
+    };
+    if (newTask.title) {
+      setUnsortedTasks((prev) => [...prev, newTask]);
+    }
+  }, []);
+
+  const addMultipleUnsortedTasks = useCallback((titles: string[]) => {
+    const newTasks = titles
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0)
+      .map((title) => ({
+        id: generateId(),
+        title,
+      }));
+    setUnsortedTasks((prev) => [...prev, ...newTasks]);
+  }, []);
+
+  const sortUnsortedTask = useCallback((id: string, lane: Lane) => {
+    const unsorted = unsortedTasks.find((t) => t.id === id);
+    if (unsorted) {
+      const newTask: Task = {
+        id: generateId(),
+        title: unsorted.title,
+        lane,
+        createdAt: new Date(),
+        dueDate: calculateDueDate(lane),
+        subtasks: [],
+        reminderType: "soft",
+        focusTimeMinutes: 0,
+        isOverdue: false,
+      };
+      setTasks((prev) => [newTask, ...prev]);
+      setUnsortedTasks((prev) => prev.filter((t) => t.id !== id));
+    }
+  }, [unsortedTasks, calculateDueDate]);
+
+  const removeUnsortedTask = useCallback((id: string) => {
+    setUnsortedTasks((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const completeTask = useCallback((id: string) => {
     setTasks((prev) =>
@@ -105,7 +180,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     setTasks((prev) =>
       prev.map((task) =>
         task.id === id
-          ? { ...task, lane: newLane, dueDate: calculateDueDate(newLane) }
+          ? { ...task, lane: newLane, dueDate: calculateDueDate(newLane), isOverdue: false }
           : task
       )
     );
@@ -135,6 +210,64 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     setSettings((prev) => ({ ...prev, onboardingComplete: true }));
   }, []);
 
+  const addSubtask = useCallback((taskId: string, title: string) => {
+    if (!title.trim()) return;
+    const newSubtask: Subtask = {
+      id: generateId(),
+      title: title.trim(),
+      completed: false,
+    };
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? { ...task, subtasks: [...task.subtasks, newSubtask] }
+          : task
+      )
+    );
+  }, []);
+
+  const toggleSubtask = useCallback((taskId: string, subtaskId: string) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              subtasks: task.subtasks.map((st) =>
+                st.id === subtaskId ? { ...st, completed: !st.completed } : st
+              ),
+            }
+          : task
+      )
+    );
+  }, []);
+
+  const deleteSubtask = useCallback((taskId: string, subtaskId: string) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? { ...task, subtasks: task.subtasks.filter((st) => st.id !== subtaskId) }
+          : task
+      )
+    );
+  }, []);
+
+  const getTaskProgress = useCallback((taskId: string): number => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.subtasks.length === 0) return 0;
+    const completed = task.subtasks.filter((st) => st.completed).length;
+    return Math.round((completed / task.subtasks.length) * 100);
+  }, [tasks]);
+
+  const addFocusTime = useCallback((taskId: string, minutes: number) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? { ...task, focusTimeMinutes: task.focusTimeMinutes + minutes }
+          : task
+      )
+    );
+  }, []);
+
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
@@ -147,6 +280,8 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
               return { ...task, lane: "soon" as Lane, dueDate: calculateDueDate("soon") };
             } else if (task.lane === "soon") {
               return { ...task, lane: "now" as Lane, dueDate: calculateDueDate("now") };
+            } else if (task.lane === "now") {
+              return { ...task, isOverdue: true };
             }
           }
           return task;
@@ -160,8 +295,13 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     <TaskStoreContext.Provider
       value={{
         tasks,
+        unsortedTasks,
         settings,
         addTask,
+        addUnsortedTask,
+        addMultipleUnsortedTasks,
+        sortUnsortedTask,
+        removeUnsortedTask,
         completeTask,
         deleteTask,
         moveTask,
@@ -170,6 +310,11 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         getTasksByLane,
         getCompletedTasks,
         completeOnboarding,
+        addSubtask,
+        toggleSubtask,
+        deleteSubtask,
+        getTaskProgress,
+        addFocusTime,
       }}
     >
       {children}

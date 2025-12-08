@@ -10,7 +10,9 @@ import { Lane } from "@/stores/TaskStore";
 interface EmptyStateProps {
   lane?: Lane;
   title: string;
-  message: string;
+  description?: string;
+  message?: string;
+  icon?: keyof typeof Feather.glyphMap;
 }
 
 const laneIcons: Record<Lane, keyof typeof Feather.glyphMap> = {
@@ -20,10 +22,11 @@ const laneIcons: Record<Lane, keyof typeof Feather.glyphMap> = {
   park: "archive",
 };
 
-export function EmptyState({ lane, title, message }: EmptyStateProps) {
+export default function EmptyState({ lane, title, description, message, icon }: EmptyStateProps) {
   const { theme } = useTheme();
   const iconColor = lane ? LaneColors[lane].primary : theme.textSecondary;
-  const iconName = lane ? laneIcons[lane] : "check-circle";
+  const iconName = icon || (lane ? laneIcons[lane] : "check-circle");
+  const displayMessage = description || message;
 
   return (
     <View style={styles.container}>
@@ -33,12 +36,16 @@ export function EmptyState({ lane, title, message }: EmptyStateProps) {
       <ThemedText type="h3" style={styles.title}>
         {title}
       </ThemedText>
-      <ThemedText type="body" secondary style={styles.message}>
-        {message}
-      </ThemedText>
+      {displayMessage ? (
+        <ThemedText type="body" secondary style={styles.message}>
+          {displayMessage}
+        </ThemedText>
+      ) : null}
     </View>
   );
 }
+
+export { EmptyState };
 
 const styles = StyleSheet.create({
   container: {

@@ -8,6 +8,8 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
+import SubtaskItem from "@/components/SubtaskItem";
+import ProgressRing from "@/components/ProgressRing";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
@@ -28,17 +30,24 @@ export default function TaskDetailScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, "TaskDetail">>();
-  const { tasks, updateTask, deleteTask, moveTask, completeTask } = useTaskStore();
+  const { tasks, updateTask, deleteTask, moveTask, completeTask, addSubtask, toggleSubtask, deleteSubtask } = useTaskStore();
 
   const task = tasks.find((t) => t.id === route.params.taskId);
 
   const [title, setTitle] = useState(task?.title || "");
   const [notes, setNotes] = useState(task?.notes || "");
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [showSubtaskInput, setShowSubtaskInput] = useState(false);
 
   const handleSave = () => {
     if (!task) return;
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setTitle(task.title);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    updateTask(task.id, { title: title.trim(), notes: notes.trim() || undefined });
+    updateTask(task.id, { title: trimmedTitle, notes: notes.trim() || undefined });
     navigation.goBack();
   };
 
@@ -79,6 +88,30 @@ export default function TaskDetailScreen() {
     );
   };
 
+  const handleBreakItDown = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowSubtaskInput(true);
+  };
+
+  const handleAddSubtask = () => {
+    if (!task || !newSubtaskTitle.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    addSubtask(task.id, newSubtaskTitle.trim());
+    setNewSubtaskTitle("");
+  };
+
+  const handleToggleSubtask = (subtaskId: string) => {
+    if (!task) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    toggleSubtask(task.id, subtaskId);
+  };
+
+  const handleDeleteSubtask = (subtaskId: string) => {
+    if (!task) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    deleteSubtask(task.id, subtaskId);
+  };
+
   if (!task) {
     return (
       <ThemedView style={styles.container}>
@@ -88,6 +121,10 @@ export default function TaskDetailScreen() {
   }
 
   const hasChanges = title.trim() !== task.title || (notes.trim() || undefined) !== task.notes;
+  const subtasks = task.subtasks || [];
+  const completedSubtasks = subtasks.filter(s => s.completed).length;
+  const progress = subtasks.length > 0 ? completedSubtasks / subtasks.length : 0;
+  const laneColor = LaneColors[task.lane].primary;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -137,6 +174,80 @@ export default function TaskDetailScreen() {
             multiline
             maxLength={500}
           />
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="h4">Break It Down</ThemedText>
+            {subtasks.length > 0 ? (
+              <View style={styles.progressContainer}>
+                <ProgressRing 
+                  progress={progress * 100} 
+                  size={32} 
+                  strokeWidth={3} 
+                  color={laneColor}
+                />
+                <ThemedText type="small" secondary>
+                  {completedSubtasks}/{subtasks.length}
+                </ThemedText>
+              </View>
+            ) : null}
+          </View>
+
+          {subtasks.length === 0 && !showSubtaskInput ? (
+            <Pressable
+              onPress={handleBreakItDown}
+              style={[styles.breakDownButton, { backgroundColor: theme.backgroundDefault }]}
+            >
+              <View style={[styles.breakDownIcon, { backgroundColor: laneColor }]}>
+                <Feather name="scissors" size={20} color="#FFFFFF" />
+              </View>
+              <View style={styles.breakDownTextContainer}>
+                <ThemedText type="body" style={{ fontWeight: "600" }}>
+                  Break It Down
+                </ThemedText>
+                <ThemedText type="small" secondary>
+                  Split into smaller, doable chunks
+                </ThemedText>
+              </View>
+              <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+            </Pressable>
+          ) : null}
+
+          {subtasks.map((subtask) => (
+            <SubtaskItem
+              key={subtask.id}
+              subtask={subtask}
+              color={laneColor}
+              onToggle={() => handleToggleSubtask(subtask.id)}
+              onDelete={() => handleDeleteSubtask(subtask.id)}
+            />
+          ))}
+
+          {(showSubtaskInput || subtasks.length > 0) ? (
+            <View style={[styles.addSubtaskContainer, { backgroundColor: theme.backgroundDefault }]}>
+              <TextInput
+                style={[styles.subtaskInput, { color: theme.text }]}
+                placeholder="Add a subtask..."
+                placeholderTextColor={theme.textSecondary}
+                value={newSubtaskTitle}
+                onChangeText={setNewSubtaskTitle}
+                onSubmitEditing={handleAddSubtask}
+                returnKeyType="done"
+              />
+              <Pressable 
+                onPress={handleAddSubtask} 
+                disabled={!newSubtaskTitle.trim()}
+                style={styles.addSubtaskButton}
+              >
+                <Feather 
+                  name="plus-circle" 
+                  size={24} 
+                  color={newSubtaskTitle.trim() ? laneColor : theme.textSecondary} 
+                />
+              </Pressable>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.section}>
@@ -236,8 +347,52 @@ const styles = StyleSheet.create({
   section: {
     marginTop: Spacing.md,
   },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
   sectionTitle: {
     marginBottom: Spacing.sm,
+  },
+  progressContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  breakDownButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.md,
+  },
+  breakDownIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  breakDownTextContainer: {
+    flex: 1,
+  },
+  addSubtaskContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+  },
+  subtaskInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: Spacing.sm,
+  },
+  addSubtaskButton: {
+    padding: Spacing.xs,
   },
   lanesRow: {
     flexDirection: "row",

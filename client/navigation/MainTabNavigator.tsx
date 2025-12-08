@@ -5,14 +5,14 @@ import { BlurView } from "expo-blur";
 import { Platform, StyleSheet } from "react-native";
 
 import DashboardStackNavigator from "@/navigation/DashboardStackNavigator";
-import NowStackNavigator from "@/navigation/NowStackNavigator";
+import FocusStackNavigator from "@/navigation/FocusStackNavigator";
 import ProfileStackNavigator from "@/navigation/ProfileStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { LaneColors } from "@/constants/theme";
 
 export type MainTabParamList = {
   DashboardTab: undefined;
-  NowTab: undefined;
+  FocusTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -58,12 +58,12 @@ export default function MainTabNavigator() {
         }}
       />
       <Tab.Screen
-        name="NowTab"
-        component={NowStackNavigator}
+        name="FocusTab"
+        component={FocusStackNavigator}
         options={{
-          title: "Now",
+          title: "Focus",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="zap" size={size} color={color} />
+            <Feather name="target" size={size} color={color} />
           ),
         }}
       />
