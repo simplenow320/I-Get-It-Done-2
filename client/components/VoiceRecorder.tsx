@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { StyleSheet, View, Pressable, Platform, Alert } from "react-native";
+import { StyleSheet, View, Pressable, Platform, Alert, useColorScheme } from "react-native";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
@@ -13,7 +13,6 @@ import Animated, {
   cancelAnimation 
 } from "react-native-reanimated";
 
-import { useTheme } from "@/hooks/useTheme";
 import { getApiUrl } from "@/lib/query-client";
 import { LaneColors } from "@/constants/theme";
 
@@ -26,7 +25,8 @@ interface VoiceRecorderProps {
 type RecordingState = "idle" | "recording" | "processing";
 
 export default function VoiceRecorder({ onTranscriptionComplete, onError, compact = false }: VoiceRecorderProps) {
-  const { theme } = useTheme();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
   const [state, setState] = useState<RecordingState>("idle");
   const [permissionStatus, setPermissionStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   
@@ -227,7 +227,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const getButtonColor = () => {
     if (state === "recording") return LaneColors.now.primary;
-    if (state === "processing") return theme.colors.textSecondary;
+    if (state === "processing") return isDark ? "#888888" : "#666666";
     return LaneColors.soon.primary;
   };
 
@@ -267,7 +267,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
               style={[
                 styles.processingDot,
                 {
-                  backgroundColor: theme.colors.background,
+                  backgroundColor: isDark ? "#0A0A0A" : "#FFFFFF",
                 },
               ]}
             />
