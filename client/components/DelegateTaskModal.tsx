@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, Modal, TextInput, FlatList } from "react-native";
+import { StyleSheet, View, Pressable, Modal, TextInput, FlatList, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
@@ -16,6 +17,7 @@ interface DelegateTaskModalProps {
 
 export default function DelegateTaskModal({ visible, task, onClose }: DelegateTaskModalProps) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const { contacts, addContact, delegateTask } = useTaskStore();
   
   const [showAddNew, setShowAddNew] = useState(false);
@@ -65,96 +67,106 @@ export default function DelegateTaskModal({ visible, task, onClose }: DelegateTa
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={[styles.content, { backgroundColor: theme.backgroundDefault }]}>
-          <View style={styles.header}>
-            <ThemedText type="h3">Delegate Task</ThemedText>
-            <Pressable onPress={onClose} hitSlop={8}>
-              <Feather name="x" size={24} color={theme.text} />
-            </Pressable>
-          </View>
-
-          <View style={[styles.taskPreview, { backgroundColor: theme.backgroundSecondary }]}>
-            <ThemedText type="small" secondary>
-              Task to delegate:
-            </ThemedText>
-            <ThemedText type="body" numberOfLines={2}>
-              {task.title}
-            </ThemedText>
-          </View>
-
-          {!showAddNew ? (
-            <>
-              {contacts.length > 0 ? (
-                <FlatList
-                  data={contacts}
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderContact}
-                  style={styles.contactList}
-                  contentContainerStyle={styles.contactListContent}
-                />
-              ) : null}
-
-              <Pressable
-                style={[styles.addNewButton, { backgroundColor: theme.backgroundSecondary }]}
-                onPress={() => setShowAddNew(true)}
-              >
-                <View style={[styles.addIcon, { backgroundColor: LaneColors.now.primary }]}>
-                  <Feather name="user-plus" size={18} color="#FFFFFF" />
-                </View>
-                <ThemedText type="body" style={{ fontWeight: "500" }}>
-                  Add new team member
-                </ThemedText>
+      <KeyboardAvoidingView 
+        style={styles.overlay} 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView 
+          style={{ flex: 1 }} 
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[styles.content, { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.lg }]}>
+            <View style={styles.header}>
+              <ThemedText type="h3">Delegate Task</ThemedText>
+              <Pressable onPress={onClose} hitSlop={8}>
+                <Feather name="x" size={24} color={theme.text} />
               </Pressable>
-            </>
-          ) : (
-            <View style={styles.addForm}>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-                placeholder="Name"
-                placeholderTextColor={theme.textSecondary}
-                value={newName}
-                onChangeText={setNewName}
-                autoFocus
-              />
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-                placeholder="Role (optional)"
-                placeholderTextColor={theme.textSecondary}
-                value={newRole}
-                onChangeText={setNewRole}
-              />
-              <View style={styles.formButtons}>
+            </View>
+
+            <View style={[styles.taskPreview, { backgroundColor: theme.backgroundSecondary }]}>
+              <ThemedText type="small" secondary>
+                Task to delegate:
+              </ThemedText>
+              <ThemedText type="body" numberOfLines={2}>
+                {task.title}
+              </ThemedText>
+            </View>
+
+            {!showAddNew ? (
+              <>
+                {contacts.length > 0 ? (
+                  <FlatList
+                    data={contacts}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderContact}
+                    style={styles.contactList}
+                    contentContainerStyle={styles.contactListContent}
+                    scrollEnabled={false}
+                  />
+                ) : null}
+
                 <Pressable
-                  style={[styles.cancelButton, { backgroundColor: theme.backgroundSecondary }]}
-                  onPress={() => {
-                    setShowAddNew(false);
-                    setNewName("");
-                    setNewRole("");
-                  }}
+                  style={[styles.addNewButton, { backgroundColor: theme.backgroundSecondary }]}
+                  onPress={() => setShowAddNew(true)}
                 >
-                  <ThemedText type="body">Cancel</ThemedText>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.addButton,
-                    { backgroundColor: newName.trim() ? LaneColors.now.primary : theme.backgroundSecondary },
-                  ]}
-                  onPress={handleAddContact}
-                  disabled={!newName.trim()}
-                >
-                  <ThemedText
-                    type="body"
-                    style={{ fontWeight: "600", color: newName.trim() ? "#FFFFFF" : theme.textSecondary }}
-                  >
-                    Add & Delegate
+                  <View style={[styles.addIcon, { backgroundColor: LaneColors.now.primary }]}>
+                    <Feather name="user-plus" size={18} color="#FFFFFF" />
+                  </View>
+                  <ThemedText type="body" style={{ fontWeight: "500" }}>
+                    Add new team member
                   </ThemedText>
                 </Pressable>
+              </>
+            ) : (
+              <View style={styles.addForm}>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
+                  placeholder="Name"
+                  placeholderTextColor={theme.textSecondary}
+                  value={newName}
+                  onChangeText={setNewName}
+                  autoFocus
+                />
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
+                  placeholder="Role (optional)"
+                  placeholderTextColor={theme.textSecondary}
+                  value={newRole}
+                  onChangeText={setNewRole}
+                />
+                <View style={styles.formButtons}>
+                  <Pressable
+                    style={[styles.cancelButton, { backgroundColor: theme.backgroundSecondary }]}
+                    onPress={() => {
+                      setShowAddNew(false);
+                      setNewName("");
+                      setNewRole("");
+                    }}
+                  >
+                    <ThemedText type="body">Cancel</ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.addButton,
+                      { backgroundColor: newName.trim() ? LaneColors.now.primary : theme.backgroundSecondary },
+                    ]}
+                    onPress={handleAddContact}
+                    disabled={!newName.trim()}
+                  >
+                    <ThemedText
+                      type="body"
+                      style={{ fontWeight: "600", color: newName.trim() ? "#FFFFFF" : theme.textSecondary }}
+                    >
+                      Add & Delegate
+                    </ThemedText>
+                  </Pressable>
+                </View>
               </View>
-            </View>
-          )}
-        </View>
-      </View>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
