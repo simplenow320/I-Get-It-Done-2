@@ -1,12 +1,30 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type Lane = "now" | "soon" | "later" | "park";
 export type ReminderType = "soft" | "strong" | "persistent" | "none";
+export type DelegationStatus = "assigned" | "in_progress" | "waiting" | "needs_review" | "done";
 
 export interface Subtask {
   id: string;
   title: string;
   completed: boolean;
+}
+
+export interface DelegationNote {
+  id: string;
+  type: "update" | "blocked" | "question" | "completed" | "custom";
+  text: string;
+  createdAt: Date;
+  author: "owner" | "delegate";
+}
+
+export interface Contact {
+  id: string;
+  name: string;
+  role?: string;
+  color: string;
+  createdAt: Date;
 }
 
 export interface Task {
@@ -22,6 +40,10 @@ export interface Task {
   reminderType: ReminderType;
   focusTimeMinutes: number;
   isOverdue: boolean;
+  delegationStatus?: DelegationStatus;
+  delegationNotes?: DelegationNote[];
+  delegatedAt?: Date;
+  lastDelegationUpdate?: Date;
 }
 
 export interface LaneTimings {
@@ -42,9 +64,15 @@ export interface UnsortedTask {
   title: string;
 }
 
+const CONTACT_COLORS = [
+  "#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", 
+  "#AF52DE", "#FF2D55", "#5856D6", "#00C7BE", "#FF6B60",
+];
+
 interface TaskStoreContext {
   tasks: Task[];
   unsortedTasks: UnsortedTask[];
+  contacts: Contact[];
   settings: UserSettings;
   addTask: (title: string, lane: Lane, notes?: string) => void;
   addUnsortedTask: (title: string) => void;
@@ -64,6 +92,16 @@ interface TaskStoreContext {
   deleteSubtask: (taskId: string, subtaskId: string) => void;
   getTaskProgress: (taskId: string) => number;
   addFocusTime: (taskId: string, minutes: number) => void;
+  addContact: (name: string, role?: string) => Contact;
+  updateContact: (id: string, updates: Partial<Contact>) => void;
+  deleteContact: (id: string) => void;
+  getContactById: (id: string) => Contact | undefined;
+  delegateTask: (taskId: string, contactId: string) => void;
+  undelegateTask: (taskId: string) => void;
+  updateDelegationStatus: (taskId: string, status: DelegationStatus) => void;
+  addDelegationNote: (taskId: string, type: DelegationNote["type"], text: string) => void;
+  getDelegatedTasks: () => Task[];
+  getDelegatedTasksByContact: (contactId: string) => Task[];
 }
 
 const defaultSettings: UserSettings = {
@@ -77,14 +115,72 @@ const defaultSettings: UserSettings = {
   onboardingComplete: false,
 };
 
+const STORAGE_KEY = "@task_store";
+
 const TaskStoreContext = createContext<TaskStoreContext | null>(null);
 
 export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [unsortedTasks, setUnsortedTasks] = useState<UnsortedTask[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const generateId = () => Math.random().toString(36).substring(2, 15);
+
+  useEffect(() => {
+    loadState();
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded) {
+      saveState();
+    }
+  }, [tasks, unsortedTasks, contacts, settings, isLoaded]);
+
+  const loadState = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.tasks) setTasks(parsed.tasks.map((t: Task) => ({
+          ...t,
+          createdAt: new Date(t.createdAt),
+          dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
+          completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
+          delegatedAt: t.delegatedAt ? new Date(t.delegatedAt) : undefined,
+          lastDelegationUpdate: t.lastDelegationUpdate ? new Date(t.lastDelegationUpdate) : undefined,
+          delegationNotes: t.delegationNotes?.map((n: DelegationNote) => ({
+            ...n,
+            createdAt: new Date(n.createdAt),
+          })),
+        })));
+        if (parsed.unsortedTasks) setUnsortedTasks(parsed.unsortedTasks);
+        if (parsed.contacts) setContacts(parsed.contacts.map((c: Contact) => ({
+          ...c,
+          createdAt: new Date(c.createdAt),
+        })));
+        if (parsed.settings) setSettings({ ...defaultSettings, ...parsed.settings });
+      }
+      setIsLoaded(true);
+    } catch (error) {
+      console.error("Failed to load task store:", error);
+      setIsLoaded(true);
+    }
+  };
+
+  const saveState = async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
+        tasks,
+        unsortedTasks,
+        contacts,
+        settings,
+      }));
+    } catch (error) {
+      console.error("Failed to save task store:", error);
+    }
+  };
 
   const calculateDueDate = useCallback((lane: Lane): Date => {
     const now = new Date();
@@ -268,6 +364,112 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const addContact = useCallback((name: string, role?: string): Contact => {
+    const newContact: Contact = {
+      id: generateId(),
+      name: name.trim(),
+      role: role?.trim(),
+      color: CONTACT_COLORS[contacts.length % CONTACT_COLORS.length],
+      createdAt: new Date(),
+    };
+    setContacts((prev) => [...prev, newContact]);
+    return newContact;
+  }, [contacts.length]);
+
+  const updateContact = useCallback((id: string, updates: Partial<Contact>) => {
+    setContacts((prev) =>
+      prev.map((contact) => (contact.id === id ? { ...contact, ...updates } : contact))
+    );
+  }, []);
+
+  const deleteContact = useCallback((id: string) => {
+    setContacts((prev) => prev.filter((contact) => contact.id !== id));
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.assignedTo === id
+          ? { ...task, assignedTo: undefined, delegationStatus: undefined, delegatedAt: undefined }
+          : task
+      )
+    );
+  }, []);
+
+  const getContactById = useCallback((id: string): Contact | undefined => {
+    return contacts.find((c) => c.id === id);
+  }, [contacts]);
+
+  const delegateTask = useCallback((taskId: string, contactId: string) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              assignedTo: contactId,
+              delegationStatus: "assigned",
+              delegatedAt: new Date(),
+              lastDelegationUpdate: new Date(),
+              delegationNotes: [],
+            }
+          : task
+      )
+    );
+  }, []);
+
+  const undelegateTask = useCallback((taskId: string) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              assignedTo: undefined,
+              delegationStatus: undefined,
+              delegatedAt: undefined,
+              lastDelegationUpdate: undefined,
+              delegationNotes: undefined,
+            }
+          : task
+      )
+    );
+  }, []);
+
+  const updateDelegationStatus = useCallback((taskId: string, status: DelegationStatus) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? { ...task, delegationStatus: status, lastDelegationUpdate: new Date() }
+          : task
+      )
+    );
+  }, []);
+
+  const addDelegationNote = useCallback((taskId: string, type: DelegationNote["type"], text: string) => {
+    const newNote: DelegationNote = {
+      id: generateId(),
+      type,
+      text: text.trim(),
+      createdAt: new Date(),
+      author: "owner",
+    };
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              delegationNotes: [...(task.delegationNotes || []), newNote],
+              lastDelegationUpdate: new Date(),
+            }
+          : task
+      )
+    );
+  }, []);
+
+  const getDelegatedTasks = useCallback((): Task[] => {
+    return tasks.filter((task) => task.assignedTo && !task.completedAt);
+  }, [tasks]);
+
+  const getDelegatedTasksByContact = useCallback((contactId: string): Task[] => {
+    return tasks.filter((task) => task.assignedTo === contactId && !task.completedAt);
+  }, [tasks]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
@@ -296,6 +498,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       value={{
         tasks,
         unsortedTasks,
+        contacts,
         settings,
         addTask,
         addUnsortedTask,
@@ -315,6 +518,16 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         deleteSubtask,
         getTaskProgress,
         addFocusTime,
+        addContact,
+        updateContact,
+        deleteContact,
+        getContactById,
+        delegateTask,
+        undelegateTask,
+        updateDelegationStatus,
+        addDelegationNote,
+        getDelegatedTasks,
+        getDelegatedTasksByContact,
       }}
     >
       {children}
