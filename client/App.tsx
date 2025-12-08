@@ -11,6 +11,7 @@ import { queryClient } from "@/lib/query-client";
 
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AchievementUnlockModal } from "@/components/AchievementUnlockModal";
 import { TaskStoreProvider } from "@/stores/TaskStore";
 import { GamificationProvider } from "@/stores/GamificationStore";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -24,6 +25,7 @@ function AppContent() {
       <NavigationContainer>
         <RootStackNavigator />
       </NavigationContainer>
+      <AchievementUnlockModal />
       <StatusBar style={isDark ? "light" : "dark"} />
     </>
   );

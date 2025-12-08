@@ -103,6 +103,7 @@ interface TaskStoreContext {
   addDelegationNote: (taskId: string, type: DelegationNote["type"], text: string) => void;
   getDelegatedTasks: () => Task[];
   getDelegatedTasksByContact: (contactId: string) => Task[];
+  checkOverdueTasks: () => { movedCount: number; tasks: Task[] };
 }
 
 const defaultSettings: UserSettings = {
@@ -684,6 +685,36 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     return tasks.filter((task) => task.assignedTo === contactId && !task.completedAt);
   }, [tasks]);
 
+  const checkOverdueTasks = useCallback((): { movedCount: number; tasks: Task[] } => {
+    const now = new Date();
+    const movedTasks: Task[] = [];
+    
+    setTasks((prev) =>
+      prev.map((task) => {
+        if (task.completedAt || !task.dueDate) return task;
+        const dueTime = new Date(task.dueDate).getTime();
+        if (now.getTime() >= dueTime) {
+          if (task.lane === "later") {
+            const updated = { ...task, lane: "soon" as Lane, dueDate: calculateDueDate("soon") };
+            movedTasks.push(updated);
+            return updated;
+          } else if (task.lane === "soon") {
+            const updated = { ...task, lane: "now" as Lane, dueDate: calculateDueDate("now") };
+            movedTasks.push(updated);
+            return updated;
+          } else if (task.lane === "now" && !task.isOverdue) {
+            const updated = { ...task, isOverdue: true };
+            movedTasks.push(updated);
+            return updated;
+          }
+        }
+        return task;
+      })
+    );
+    
+    return { movedCount: movedTasks.length, tasks: movedTasks };
+  }, [calculateDueDate]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
@@ -742,6 +773,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         addDelegationNote,
         getDelegatedTasks,
         getDelegatedTasksByContact,
+        checkOverdueTasks,
       }}
     >
       {children}

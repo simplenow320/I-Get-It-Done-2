@@ -7,9 +7,11 @@ A premium ADHD-optimized mobile task management app that helps users stay focuse
 - **Phase**: All 6 Phases Complete (Full MVP)
 - **Status**: Quick Dump, Break It Down, Focus Mode, Focus Timer, Gamification, Enhanced Weekly Reset, and Delegation all implemented
 - **Design**: Premium iOS 26-inspired liquid glass design with bold gradients
-- **Gamification**: Streak tracking, points/XP system, level progression, confetti celebrations
+- **Gamification**: Streak tracking, points/XP system, level progression, achievement unlock notifications
 - **Weekly Reset**: Wins display, cleanup suggestions, future planning, gamification stats integration
 - **Delegation**: Team Hub, task hand-off, delegation status tracking, in-app notes/communication
+- **Data Persistence**: Full PostgreSQL cloud sync via Express REST API (migrated from Supabase)
+- **Auto-Lane Movement**: Overdue tasks automatically move from Later→Soon→Now
 
 ## ADHD Problems This App Solves
 - Time blindness → Focus timers, countdown rings, auto-move

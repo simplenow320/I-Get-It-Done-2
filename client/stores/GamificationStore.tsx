@@ -44,6 +44,8 @@ interface GamificationContextType extends GamificationState {
   getTodayStats: () => DailyStats | null;
   getWeeklyStats: () => { tasksCompleted: number; focusMinutes: number; daysActive: number };
   useStreakProtection: () => boolean;
+  pendingUnlock: Achievement | null;
+  dismissUnlock: () => void;
 }
 
 const LEVEL_THRESHOLDS: Record<Level, number> = {
@@ -112,6 +114,8 @@ function getDaysDiff(date1: string, date2: string): number {
 export function GamificationProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GamificationState>(defaultState);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [pendingUnlock, setPendingUnlock] = useState<Achievement | null>(null);
+  const [unlockQueue, setUnlockQueue] = useState<Achievement[]>([]);
 
   useEffect(() => {
     loadState();
@@ -240,12 +244,35 @@ export function GamificationProvider({ children }: { children: ReactNode }) {
       unlocks.push("level_unstoppable");
     }
 
-    setState((prev) => ({
-      ...prev,
-      achievements: prev.achievements.map((a) =>
-        unlocks.includes(a.id) && !a.unlockedAt ? { ...a, unlockedAt: now } : a
-      ),
-    }));
+    setState((prev) => {
+      const newlyUnlocked: Achievement[] = [];
+      const updatedAchievements = prev.achievements.map((a) => {
+        if (unlocks.includes(a.id) && !a.unlockedAt) {
+          const updated = { ...a, unlockedAt: now };
+          newlyUnlocked.push(updated);
+          return updated;
+        }
+        return a;
+      });
+
+      if (newlyUnlocked.length > 0) {
+        setUnlockQueue((q) => [...q, ...newlyUnlocked]);
+      }
+
+      return { ...prev, achievements: updatedAchievements };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!pendingUnlock && unlockQueue.length > 0) {
+      const [next, ...rest] = unlockQueue;
+      setPendingUnlock(next);
+      setUnlockQueue(rest);
+    }
+  }, [pendingUnlock, unlockQueue]);
+
+  const dismissUnlock = useCallback(() => {
+    setPendingUnlock(null);
   }, []);
 
   const calculateLevel = useCallback((points: number): Level => {
@@ -405,6 +432,8 @@ export function GamificationProvider({ children }: { children: ReactNode }) {
         getTodayStats,
         getWeeklyStats,
         useStreakProtection,
+        pendingUnlock,
+        dismissUnlock,
       }}
     >
       {children}
