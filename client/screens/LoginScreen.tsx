@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: Spacing.xl,
     justifyContent: "center",
   },
