@@ -232,6 +232,9 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
       }
       
       console.log("Comparing password...");
+      console.log("Input password:", password);
+      console.log("Input password length:", password.length);
+      console.log("Stored hash:", user.passwordHash);
       const validPassword = await bcrypt.compare(password, user.passwordHash);
       console.log("Password valid:", validPassword);
       
