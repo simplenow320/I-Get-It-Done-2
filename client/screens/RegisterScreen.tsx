@@ -5,8 +5,6 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -14,6 +12,7 @@ import { Feather } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/contexts/AuthContext";
@@ -74,16 +73,14 @@ export default function RegisterScreen() {
       colors={[colors.background, colors.surfaceSecondary]}
       style={styles.gradient}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + Spacing.xxl, paddingBottom: insets.bottom + Spacing.xxl },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View
-          style={[
-            styles.content,
-            { paddingTop: insets.top + Spacing.xxl, paddingBottom: insets.bottom + Spacing.xl },
-          ]}
-        >
           <View style={styles.header}>
             <View style={[styles.iconContainer, { backgroundColor: LaneColors.soon.primary }]}>
               <Feather name="user-plus" size={40} color="#FFFFFF" />
@@ -202,8 +199,7 @@ export default function RegisterScreen() {
               </ThemedText>
             </Pressable>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollViewCompat>
     </LinearGradient>
   );
 }
