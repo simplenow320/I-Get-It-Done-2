@@ -44,12 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string, rememberMe: boolean): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await fetch(new URL("/api/auth/login", getApiUrl()).toString(), {
+      const apiUrl = getApiUrl();
+      const url = new URL("/api/auth/login", apiUrl).toString();
+      console.log("Attempting login to:", url);
+      
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
+      console.log("Login response status:", response.status);
       const data = await response.json();
 
       if (!response.ok) {
