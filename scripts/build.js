@@ -136,7 +136,7 @@ async function startMetro() {
 
 async function downloadFile(url, outputPath) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120_000);
+  const timeoutId = setTimeout(() => controller.abort(), 300_000); // 5 minutes timeout
 
   try {
     console.log(`Downloading: ${url}`);
@@ -161,7 +161,7 @@ async function downloadFile(url, outputPath) {
     }
 
     if (error.name === "AbortError") {
-      throw new Error(`Download timeout after 2m: ${url}`);
+      throw new Error(`Download timeout after 5m: ${url}`);
     }
     throw error;
   } finally {
