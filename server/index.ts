@@ -221,9 +221,11 @@ function setupErrorHandler(app: express.Application) {
   setupBodyParsing(app);
   setupRequestLogging(app);
 
-  configureExpoAndLanding(app);
-
+  // Register API routes BEFORE static files so /api/* routes are handled
   const server = await registerRoutes(app);
+
+  // Static file serving comes after API routes
+  configureExpoAndLanding(app);
 
   setupErrorHandler(app);
 
