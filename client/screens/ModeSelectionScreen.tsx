@@ -12,6 +12,7 @@ import Animated, {
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
@@ -130,11 +131,13 @@ export default function ModeSelectionScreen() {
         <Feather name="chevron-left" size={28} color={theme.text} />
       </Pressable>
 
-      <View
-        style={[
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 },
+          { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 120 },
         ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
           <View style={styles.progressContainer}>
@@ -171,7 +174,7 @@ export default function ModeSelectionScreen() {
         <View style={styles.buttonContainer}>
           <Button onPress={handleContinue}>Let's Go</Button>
         </View>
-      </View>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }
@@ -207,9 +210,8 @@ const styles = StyleSheet.create({
   },
   subtitle: {},
   cardsContainer: {
-    flex: 1,
-    justifyContent: "center",
     gap: Spacing.md,
+    marginVertical: Spacing.lg,
   },
   modeCard: {
     padding: Spacing.lg,

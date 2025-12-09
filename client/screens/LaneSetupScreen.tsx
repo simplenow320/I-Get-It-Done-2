@@ -90,7 +90,7 @@ export default function LaneSetupScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 60, paddingBottom: 120 },
+          { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 140 },
         ]}
       >
         <View style={styles.header}>
