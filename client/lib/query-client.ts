@@ -6,10 +6,10 @@ import { Platform } from "react-native";
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
-  // On web, use relative URLs - the Express server serves both the app and API
-  if (Platform.OS === "web") {
-    // Web browser - same origin, relative path works
-    return "";
+  // On web, use window.location.origin - the Express server serves both the app and API
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    // Web browser - use current origin (same-origin requests)
+    return window.location.origin;
   }
 
   // On native (Expo Go), use the full URL with port
