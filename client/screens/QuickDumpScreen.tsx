@@ -40,6 +40,10 @@ export default function QuickDumpScreen() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
 
+  const dismissKeyboard = useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
   const handleVoiceTranscription = useCallback(async (text: string) => {
     setVoiceError(null);
     
@@ -191,10 +195,6 @@ export default function QuickDumpScreen() {
       </ThemedView>
     );
   }
-
-  const dismissKeyboard = useCallback(() => {
-    Keyboard.dismiss();
-  }, []);
 
   return (
     <ThemedView style={styles.container}>
