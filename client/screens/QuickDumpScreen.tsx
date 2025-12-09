@@ -15,6 +15,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { useTaskStore, Lane, UnsortedTask } from "@/stores/TaskStore";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
+import { getApiUrl } from "@/lib/query-client";
 
 type Phase = "capture" | "sort";
 
@@ -37,20 +38,53 @@ export default function QuickDumpScreen() {
   const [phase, setPhase] = useState<Phase>("capture");
   const [inputValue, setInputValue] = useState("");
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
 
-  const handleVoiceTranscription = useCallback((text: string) => {
+  const handleVoiceTranscription = useCallback(async (text: string) => {
     setVoiceError(null);
-    const lines = text.split(/[.,!?]\s+/).filter(line => line.trim().length > 0);
-    if (lines.length > 1) {
-      lines.forEach(line => {
-        if (line.trim()) {
-          addUnsortedTask(line.trim());
-        }
+    
+    if (!text.trim()) return;
+    
+    setIsExtracting(true);
+    
+    try {
+      const response = await fetch(new URL("/api/tasks/extract", getApiUrl()).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript: text }),
       });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else if (text.trim()) {
-      addUnsortedTask(text.trim());
+
+      if (!response.ok) {
+        throw new Error("Failed to extract tasks");
+      }
+
+      const data = await response.json();
+      const tasks = data.tasks || [];
+
+      if (tasks.length > 0) {
+        tasks.forEach((task: { title: string }) => {
+          addUnsortedTask(task.title);
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        addUnsortedTask(text.trim());
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    } catch (error) {
+      console.error("Task extraction error:", error);
+      const lines = text.split(/[.,!?]\s+/).filter(line => line.trim().length > 0);
+      if (lines.length > 1) {
+        lines.forEach(line => {
+          if (line.trim()) {
+            addUnsortedTask(line.trim());
+          }
+        });
+      } else {
+        addUnsortedTask(text.trim());
+      }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } finally {
+      setIsExtracting(false);
     }
   }, [addUnsortedTask]);
 
@@ -204,6 +238,13 @@ export default function QuickDumpScreen() {
               <Feather name="plus" size={24} color={inputValue.trim() ? "#FFFFFF" : theme.textSecondary} />
             </Pressable>
           </View>
+          {isExtracting ? (
+            <Animated.View entering={FadeInUp.duration(200)} style={styles.extractingContainer}>
+              <ThemedText type="small" secondary>
+                Extracting tasks...
+              </ThemedText>
+            </Animated.View>
+          ) : null}
           {voiceError ? (
             <Animated.View entering={FadeInUp.duration(200)} style={styles.errorContainer}>
               <ThemedText type="small" style={{ color: LaneColors.now.primary }}>
@@ -362,5 +403,10 @@ const styles = StyleSheet.create({
   errorContainer: {
     marginTop: Spacing.sm,
     paddingHorizontal: Spacing.sm,
+  },
+  extractingContainer: {
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    alignItems: "center",
   },
 });

@@ -71,6 +71,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/tasks/extract", async (req: Request, res: Response) => {
+    try {
+      const { transcript } = req.body;
+
+      if (!transcript || typeof transcript !== "string") {
+        return res.status(400).json({ error: "Transcript is required" });
+      }
+
+      if (transcript.trim().length === 0) {
+        return res.json({ tasks: [] });
+      }
+
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        console.error("OPENAI_API_KEY not configured");
+        return res.status(500).json({ error: "AI service not configured" });
+      }
+
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: `You are a task extraction assistant for an ADHD productivity app. Your job is to extract actionable tasks from natural speech.
+
+Rules:
+1. Extract only clear, actionable tasks (things someone can DO)
+2. Convert each task to a concise, imperative title (e.g., "Call mom", "Buy groceries", "Schedule dentist appointment")
+3. Ignore filler words, thinking out loud, questions, and non-actionable statements
+4. If someone mentions timing (tomorrow, next week, etc.), don't include it in the title - just extract the core task
+5. Split compound tasks into separate items (e.g., "call mom and dad" becomes two tasks)
+6. If no clear tasks are found, return an empty array
+
+Return JSON in this exact format:
+{"tasks": [{"title": "Task title here"}]}
+
+Examples:
+Input: "I need to call my mom tomorrow and also I was thinking maybe I should clean the garage"
+Output: {"tasks": [{"title": "Call mom"}, {"title": "Clean garage"}]}
+
+Input: "So yeah, it's been a long day, not sure what to do"
+Output: {"tasks": []}
+
+Input: "Pick up the dry cleaning, oh and get milk, and I should probably email Sarah about the meeting"
+Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"title": "Email Sarah about meeting"}]}`
+            },
+            {
+              role: "user",
+              content: transcript
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 500,
+          response_format: { type: "json_object" }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("OpenAI error:", response.status, errorText);
+        throw new Error(`OpenAI API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const content = result.choices?.[0]?.message?.content;
+
+      if (!content) {
+        return res.json({ tasks: [] });
+      }
+
+      try {
+        const parsed = JSON.parse(content);
+        const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+        res.json({ tasks: tasks.filter((t: any) => t.title && typeof t.title === "string") });
+      } catch (parseError) {
+        console.error("Failed to parse OpenAI response:", content);
+        res.json({ tasks: [] });
+      }
+    } catch (error: any) {
+      console.error("Task extraction error:", error);
+      res.status(500).json({ error: "Failed to extract tasks" });
+    }
+  });
+
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
