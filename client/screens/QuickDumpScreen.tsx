@@ -240,6 +240,7 @@ export default function QuickDumpScreen() {
           </View>
           {isExtracting ? (
             <Animated.View entering={FadeInUp.duration(200)} style={styles.extractingContainer}>
+              <Feather name="loader" size={16} color={theme.textSecondary} />
               <ThemedText type="small" secondary>
                 Extracting tasks...
               </ThemedText>
@@ -405,8 +406,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
   },
   extractingContainer: {
+    flexDirection: "row",
     marginTop: Spacing.sm,
     paddingHorizontal: Spacing.sm,
     alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
   },
 });
