@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
-import { StyleSheet, View, TextInput, Pressable, FlatList, KeyboardAvoidingView, Platform } from "react-native";
+import { StyleSheet, View, TextInput, Pressable, ScrollView, Keyboard, TouchableWithoutFeedback } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
@@ -192,80 +192,86 @@ export default function QuickDumpScreen() {
     );
   }
 
+  const dismissKeyboard = useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
   return (
     <ThemedView style={styles.container}>
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={headerHeight}
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.content, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }]}>
-          <Animated.View entering={FadeInUp.duration(300)} style={styles.header}>
-            <ThemedText type="h2" style={styles.title}>
-              Brain Dump
-            </ThemedText>
-            <ThemedText type="body" secondary>
-              Type fast. Sort later.
+        <Animated.View entering={FadeInUp.duration(300)} style={styles.header}>
+          <ThemedText type="h2" style={styles.title}>
+            Brain Dump
+          </ThemedText>
+          <ThemedText type="body" secondary>
+            Type fast. Sort later.
+          </ThemedText>
+        </Animated.View>
+
+        <View style={[styles.inputContainer, { backgroundColor: theme.backgroundDefault }]}>
+          <TextInput
+            ref={inputRef}
+            value={inputValue}
+            onChangeText={setInputValue}
+            placeholder="What's on your mind?"
+            placeholderTextColor={theme.textSecondary}
+            style={[styles.input, { color: theme.text }]}
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={handleAddTask}
+            blurOnSubmit={false}
+          />
+          <VoiceRecorder
+            onTranscriptionComplete={handleVoiceTranscription}
+            onError={handleVoiceError}
+            compact
+          />
+          <Pressable
+            onPress={handleAddTask}
+            disabled={!inputValue.trim()}
+            style={[
+              styles.addButton,
+              { backgroundColor: inputValue.trim() ? LaneColors.now.primary : theme.backgroundSecondary },
+            ]}
+          >
+            <Feather name="plus" size={24} color={inputValue.trim() ? "#FFFFFF" : theme.textSecondary} />
+          </Pressable>
+        </View>
+        {isExtracting ? (
+          <Animated.View entering={FadeInUp.duration(200)} style={styles.extractingContainer}>
+            <Feather name="loader" size={16} color={theme.textSecondary} />
+            <ThemedText type="small" secondary>
+              Extracting tasks...
             </ThemedText>
           </Animated.View>
+        ) : null}
+        {voiceError ? (
+          <Animated.View entering={FadeInUp.duration(200)} style={styles.errorContainer}>
+            <ThemedText type="small" style={{ color: LaneColors.now.primary }}>
+              {voiceError}
+            </ThemedText>
+          </Animated.View>
+        ) : null}
 
-          <View style={[styles.inputContainer, { backgroundColor: theme.backgroundDefault }]}>
-            <TextInput
-              ref={inputRef}
-              value={inputValue}
-              onChangeText={setInputValue}
-              placeholder="What's on your mind?"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.input, { color: theme.text }]}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleAddTask}
-              blurOnSubmit={false}
-            />
-            <VoiceRecorder
-              onTranscriptionComplete={handleVoiceTranscription}
-              onError={handleVoiceError}
-              compact
-            />
-            <Pressable
-              onPress={handleAddTask}
-              disabled={!inputValue.trim()}
-              style={[
-                styles.addButton,
-                { backgroundColor: inputValue.trim() ? LaneColors.now.primary : theme.backgroundSecondary },
-              ]}
-            >
-              <Feather name="plus" size={24} color={inputValue.trim() ? "#FFFFFF" : theme.textSecondary} />
-            </Pressable>
-          </View>
-          {isExtracting ? (
-            <Animated.View entering={FadeInUp.duration(200)} style={styles.extractingContainer}>
-              <Feather name="loader" size={16} color={theme.textSecondary} />
-              <ThemedText type="small" secondary>
-                Extracting tasks...
-              </ThemedText>
-            </Animated.View>
-          ) : null}
-          {voiceError ? (
-            <Animated.View entering={FadeInUp.duration(200)} style={styles.errorContainer}>
-              <ThemedText type="small" style={{ color: LaneColors.now.primary }}>
-                {voiceError}
-              </ThemedText>
-            </Animated.View>
-          ) : null}
-
-          {unsortedTasks.length > 0 ? (
-            <>
+        {unsortedTasks.length > 0 ? (
+          <TouchableWithoutFeedback onPress={dismissKeyboard}>
+            <View>
               <View style={styles.listHeader}>
                 <ThemedText type="h4">
                   Captured ({unsortedTasks.length})
                 </ThemedText>
               </View>
-              <FlatList
-                data={unsortedTasks}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item, index }) => (
+              <View style={styles.listContent}>
+                {unsortedTasks.map((item, index) => (
                   <Animated.View
+                    key={item.id}
                     entering={FadeInUp.delay(index * 30).duration(200)}
                     style={[styles.capturedItem, { backgroundColor: theme.backgroundDefault }]}
                   >
@@ -276,28 +282,24 @@ export default function QuickDumpScreen() {
                       <Feather name="x" size={18} color={theme.textSecondary} />
                     </Pressable>
                   </Animated.View>
-                )}
-                style={styles.list}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              />
+                ))}
+              </View>
               <Button
                 title={`Sort ${unsortedTasks.length} task${unsortedTasks.length > 1 ? "s" : ""}`}
                 onPress={handleStartSorting}
                 style={styles.sortButton}
               />
-            </>
-          ) : (
-            <Animated.View entering={FadeInUp.delay(200).duration(300)} style={styles.emptyState}>
-              <Feather name="inbox" size={48} color={theme.textSecondary} />
-              <ThemedText type="body" secondary style={styles.emptyText}>
-                Start typing to capture your thoughts
-              </ThemedText>
-            </Animated.View>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+            </View>
+          </TouchableWithoutFeedback>
+        ) : (
+          <Animated.View entering={FadeInUp.delay(200).duration(300)} style={styles.emptyState}>
+            <Feather name="inbox" size={48} color={theme.textSecondary} />
+            <ThemedText type="body" secondary style={styles.emptyText}>
+              Start typing to capture your thoughts
+            </ThemedText>
+          </Animated.View>
+        )}
+      </KeyboardAwareScrollViewCompat>
     </ThemedView>
   );
 }
@@ -308,6 +310,10 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingHorizontal: Spacing.lg,
+  },
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: Spacing.lg,
   },
   header: {
