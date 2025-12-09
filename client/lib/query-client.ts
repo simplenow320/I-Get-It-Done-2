@@ -1,10 +1,18 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { Platform } from "react-native";
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
+  // On web, use relative URLs - the Express server serves both the app and API
+  if (Platform.OS === "web") {
+    // Web browser - same origin, relative path works
+    return "";
+  }
+
+  // On native (Expo Go), use the full URL with port
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
   if (!host) {

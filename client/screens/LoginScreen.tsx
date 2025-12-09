@@ -18,7 +18,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/contexts/AuthContext";
 import { LaneColors, Spacing, BorderRadius } from "@/constants/theme";
 import { AuthStackParamList } from "@/navigation/AuthStackNavigator";
-import { getApiUrl } from "@/lib/query-client";
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "Login">;
 
@@ -77,9 +76,6 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.form}>
-            <ThemedText style={{ fontSize: 10, color: colors.textSecondary, marginBottom: 8 }}>
-              API: {(() => { try { return getApiUrl(); } catch (e: any) { return `Error: ${e.message}`; } })()}
-            </ThemedText>
             {error ? (
               <View style={[styles.errorContainer, { backgroundColor: LaneColors.now.primary + "20" }]}>
                 <ThemedText style={[styles.errorText, { color: LaneColors.now.primary }]}>
