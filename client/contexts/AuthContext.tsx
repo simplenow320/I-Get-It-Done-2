@@ -47,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const apiUrl = getApiUrl();
       const url = new URL("/api/auth/login", apiUrl).toString();
       console.log("Attempting login to:", url);
+      console.log("API URL:", apiUrl);
+      console.log("Email:", email);
       
       const response = await fetch(url, {
         method: "POST",
@@ -55,9 +57,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       console.log("Login response status:", response.status);
+      console.log("Login response ok:", response.ok);
       const data = await response.json();
+      console.log("Login response data:", data);
 
       if (!response.ok) {
+        console.log("Login failed with error:", data.error);
         return { success: false, error: data.error || "Login failed" };
       }
 
