@@ -71,8 +71,21 @@ export default function LaneSetupScreen() {
     navigation.navigate("ModeSelection");
   };
 
+  const handleBack = () => {
+    Haptics.selectionAsync();
+    navigation.goBack();
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      <Pressable
+        style={[styles.backButton, { top: insets.top + Spacing.md }]}
+        onPress={handleBack}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Feather name="chevron-left" size={28} color={theme.text} />
+      </Pressable>
+
       <KeyboardAwareScrollViewCompat
         style={styles.scrollView}
         contentContainerStyle={[
@@ -156,6 +169,12 @@ export default function LaneSetupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  backButton: {
+    position: "absolute",
+    left: Spacing.md,
+    zIndex: 10,
+    padding: Spacing.xs,
   },
   scrollView: {
     flex: 1,
