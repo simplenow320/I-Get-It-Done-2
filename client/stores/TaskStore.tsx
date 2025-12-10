@@ -457,15 +457,18 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeTask = useCallback((id: string) => {
-    setTasks((prev) => {
-      const updated = prev.map((task) =>
-        task.id === id ? { ...task, completedAt: new Date() } : task
-      );
-      const task = updated.find(t => t.id === id);
-      if (task) saveTaskToApi(task);
-      return updated;
+    const completedTask = tasks.find(t => t.id === id);
+    if (!completedTask) return;
+    
+    const updated = { ...completedTask, completedAt: new Date() };
+    setTasks((prev) => prev.map((task) =>
+      task.id === id ? updated : task
+    ));
+    
+    saveTaskToApi(updated).catch(err => {
+      console.error("Failed to complete task:", err);
     });
-  }, [userId]);
+  }, [tasks, userId]);
 
   const deleteTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((task) => task.id !== id));
@@ -473,26 +476,32 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const moveTask = useCallback((id: string, newLane: Lane) => {
-    setTasks((prev) => {
-      const updated = prev.map((task) =>
-        task.id === id
-          ? { ...task, lane: newLane, dueDate: calculateDueDate(newLane), isOverdue: false }
-          : task
-      );
-      const task = updated.find(t => t.id === id);
-      if (task) saveTaskToApi(task);
-      return updated;
+    const taskToMove = tasks.find(t => t.id === id);
+    if (!taskToMove) return;
+    
+    const updated = { ...taskToMove, lane: newLane, dueDate: calculateDueDate(newLane), isOverdue: false };
+    setTasks((prev) => prev.map((task) =>
+      task.id === id ? updated : task
+    ));
+    
+    saveTaskToApi(updated).catch(err => {
+      console.error("Failed to move task:", err);
     });
-  }, [calculateDueDate, userId]);
+  }, [tasks, calculateDueDate, userId]);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
-    setTasks((prev) => {
-      const updated = prev.map((task) => (task.id === id ? { ...task, ...updates } : task));
-      const task = updated.find(t => t.id === id);
-      if (task) saveTaskToApi(task);
-      return updated;
+    const taskToUpdate = tasks.find(t => t.id === id);
+    if (!taskToUpdate) return;
+    
+    const updated = { ...taskToUpdate, ...updates };
+    setTasks((prev) => prev.map((task) =>
+      task.id === id ? updated : task
+    ));
+    
+    saveTaskToApi(updated).catch(err => {
+      console.error("Failed to update task:", err);
     });
-  }, [userId]);
+  }, [tasks, userId]);
 
   const updateSettings = useCallback((updates: Partial<UserSettings>) => {
     setSettings((prev) => ({ ...prev, ...updates }));
