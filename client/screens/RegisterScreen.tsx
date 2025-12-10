@@ -114,6 +114,8 @@ export default function RegisterScreen() {
                   keyboardType="email-address"
                   autoComplete="email"
                   textContentType="emailAddress"
+                  editable={true}
+                  selectTextOnFocus
                 />
               </View>
             </View>
@@ -131,6 +133,8 @@ export default function RegisterScreen() {
                   secureTextEntry={!showPassword}
                   autoComplete="new-password"
                   textContentType="newPassword"
+                  editable={true}
+                  selectTextOnFocus
                 />
                 <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
                   <Feather
@@ -158,6 +162,8 @@ export default function RegisterScreen() {
                   secureTextEntry={!showConfirmPassword}
                   autoComplete="new-password"
                   textContentType="newPassword"
+                  editable={true}
+                  selectTextOnFocus
                 />
                 <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeButton}>
                   <Feather

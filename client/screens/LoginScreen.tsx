@@ -98,6 +98,8 @@ export default function LoginScreen() {
                   keyboardType="email-address"
                   autoComplete="email"
                   textContentType="emailAddress"
+                  editable={true}
+                  selectTextOnFocus
                 />
               </View>
             </View>
@@ -115,6 +117,8 @@ export default function LoginScreen() {
                   secureTextEntry={!showPassword}
                   autoComplete="password"
                   textContentType="password"
+                  editable={true}
+                  selectTextOnFocus
                 />
                 <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
                   <Feather
