@@ -12,15 +12,18 @@ export function getApiUrl(): string {
     return window.location.origin;
   }
 
-  // On native (Expo Go), use the full URL with port
+  // On native (Expo Go), use the Replit dev domain WITHOUT port
+  // Replit's proxy automatically routes external HTTPS (port 443) to internal port 5000
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
   if (!host) {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  // Return URL without trailing slash to prevent double slashes
-  // Keep port 5000 - external requests need it to reach Express server
+  // Remove any port number - external URLs use HTTPS on port 443
+  // Replit proxy handles routing to internal port 5000
+  host = host.replace(/:5000$/, '').replace(/:[\d]+$/, '');
+
   return `https://${host}`;
 }
 
