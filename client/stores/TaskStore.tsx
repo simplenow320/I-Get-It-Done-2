@@ -30,6 +30,43 @@ export interface Contact {
   createdAt: Date;
 }
 
+export interface TeamMember {
+  id: string;
+  teammateId: string;
+  nickname: string;
+  role?: string;
+  color: string;
+  teammateName?: string;
+  teammateEmail?: string;
+}
+
+export interface TeamInvite {
+  id: string;
+  inviteCode: string;
+  inviterId?: string;
+  inviteeEmail?: string;
+  status: "pending" | "accepted" | "declined";
+  createdAt: Date;
+  expiresAt?: Date;
+  inviterName?: string;
+  inviterEmail?: string;
+}
+
+export interface DelegatedToMeTask {
+  id: string;
+  title: string;
+  notes?: string;
+  lane: Lane;
+  createdAt: Date;
+  dueDate?: Date;
+  subtasks: Subtask[];
+  delegationStatus?: DelegationStatus;
+  delegationNotes?: DelegationNote[];
+  delegatedAt?: Date;
+  ownerName: string;
+  ownerEmail?: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -39,6 +76,7 @@ export interface Task {
   dueDate?: Date;
   completedAt?: Date;
   assignedTo?: string;
+  delegatedToUserId?: string;
   subtasks: Subtask[];
   reminderType: ReminderType;
   focusTimeMinutes: number;
@@ -76,6 +114,9 @@ interface TaskStoreContext {
   tasks: Task[];
   unsortedTasks: UnsortedTask[];
   contacts: Contact[];
+  teamMembers: TeamMember[];
+  teamInvites: { sent: TeamInvite[]; received: TeamInvite[] };
+  delegatedToMeTasks: DelegatedToMeTask[];
   settings: UserSettings;
   userId: string | null;
   addTask: (title: string, lane: Lane, notes?: string) => void;
@@ -101,12 +142,21 @@ interface TaskStoreContext {
   deleteContact: (id: string) => void;
   getContactById: (id: string) => Contact | undefined;
   delegateTask: (taskId: string, contactId: string) => void;
+  delegateTaskToUser: (taskId: string, teammateId: string) => void;
   undelegateTask: (taskId: string) => void;
   updateDelegationStatus: (taskId: string, status: DelegationStatus) => void;
   addDelegationNote: (taskId: string, type: DelegationNote["type"], text: string) => void;
   getDelegatedTasks: () => Task[];
   getDelegatedTasksByContact: (contactId: string) => Task[];
   checkOverdueTasks: () => { movedCount: number; tasks: Task[] };
+  createTeamInvite: (inviteeEmail?: string) => Promise<TeamInvite | null>;
+  acceptTeamInvite: (inviteCode: string) => Promise<boolean>;
+  declineTeamInvite: (inviteId: string) => Promise<boolean>;
+  removeTeamMember: (teamMemberId: string) => Promise<boolean>;
+  refreshTeamData: () => Promise<void>;
+  refreshDelegatedToMe: () => Promise<void>;
+  updateDelegatedTaskStatus: (taskId: string, status: DelegationStatus, note?: string) => Promise<boolean>;
+  getTeamMemberById: (id: string) => TeamMember | undefined;
 }
 
 const defaultSettings: UserSettings = {
@@ -130,6 +180,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [unsortedTasks, setUnsortedTasks] = useState<UnsortedTask[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamInvites, setTeamInvites] = useState<{ sent: TeamInvite[]; received: TeamInvite[] }>({ sent: [], received: [] });
+  const [delegatedToMeTasks, setDelegatedToMeTasks] = useState<DelegatedToMeTask[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [isLoaded, setIsLoaded] = useState(false);
   const userId = user?.id || null;
@@ -740,12 +793,181 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [checkOverdueTasks]);
 
+  const refreshTeamData = useCallback(async (): Promise<void> => {
+    if (!userId) return;
+    try {
+      const [membersRes, invitesRes] = await Promise.all([
+        apiRequest("GET", `/api/team/members/${userId}`),
+        apiRequest("GET", `/api/team/invites/${userId}`),
+      ]);
+      const membersData = await membersRes.json();
+      const invitesData = await invitesRes.json();
+      
+      setTeamMembers(membersData.members || []);
+      setTeamInvites({
+        sent: invitesData.sentInvites || [],
+        received: invitesData.receivedInvites || [],
+      });
+    } catch (error) {
+      console.error("Failed to refresh team data:", error);
+    }
+  }, [userId]);
+
+  const refreshDelegatedToMe = useCallback(async (): Promise<void> => {
+    if (!userId) return;
+    try {
+      const response = await apiRequest("GET", `/api/delegated-to-me/${userId}`);
+      const data = await response.json();
+      setDelegatedToMeTasks(data.tasks || []);
+    } catch (error) {
+      console.error("Failed to refresh delegated tasks:", error);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (isAuthenticated && userId && settings.mode === "team") {
+      refreshTeamData();
+      refreshDelegatedToMe();
+    }
+  }, [isAuthenticated, userId, settings.mode, refreshTeamData, refreshDelegatedToMe]);
+
+  const createTeamInvite = useCallback(async (inviteeEmail?: string): Promise<TeamInvite | null> => {
+    if (!userId) return null;
+    try {
+      const response = await apiRequest("POST", "/api/team/invite", { inviterId: userId, inviteeEmail });
+      const data = await response.json();
+      if (data.invite) {
+        setTeamInvites((prev) => ({
+          ...prev,
+          sent: [...prev.sent, data.invite],
+        }));
+        return data.invite;
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to create invite:", error);
+      return null;
+    }
+  }, [userId]);
+
+  const acceptTeamInvite = useCallback(async (inviteCode: string): Promise<boolean> => {
+    if (!userId) return false;
+    try {
+      const response = await apiRequest("POST", "/api/team/invite/accept", { inviteCode, userId });
+      if (response.ok) {
+        await refreshTeamData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to accept invite:", error);
+      return false;
+    }
+  }, [userId, refreshTeamData]);
+
+  const declineTeamInvite = useCallback(async (inviteId: string): Promise<boolean> => {
+    try {
+      const response = await apiRequest("POST", "/api/team/invite/decline", { inviteId });
+      if (response.ok) {
+        setTeamInvites((prev) => ({
+          ...prev,
+          received: prev.received.filter((inv) => inv.id !== inviteId),
+        }));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to decline invite:", error);
+      return false;
+    }
+  }, []);
+
+  const removeTeamMember = useCallback(async (teamMemberId: string): Promise<boolean> => {
+    if (!userId) return false;
+    try {
+      const response = await apiRequest("DELETE", `/api/team/members/${teamMemberId}`, { userId });
+      if (response.ok) {
+        setTeamMembers((prev) => prev.filter((m) => m.id !== teamMemberId));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to remove team member:", error);
+      return false;
+    }
+  }, [userId]);
+
+  const delegateTaskToUser = useCallback((taskId: string, teammateId: string) => {
+    const teammate = teamMembers.find((m) => m.teammateId === teammateId);
+    if (!teammate) return;
+    
+    const now = new Date();
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              assignedTo: teammate.nickname,
+              delegatedToUserId: teammateId,
+              delegationStatus: "assigned" as DelegationStatus,
+              delegatedAt: now,
+              lastDelegationUpdate: now,
+            }
+          : task
+      )
+    );
+    
+    const task = tasks.find((t) => t.id === taskId);
+    if (task) {
+      saveTaskToApi({
+        ...task,
+        assignedTo: teammate.nickname,
+        delegatedToUserId: teammateId,
+        delegationStatus: "assigned",
+        delegatedAt: now,
+        lastDelegationUpdate: now,
+      }).catch(console.error);
+    }
+  }, [teamMembers, tasks, saveTaskToApi]);
+
+  const updateDelegatedTaskStatus = useCallback(async (
+    taskId: string, 
+    status: DelegationStatus, 
+    note?: string
+  ): Promise<boolean> => {
+    if (!userId) return false;
+    try {
+      const response = await apiRequest("PUT", `/api/delegation-status/${taskId}`, { userId, status, note });
+      if (response.ok) {
+        setDelegatedToMeTasks((prev) =>
+          prev.map((task) =>
+            task.id === taskId
+              ? { ...task, delegationStatus: status }
+              : task
+          )
+        );
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to update delegation status:", error);
+      return false;
+    }
+  }, [userId]);
+
+  const getTeamMemberById = useCallback((id: string): TeamMember | undefined => {
+    return teamMembers.find((m) => m.id === id || m.teammateId === id);
+  }, [teamMembers]);
+
   return (
     <TaskStoreContext.Provider
       value={{
         tasks,
         unsortedTasks,
         contacts,
+        teamMembers,
+        teamInvites,
+        delegatedToMeTasks,
         settings,
         addTask,
         addUnsortedTask,
@@ -770,6 +992,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         deleteContact,
         getContactById,
         delegateTask,
+        delegateTaskToUser,
         undelegateTask,
         updateDelegationStatus,
         addDelegationNote,
@@ -777,6 +1000,14 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         getDelegatedTasksByContact,
         checkOverdueTasks,
         userId,
+        createTeamInvite,
+        acceptTeamInvite,
+        declineTeamInvite,
+        removeTeamMember,
+        refreshTeamData,
+        refreshDelegatedToMe,
+        updateDelegatedTaskStatus,
+        getTeamMemberById,
       }}
     >
       {children}

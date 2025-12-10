@@ -1,17 +1,18 @@
-import React, { useState } from "react";
-import { StyleSheet, View, Pressable, FlatList, TextInput, Modal, Alert } from "react-native";
+import React, { useState, useEffect } from "react";
+import { StyleSheet, View, Pressable, FlatList, TextInput, Modal, Alert, Share, Clipboard, Platform } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useNavigation } from "@react-navigation/native";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
-import { useTaskStore, Contact, DelegationStatus } from "@/stores/TaskStore";
+import { useTaskStore, Contact, DelegationStatus, TeamMember, TeamInvite } from "@/stores/TaskStore";
 
 const STATUS_LABELS: Record<DelegationStatus, string> = {
   assigned: "Assigned",
@@ -29,16 +30,34 @@ const STATUS_COLORS: Record<DelegationStatus, string> = {
   done: "#34C759",
 };
 
+type TabType = "team" | "contacts";
+
 export default function TeamHubScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { contacts, addContact, deleteContact, getDelegatedTasks, getDelegatedTasksByContact } = useTaskStore();
+  const navigation = useNavigation<any>();
+  const { 
+    contacts, addContact, deleteContact, getDelegatedTasks, getDelegatedTasksByContact,
+    teamMembers, teamInvites, createTeamInvite, acceptTeamInvite, declineTeamInvite,
+    removeTeamMember, refreshTeamData, delegatedToMeTasks
+  } = useTaskStore();
 
+  const [activeTab, setActiveTab] = useState<TabType>("team");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [generatedInvite, setGeneratedInvite] = useState<TeamInvite | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    refreshTeamData();
+  }, [refreshTeamData]);
 
   const delegatedTasks = getDelegatedTasks();
 
@@ -70,6 +89,88 @@ export default function TeamHubScreen() {
     ]);
   };
 
+  const handleRemoveTeamMember = (member: TeamMember) => {
+    Alert.alert(
+      "Remove Team Member",
+      `Remove ${member.nickname} from your team? They will no longer be able to see tasks you delegate to them.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            await removeTeamMember(member.id);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCreateInvite = async () => {
+    setIsLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const invite = await createTeamInvite(inviteEmail || undefined);
+    setIsLoading(false);
+    if (invite) {
+      setGeneratedInvite(invite);
+      setInviteEmail("");
+    } else {
+      Alert.alert("Error", "Failed to create invite. Please try again.");
+    }
+  };
+
+  const handleShareInvite = async () => {
+    if (!generatedInvite) return;
+    try {
+      await Share.share({
+        message: `Join my team on I GET IT DONE! Use invite code: ${generatedInvite.inviteCode}`,
+      });
+    } catch (error) {
+      console.error("Share error:", error);
+    }
+  };
+
+  const handleCopyCode = () => {
+    if (!generatedInvite) return;
+    if (Platform.OS === "web") {
+      navigator.clipboard?.writeText(generatedInvite.inviteCode);
+    } else {
+      Clipboard.setString(generatedInvite.inviteCode);
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Copied!", "Invite code copied to clipboard");
+  };
+
+  const handleAcceptInvite = async (inviteCode: string) => {
+    setIsLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const success = await acceptTeamInvite(inviteCode);
+    setIsLoading(false);
+    if (success) {
+      Alert.alert("Success!", "You've joined the team.");
+    } else {
+      Alert.alert("Error", "Invalid or expired invite code.");
+    }
+  };
+
+  const handleDeclineInvite = async (inviteId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await declineTeamInvite(inviteId);
+  };
+
+  const handleJoinWithCode = async () => {
+    if (!joinCode.trim()) return;
+    const success = await acceptTeamInvite(joinCode.trim().toUpperCase());
+    if (success) {
+      setShowJoinModal(false);
+      setJoinCode("");
+      Alert.alert("Success!", "You've joined the team.");
+    } else {
+      Alert.alert("Error", "Invalid or expired invite code.");
+    }
+  };
+
   const getStatusSummary = () => {
     const summary: Partial<Record<DelegationStatus, number>> = {};
     delegatedTasks.forEach((task) => {
@@ -81,6 +182,37 @@ export default function TeamHubScreen() {
   };
 
   const statusSummary = getStatusSummary();
+
+  const renderTeamMemberItem = ({ item }: { item: TeamMember }) => {
+    return (
+      <Pressable 
+        style={[styles.contactCard, { backgroundColor: theme.backgroundDefault }]}
+        onLongPress={() => handleRemoveTeamMember(item)}
+      >
+        <View style={[styles.avatar, { backgroundColor: item.color }]}>
+          <ThemedText type="h3" lightColor="#FFFFFF" darkColor="#FFFFFF">
+            {(item.nickname || item.teammateName || "T").charAt(0).toUpperCase()}
+          </ThemedText>
+        </View>
+        <View style={styles.contactInfo}>
+          <ThemedText type="body" style={{ fontWeight: "600" }}>
+            {item.nickname || item.teammateName}
+          </ThemedText>
+          {item.teammateEmail ? (
+            <ThemedText type="small" secondary>
+              {item.teammateEmail}
+            </ThemedText>
+          ) : null}
+        </View>
+        <View style={[styles.linkedBadge, { backgroundColor: "#34C759" + "20" }]}>
+          <Feather name="link" size={12} color="#34C759" />
+          <ThemedText type="caption" style={{ color: "#34C759", marginLeft: 4 }}>
+            Linked
+          </ThemedText>
+        </View>
+      </Pressable>
+    );
+  };
 
   const renderContactItem = ({ item }: { item: Contact }) => {
     const tasks = getDelegatedTasksByContact(item.id);
@@ -116,18 +248,83 @@ export default function TeamHubScreen() {
     );
   };
 
+  const renderReceivedInvite = ({ item }: { item: TeamInvite }) => (
+    <View style={[styles.inviteCard, { backgroundColor: LaneColors.now.primary + "15" }]}>
+      <View style={styles.inviteInfo}>
+        <Feather name="mail" size={20} color={LaneColors.now.primary} />
+        <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
+          <ThemedText type="body" style={{ fontWeight: "600" }}>
+            Team Invite
+          </ThemedText>
+          <ThemedText type="small" secondary>
+            From: {item.inviterName || item.inviterEmail || "Unknown"}
+          </ThemedText>
+        </View>
+      </View>
+      <View style={styles.inviteActions}>
+        <Pressable
+          style={[styles.inviteButton, { backgroundColor: "#34C759" }]}
+          onPress={() => handleAcceptInvite(item.inviteCode)}
+        >
+          <Feather name="check" size={16} color="#FFFFFF" />
+        </Pressable>
+        <Pressable
+          style={[styles.inviteButton, { backgroundColor: "#FF3B30" }]}
+          onPress={() => handleDeclineInvite(item.id)}
+        >
+          <Feather name="x" size={16} color="#FFFFFF" />
+        </Pressable>
+      </View>
+    </View>
+  );
+
   return (
     <ThemedView style={styles.container}>
       <FlatList
-        data={contacts}
+        data={activeTab === "team" ? teamMembers : contacts}
         keyExtractor={(item) => item.id}
-        renderItem={renderContactItem}
+        renderItem={activeTab === "team" ? renderTeamMemberItem : renderContactItem}
         contentContainerStyle={[
           styles.content,
           { paddingTop: headerHeight + Spacing.md, paddingBottom: tabBarHeight + Spacing.xl },
         ]}
         ListHeaderComponent={
           <>
+            {teamInvites.received.length > 0 ? (
+              <View style={styles.invitesSection}>
+                <ThemedText type="h3" style={styles.sectionTitle}>
+                  Pending Invites
+                </ThemedText>
+                {teamInvites.received.map((invite) => (
+                  <View key={invite.id}>
+                    {renderReceivedInvite({ item: invite })}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {delegatedToMeTasks.length > 0 ? (
+              <Pressable
+                style={[styles.delegatedToMeCard, { backgroundColor: LaneColors.soon.primary + "20" }]}
+                onPress={() => navigation.navigate("DelegatedToMe")}
+              >
+                <View style={styles.delegatedToMeInfo}>
+                  <View style={[styles.delegatedIcon, { backgroundColor: LaneColors.soon.primary }]}>
+                    <Feather name="inbox" size={20} color="#FFFFFF" />
+                  </View>
+                  <View>
+                    <ThemedText type="body" style={{ fontWeight: "600" }}>
+                      Tasks Assigned to You
+                    </ThemedText>
+                    <ThemedText type="small" secondary>
+                      {delegatedToMeTasks.length} task{delegatedToMeTasks.length !== 1 ? "s" : ""} waiting for you
+                    </ThemedText>
+                  </View>
+                </View>
+                <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+              </Pressable>
+            ) : null}
+
             <View style={styles.statsSection}>
               <ThemedText type="h2" style={styles.sectionTitle}>
                 Delegation Overview
@@ -157,41 +354,113 @@ export default function TeamHubScreen() {
               )}
             </View>
 
-            <View style={styles.teamHeader}>
-              <ThemedText type="h2">Team Members</ThemedText>
+            <View style={styles.tabRow}>
               <Pressable
-                onPress={() => setShowAddModal(true)}
-                style={[styles.addButton, { backgroundColor: LaneColors.now.primary }]}
+                style={[
+                  styles.tab,
+                  activeTab === "team" && { borderBottomColor: LaneColors.now.primary, borderBottomWidth: 2 },
+                ]}
+                onPress={() => setActiveTab("team")}
               >
-                <Feather name="plus" size={20} color="#FFFFFF" />
+                <ThemedText
+                  type="body"
+                  style={{
+                    fontWeight: activeTab === "team" ? "600" : "400",
+                    color: activeTab === "team" ? LaneColors.now.primary : theme.textSecondary,
+                  }}
+                >
+                  Linked Team ({teamMembers.length})
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.tab,
+                  activeTab === "contacts" && { borderBottomColor: LaneColors.now.primary, borderBottomWidth: 2 },
+                ]}
+                onPress={() => setActiveTab("contacts")}
+              >
+                <ThemedText
+                  type="body"
+                  style={{
+                    fontWeight: activeTab === "contacts" ? "600" : "400",
+                    color: activeTab === "contacts" ? LaneColors.now.primary : theme.textSecondary,
+                  }}
+                >
+                  Contacts ({contacts.length})
+                </ThemedText>
               </Pressable>
             </View>
+
+            {activeTab === "team" ? (
+              <View style={styles.teamActions}>
+                <Pressable
+                  style={[styles.actionButton, { backgroundColor: LaneColors.now.primary }]}
+                  onPress={() => setShowInviteModal(true)}
+                >
+                  <Feather name="user-plus" size={18} color="#FFFFFF" />
+                  <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600", marginLeft: Spacing.xs }}>
+                    Invite
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[styles.actionButton, { backgroundColor: theme.backgroundDefault }]}
+                  onPress={() => setShowJoinModal(true)}
+                >
+                  <Feather name="log-in" size={18} color={theme.text} />
+                  <ThemedText type="body" style={{ fontWeight: "600", marginLeft: Spacing.xs }}>
+                    Join Team
+                  </ThemedText>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.teamHeader}>
+                <ThemedText type="h3">Contacts</ThemedText>
+                <Pressable
+                  onPress={() => setShowAddModal(true)}
+                  style={[styles.addButton, { backgroundColor: LaneColors.now.primary }]}
+                >
+                  <Feather name="plus" size={20} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            )}
           </>
         }
         ListEmptyComponent={
-          <View style={[styles.emptyContacts, { backgroundColor: theme.backgroundDefault }]}>
-            <Feather name="user-plus" size={48} color={theme.textSecondary} />
-            <ThemedText type="h3" style={styles.emptyTitle}>
-              Add your first team member
-            </ThemedText>
-            <ThemedText type="body" secondary style={styles.emptyText}>
-              Add people you work with to delegate tasks
-            </ThemedText>
-            <Pressable
-              onPress={() => setShowAddModal(true)}
-              style={[styles.emptyAddButton, { backgroundColor: LaneColors.now.primary }]}
-            >
-              <Feather name="plus" size={20} color="#FFFFFF" />
-              <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600" }}>
-                Add Team Member
+          activeTab === "team" ? (
+            <View style={[styles.emptyContacts, { backgroundColor: theme.backgroundDefault }]}>
+              <Feather name="users" size={48} color={theme.textSecondary} />
+              <ThemedText type="h3" style={styles.emptyTitle}>
+                No linked team members
               </ThemedText>
-            </Pressable>
-          </View>
+              <ThemedText type="body" secondary style={styles.emptyText}>
+                Invite team members or join a team to delegate tasks with real-time updates
+              </ThemedText>
+            </View>
+          ) : (
+            <View style={[styles.emptyContacts, { backgroundColor: theme.backgroundDefault }]}>
+              <Feather name="user-plus" size={48} color={theme.textSecondary} />
+              <ThemedText type="h3" style={styles.emptyTitle}>
+                Add your first contact
+              </ThemedText>
+              <ThemedText type="body" secondary style={styles.emptyText}>
+                Add people you work with to delegate tasks
+              </ThemedText>
+              <Pressable
+                onPress={() => setShowAddModal(true)}
+                style={[styles.emptyAddButton, { backgroundColor: LaneColors.now.primary }]}
+              >
+                <Feather name="plus" size={20} color="#FFFFFF" />
+                <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600" }}>
+                  Add Contact
+                </ThemedText>
+              </Pressable>
+            </View>
+          )
         }
         ListFooterComponent={
-          contacts.length > 0 ? (
+          (activeTab === "team" ? teamMembers.length : contacts.length) > 0 ? (
             <ThemedText type="caption" secondary style={styles.hint}>
-              Long press to remove a team member
+              Long press to remove
             </ThemedText>
           ) : null
         }
@@ -207,7 +476,7 @@ export default function TeamHubScreen() {
             ]}
           >
             <View style={styles.modalHeader}>
-              <ThemedText type="h3">Add Team Member</ThemedText>
+              <ThemedText type="h3">Add Contact</ThemedText>
               <Pressable onPress={() => setShowAddModal(false)} hitSlop={8}>
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
@@ -231,18 +500,153 @@ export default function TeamHubScreen() {
             />
             
             <Pressable
-              onPress={handleAddContact}
-              disabled={!newName.trim()}
               style={[
-                styles.modalAddButton, 
+                styles.submitButton,
                 { backgroundColor: newName.trim() ? LaneColors.now.primary : theme.backgroundSecondary }
               ]}
+              onPress={handleAddContact}
+              disabled={!newName.trim()}
             >
               <ThemedText 
                 type="body" 
-                style={{ fontWeight: "600", color: newName.trim() ? "#FFFFFF" : theme.textSecondary }}
+                style={{ 
+                  color: newName.trim() ? "#FFFFFF" : theme.textSecondary,
+                  fontWeight: "600"
+                }}
               >
-                Add Member
+                Add Contact
+              </ThemedText>
+            </Pressable>
+          </KeyboardAwareScrollViewCompat>
+        </View>
+      </Modal>
+
+      <Modal visible={showInviteModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAwareScrollViewCompat
+            style={styles.modalContent}
+            contentContainerStyle={[
+              styles.modalScrollContent,
+              { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.xl }
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <ThemedText type="h3">Invite Team Member</ThemedText>
+              <Pressable onPress={() => { setShowInviteModal(false); setGeneratedInvite(null); }} hitSlop={8}>
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+
+            {!generatedInvite ? (
+              <>
+                <ThemedText type="body" secondary>
+                  Generate an invite code to share with a team member. They can use this code to join your team.
+                </ThemedText>
+                
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
+                  placeholder="Their email (optional)"
+                  placeholderTextColor={theme.textSecondary}
+                  value={inviteEmail}
+                  onChangeText={setInviteEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                
+                <Pressable
+                  style={[styles.submitButton, { backgroundColor: LaneColors.now.primary }]}
+                  onPress={handleCreateInvite}
+                  disabled={isLoading}
+                >
+                  <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600" }}>
+                    {isLoading ? "Creating..." : "Generate Invite Code"}
+                  </ThemedText>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <View style={[styles.codeBox, { backgroundColor: theme.backgroundSecondary }]}>
+                  <ThemedText type="h2" style={{ letterSpacing: 4 }}>
+                    {generatedInvite.inviteCode}
+                  </ThemedText>
+                </View>
+                
+                <ThemedText type="small" secondary style={{ textAlign: "center" }}>
+                  This code expires in 7 days
+                </ThemedText>
+                
+                <View style={styles.shareActions}>
+                  <Pressable
+                    style={[styles.shareButton, { backgroundColor: LaneColors.now.primary }]}
+                    onPress={handleShareInvite}
+                  >
+                    <Feather name="share" size={18} color="#FFFFFF" />
+                    <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600", marginLeft: Spacing.xs }}>
+                      Share
+                    </ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.shareButton, { backgroundColor: theme.backgroundSecondary }]}
+                    onPress={handleCopyCode}
+                  >
+                    <Feather name="copy" size={18} color={theme.text} />
+                    <ThemedText type="body" style={{ fontWeight: "600", marginLeft: Spacing.xs }}>
+                      Copy
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </KeyboardAwareScrollViewCompat>
+        </View>
+      </Modal>
+
+      <Modal visible={showJoinModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAwareScrollViewCompat
+            style={styles.modalContent}
+            contentContainerStyle={[
+              styles.modalScrollContent,
+              { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.xl }
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <ThemedText type="h3">Join a Team</ThemedText>
+              <Pressable onPress={() => { setShowJoinModal(false); setJoinCode(""); }} hitSlop={8}>
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+
+            <ThemedText type="body" secondary>
+              Enter the invite code you received from a team member.
+            </ThemedText>
+            
+            <TextInput
+              style={[styles.input, styles.codeInput, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
+              placeholder="XXXXXXXX"
+              placeholderTextColor={theme.textSecondary}
+              value={joinCode}
+              onChangeText={(text) => setJoinCode(text.toUpperCase())}
+              autoCapitalize="characters"
+              maxLength={8}
+            />
+            
+            <Pressable
+              style={[
+                styles.submitButton,
+                { backgroundColor: joinCode.length === 8 ? LaneColors.now.primary : theme.backgroundSecondary }
+              ]}
+              onPress={handleJoinWithCode}
+              disabled={joinCode.length !== 8}
+            >
+              <ThemedText 
+                type="body" 
+                style={{ 
+                  color: joinCode.length === 8 ? "#FFFFFF" : theme.textSecondary,
+                  fontWeight: "600"
+                }}
+              >
+                Join Team
               </ThemedText>
             </Pressable>
           </KeyboardAwareScrollViewCompat>
@@ -258,40 +662,107 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+  },
+  invitesSection: {
+    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  sectionTitle: {
+    marginBottom: Spacing.sm,
+  },
+  inviteCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  inviteInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  inviteActions: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+  },
+  inviteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  delegatedToMeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.lg,
+  },
+  delegatedToMeInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: Spacing.md,
+  },
+  delegatedIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
   statsSection: {
     marginBottom: Spacing.lg,
   },
-  sectionTitle: {
-    marginBottom: Spacing.md,
-  },
   statsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.md,
+    justifyContent: "space-around",
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
   },
   statItem: {
-    flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   emptyStats: {
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.md,
     alignItems: "center",
+    padding: Spacing.xl,
+    borderRadius: BorderRadius.lg,
     gap: Spacing.sm,
+  },
+  tabRow: {
+    flexDirection: "row",
+    marginBottom: Spacing.md,
+    gap: Spacing.lg,
+  },
+  tab: {
+    paddingVertical: Spacing.sm,
+  },
+  teamActions: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
   },
   teamHeader: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: Spacing.md,
   },
   addButton: {
@@ -305,9 +776,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.md,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     marginBottom: Spacing.sm,
-    gap: Spacing.md,
   },
   avatar: {
     width: 48,
@@ -318,30 +788,38 @@ const styles = StyleSheet.create({
   },
   contactInfo: {
     flex: 1,
+    marginLeft: Spacing.md,
   },
   taskCount: {
     alignItems: "center",
   },
-  emptyContacts: {
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.md,
+  linkedBadge: {
+    flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+  },
+  emptyContacts: {
+    alignItems: "center",
+    padding: Spacing.xxl,
+    borderRadius: BorderRadius.lg,
     gap: Spacing.md,
   },
   emptyTitle: {
-    marginTop: Spacing.sm,
+    textAlign: "center",
   },
   emptyText: {
     textAlign: "center",
+    maxWidth: 280,
   },
   emptyAddButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    marginTop: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.xs,
   },
   hint: {
     textAlign: "center",
@@ -353,29 +831,50 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    flex: 1,
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
+    maxHeight: "80%",
   },
   modalScrollContent: {
-    padding: Spacing.lg,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
   },
   modalHeader: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: Spacing.lg,
+    alignItems: "center",
   },
   input: {
     padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    fontSize: 17,
-    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.md,
+    fontSize: 16,
   },
-  modalAddButton: {
+  codeInput: {
+    textAlign: "center",
+    fontSize: 24,
+    letterSpacing: 4,
+    fontWeight: "600",
+  },
+  submitButton: {
     alignItems: "center",
     padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    marginTop: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  codeBox: {
+    alignItems: "center",
+    padding: Spacing.xl,
+    borderRadius: BorderRadius.lg,
+  },
+  shareActions: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  shareButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
   },
 });

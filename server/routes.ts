@@ -4,8 +4,8 @@ import multer from "multer";
 import * as fs from "fs";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { users, tasks, subtasks, contacts, delegationNotes, userStats } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers } from "@shared/schema";
+import { eq, and, inArray, or } from "drizzle-orm";
 
 const upload = multer({ 
   dest: "/tmp/audio-uploads/",
@@ -477,23 +477,6 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.post("/api/delegation-notes", async (req: Request, res: Response) => {
-    try {
-      const { taskId, type, text } = req.body;
-      
-      const result = await db.insert(delegationNotes).values({
-        taskId,
-        type,
-        text: text || null,
-      }).returning();
-      
-      res.json({ note: result[0] });
-    } catch (error) {
-      console.error("Create delegation note error:", error);
-      res.status(500).json({ error: "Failed to create delegation note" });
-    }
-  });
-
   app.put("/api/users/:id/push-token", async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -634,6 +617,320 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     } catch (error) {
       console.error("Sync error:", error);
       res.status(500).json({ error: "Failed to sync data" });
+    }
+  });
+
+  function generateInviteCode(): string {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
+  app.put("/api/users/:id/display-name", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { displayName } = req.body;
+      
+      const result = await db.update(users).set({ displayName }).where(eq(users.id, id)).returning();
+      
+      if (result.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      res.json({ user: { id: result[0].id, email: result[0].email, displayName: result[0].displayName } });
+    } catch (error) {
+      console.error("Update display name error:", error);
+      res.status(500).json({ error: "Failed to update display name" });
+    }
+  });
+
+  app.post("/api/team/invite", async (req: Request, res: Response) => {
+    try {
+      const { inviterId, inviteeEmail } = req.body;
+      
+      let inviteCode = generateInviteCode();
+      let attempts = 0;
+      while (attempts < 5) {
+        const existing = await db.select().from(teamInvites).where(eq(teamInvites.inviteCode, inviteCode)).limit(1);
+        if (existing.length === 0) break;
+        inviteCode = generateInviteCode();
+        attempts++;
+      }
+      
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      
+      const result = await db.insert(teamInvites).values({
+        inviteCode,
+        inviterId,
+        inviteeEmail: inviteeEmail || null,
+        status: "pending",
+        expiresAt,
+      }).returning();
+      
+      res.json({ invite: result[0] });
+    } catch (error) {
+      console.error("Create invite error:", error);
+      res.status(500).json({ error: "Failed to create invite" });
+    }
+  });
+
+  app.get("/api/team/invites/:userId", async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      
+      const sentInvites = await db.select().from(teamInvites).where(
+        and(eq(teamInvites.inviterId, userId), eq(teamInvites.status, "pending"))
+      );
+      
+      const userRecord = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      const userEmail = userRecord[0]?.email;
+      
+      let receivedInvites: any[] = [];
+      if (userEmail) {
+        const invites = await db.select().from(teamInvites).where(
+          and(eq(teamInvites.inviteeEmail, userEmail), eq(teamInvites.status, "pending"))
+        );
+        
+        for (const invite of invites) {
+          const inviter = await db.select().from(users).where(eq(users.id, invite.inviterId!)).limit(1);
+          receivedInvites.push({
+            ...invite,
+            inviterEmail: inviter[0]?.email,
+            inviterName: inviter[0]?.displayName,
+          });
+        }
+      }
+      
+      res.json({ sentInvites, receivedInvites });
+    } catch (error) {
+      console.error("Get invites error:", error);
+      res.status(500).json({ error: "Failed to get invites" });
+    }
+  });
+
+  app.post("/api/team/invite/accept", async (req: Request, res: Response) => {
+    try {
+      const { inviteCode, userId } = req.body;
+      
+      const inviteResult = await db.select().from(teamInvites).where(eq(teamInvites.inviteCode, inviteCode)).limit(1);
+      
+      if (inviteResult.length === 0) {
+        return res.status(404).json({ error: "Invite not found" });
+      }
+      
+      const invite = inviteResult[0];
+      
+      if (invite.status !== "pending") {
+        return res.status(400).json({ error: "Invite is no longer valid" });
+      }
+      
+      if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
+        return res.status(400).json({ error: "Invite has expired" });
+      }
+      
+      if (invite.inviterId === userId) {
+        return res.status(400).json({ error: "Cannot accept your own invite" });
+      }
+      
+      const existingRelation = await db.select().from(teamMembers).where(
+        or(
+          and(eq(teamMembers.userId, invite.inviterId!), eq(teamMembers.teammateId, userId)),
+          and(eq(teamMembers.userId, userId), eq(teamMembers.teammateId, invite.inviterId!))
+        )
+      ).limit(1);
+      
+      if (existingRelation.length > 0) {
+        await db.update(teamInvites).set({ status: "accepted" }).where(eq(teamInvites.id, invite.id));
+        return res.json({ message: "Already team members", teamMember: existingRelation[0] });
+      }
+      
+      const colors = ["#FF3B30", "#FF9500", "#007AFF", "#AF52DE", "#34C759", "#5856D6"];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      
+      const inviterUser = await db.select().from(users).where(eq(users.id, invite.inviterId!)).limit(1);
+      const acceptingUser = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      
+      await db.insert(teamMembers).values({
+        userId: invite.inviterId!,
+        teammateId: userId,
+        nickname: acceptingUser[0]?.displayName || acceptingUser[0]?.email?.split("@")[0] || "Teammate",
+        color: randomColor,
+      });
+      
+      const randomColor2 = colors[Math.floor(Math.random() * colors.length)];
+      const result = await db.insert(teamMembers).values({
+        userId: userId,
+        teammateId: invite.inviterId!,
+        nickname: inviterUser[0]?.displayName || inviterUser[0]?.email?.split("@")[0] || "Teammate",
+        color: randomColor2,
+      }).returning();
+      
+      await db.update(teamInvites).set({ status: "accepted" }).where(eq(teamInvites.id, invite.id));
+      
+      res.json({ teamMember: result[0] });
+    } catch (error) {
+      console.error("Accept invite error:", error);
+      res.status(500).json({ error: "Failed to accept invite" });
+    }
+  });
+
+  app.post("/api/team/invite/decline", async (req: Request, res: Response) => {
+    try {
+      const { inviteId } = req.body;
+      
+      await db.update(teamInvites).set({ status: "declined" }).where(eq(teamInvites.id, inviteId));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Decline invite error:", error);
+      res.status(500).json({ error: "Failed to decline invite" });
+    }
+  });
+
+  app.get("/api/team/members/:userId", async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      
+      const members = await db.select().from(teamMembers).where(eq(teamMembers.userId, userId));
+      
+      const membersWithDetails: any[] = [];
+      for (const member of members) {
+        const teammate = await db.select().from(users).where(eq(users.id, member.teammateId!)).limit(1);
+        if (teammate[0]) {
+          membersWithDetails.push({
+            ...member,
+            teammateEmail: teammate[0].email,
+            teammateName: teammate[0].displayName || teammate[0].email?.split("@")[0],
+          });
+        }
+      }
+      
+      res.json({ members: membersWithDetails });
+    } catch (error) {
+      console.error("Get team members error:", error);
+      res.status(500).json({ error: "Failed to get team members" });
+    }
+  });
+
+  app.delete("/api/team/members/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { userId } = req.body;
+      
+      const member = await db.select().from(teamMembers).where(eq(teamMembers.id, id)).limit(1);
+      if (member.length === 0) {
+        return res.status(404).json({ error: "Team member not found" });
+      }
+      
+      await db.delete(teamMembers).where(eq(teamMembers.id, id));
+      
+      await db.delete(teamMembers).where(
+        and(
+          eq(teamMembers.userId, member[0].teammateId!),
+          eq(teamMembers.teammateId, userId)
+        )
+      );
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Remove team member error:", error);
+      res.status(500).json({ error: "Failed to remove team member" });
+    }
+  });
+
+  app.get("/api/delegated-to-me/:userId", async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      
+      const delegatedTasks = await db.select().from(tasks).where(
+        and(
+          eq(tasks.delegatedToUserId, userId),
+          eq(tasks.completedAt, null as any)
+        )
+      );
+      
+      const taskIds = delegatedTasks.map(t => t.id);
+      let taskSubtasks: any[] = [];
+      let taskNotes: any[] = [];
+      
+      if (taskIds.length > 0) {
+        taskSubtasks = await db.select().from(subtasks).where(inArray(subtasks.taskId, taskIds));
+        taskNotes = await db.select().from(delegationNotes).where(inArray(delegationNotes.taskId, taskIds));
+      }
+      
+      const tasksWithDetails = await Promise.all(delegatedTasks.map(async (task) => {
+        const owner = await db.select().from(users).where(eq(users.id, task.userId!)).limit(1);
+        return {
+          ...task,
+          subtasks: taskSubtasks.filter(s => s.taskId === task.id),
+          delegationNotes: taskNotes.filter(n => n.taskId === task.id),
+          ownerName: owner[0]?.displayName || owner[0]?.email?.split("@")[0] || "Unknown",
+          ownerEmail: owner[0]?.email,
+        };
+      }));
+      
+      res.json({ tasks: tasksWithDetails });
+    } catch (error) {
+      console.error("Get delegated tasks error:", error);
+      res.status(500).json({ error: "Failed to get delegated tasks" });
+    }
+  });
+
+  app.put("/api/delegation-status/:taskId", async (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { userId, status, note } = req.body;
+      
+      const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+      
+      if (task.length === 0) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      
+      if (task[0].delegatedToUserId !== userId) {
+        return res.status(403).json({ error: "Not authorized to update this task" });
+      }
+      
+      const result = await db.update(tasks).set({
+        delegationStatus: status,
+        lastDelegationUpdate: new Date(),
+      }).where(eq(tasks.id, taskId)).returning();
+      
+      if (note) {
+        await db.insert(delegationNotes).values({
+          taskId,
+          authorId: userId,
+          type: "status_update",
+          text: note,
+        });
+      }
+      
+      res.json({ task: result[0] });
+    } catch (error) {
+      console.error("Update delegation status error:", error);
+      res.status(500).json({ error: "Failed to update delegation status" });
+    }
+  });
+
+  app.post("/api/delegation-notes", async (req: Request, res: Response) => {
+    try {
+      const { taskId, authorId, type, text } = req.body;
+      
+      const result = await db.insert(delegationNotes).values({
+        taskId,
+        authorId: authorId || null,
+        type,
+        text: text || null,
+      }).returning();
+      
+      res.json({ note: result[0] });
+    } catch (error) {
+      console.error("Create delegation note error:", error);
+      res.status(500).json({ error: "Failed to create delegation note" });
     }
   });
 

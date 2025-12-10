@@ -9,6 +9,7 @@ export const users = pgTable("users", {
     .default(sql`gen_random_uuid()::text`),
   email: varchar("email", { length: 255 }).unique(),
   passwordHash: varchar("password_hash", { length: 255 }),
+  displayName: varchar("display_name", { length: 255 }),
   deviceId: varchar("device_id", { length: 255 }),
   pushToken: varchar("push_token", { length: 255 }),
   notificationsEnabled: boolean("notifications_enabled").default(false),
@@ -30,6 +31,7 @@ export const tasks = pgTable("tasks", {
   completedAt: timestamp("completed_at"),
   dueDate: timestamp("due_date"),
   assignedTo: varchar("assigned_to", { length: 255 }),
+  delegatedToUserId: varchar("delegated_to_user_id", { length: 255 }).references(() => users.id),
   delegationStatus: varchar("delegation_status", { length: 20 }),
   delegatedAt: timestamp("delegated_at"),
   lastDelegationUpdate: timestamp("last_delegation_update"),
@@ -61,8 +63,33 @@ export const delegationNotes = pgTable("delegation_notes", {
     .primaryKey()
     .default(sql`gen_random_uuid()::text`),
   taskId: varchar("task_id", { length: 255 }).references(() => tasks.id, { onDelete: "cascade" }),
+  authorId: varchar("author_id", { length: 255 }).references(() => users.id),
   type: varchar("type", { length: 50 }).notNull(),
   text: text("text"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const teamInvites = pgTable("team_invites", {
+  id: varchar("id", { length: 255 })
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  inviteCode: varchar("invite_code", { length: 20 }).unique().notNull(),
+  inviterId: varchar("inviter_id", { length: 255 }).references(() => users.id, { onDelete: "cascade" }),
+  inviteeEmail: varchar("invitee_email", { length: 255 }),
+  status: varchar("status", { length: 20 }).default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+});
+
+export const teamMembers = pgTable("team_members", {
+  id: varchar("id", { length: 255 })
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  userId: varchar("user_id", { length: 255 }).references(() => users.id, { onDelete: "cascade" }),
+  teammateId: varchar("teammate_id", { length: 255 }).references(() => users.id, { onDelete: "cascade" }),
+  nickname: varchar("nickname", { length: 255 }),
+  role: varchar("role", { length: 255 }),
+  color: varchar("color", { length: 20 }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -109,3 +136,11 @@ export type DelegationNote = typeof delegationNotes.$inferSelect;
 export const insertUserStatsSchema = createInsertSchema(userStats);
 export type InsertUserStats = z.infer<typeof insertUserStatsSchema>;
 export type UserStats = typeof userStats.$inferSelect;
+
+export const insertTeamInviteSchema = createInsertSchema(teamInvites);
+export type InsertTeamInvite = z.infer<typeof insertTeamInviteSchema>;
+export type TeamInvite = typeof teamInvites.$inferSelect;
+
+export const insertTeamMemberSchema = createInsertSchema(teamMembers);
+export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
+export type TeamMember = typeof teamMembers.$inferSelect;
