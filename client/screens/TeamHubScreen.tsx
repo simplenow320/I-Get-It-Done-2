@@ -2,9 +2,11 @@ import React, { useState } from "react";
 import { StyleSheet, View, Pressable, FlatList, TextInput, Modal, Alert } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
@@ -30,6 +32,7 @@ const STATUS_COLORS: Record<DelegationStatus, string> = {
 export default function TeamHubScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { contacts, addContact, deleteContact, getDelegatedTasks, getDelegatedTasksByContact } = useTaskStore();
 
@@ -196,7 +199,13 @@ export default function TeamHubScreen() {
 
       <Modal visible={showAddModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
+          <KeyboardAwareScrollViewCompat
+            style={styles.modalContent}
+            contentContainerStyle={[
+              styles.modalScrollContent,
+              { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.xl }
+            ]}
+          >
             <View style={styles.modalHeader}>
               <ThemedText type="h3">Add Team Member</ThemedText>
               <Pressable onPress={() => setShowAddModal(false)} hitSlop={8}>
@@ -236,7 +245,7 @@ export default function TeamHubScreen() {
                 Add Member
               </ThemedText>
             </Pressable>
-          </View>
+          </KeyboardAwareScrollViewCompat>
         </View>
       </Modal>
     </ThemedView>
@@ -344,10 +353,12 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
+    flex: 1,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
+  },
+  modalScrollContent: {
     padding: Spacing.lg,
-    paddingBottom: Spacing.xl + 34,
   },
   modalHeader: {
     flexDirection: "row",
