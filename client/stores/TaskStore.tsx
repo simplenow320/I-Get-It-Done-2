@@ -120,8 +120,8 @@ const defaultSettings: UserSettings = {
   onboardingComplete: false,
 };
 
-const STORAGE_KEY = "@task_store";
-const SETTINGS_STORAGE_KEY = "@user_settings";
+const STORAGE_KEY_PREFIX = "@task_store_";
+const SETTINGS_STORAGE_KEY_PREFIX = "@user_settings_";
 
 const TaskStoreContext = createContext<TaskStoreContext | null>(null);
 
@@ -140,6 +140,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     const randomPart2 = Math.random().toString(36).substring(2, 10);
     return `${timestamp}-${randomPart}-${randomPart2}`;
   };
+
+  const getStorageKey = () => `${STORAGE_KEY_PREFIX}${userId}`;
+  const getSettingsStorageKey = () => `${SETTINGS_STORAGE_KEY_PREFIX}${userId}`;
 
   useEffect(() => {
     if (isAuthenticated && userId) {
@@ -168,13 +171,18 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const loadState = async () => {
     try {
-      const storedSettings = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
+      const settingsKey = getSettingsStorageKey();
+      const storageKey = getStorageKey();
+      
+      const storedSettings = await AsyncStorage.getItem(settingsKey);
       if (storedSettings) {
         const parsedSettings = JSON.parse(storedSettings);
         setSettings({ ...defaultSettings, ...parsedSettings });
+      } else {
+        setSettings(defaultSettings);
       }
 
-      const storedUnsorted = await AsyncStorage.getItem(STORAGE_KEY);
+      const storedUnsorted = await AsyncStorage.getItem(storageKey);
       if (storedUnsorted) {
         const parsed = JSON.parse(storedUnsorted);
         if (parsed.unsortedTasks) setUnsortedTasks(parsed.unsortedTasks);
@@ -253,8 +261,11 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const saveState = async () => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ unsortedTasks }));
-      await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+      const storageKey = getStorageKey();
+      const settingsKey = getSettingsStorageKey();
+      
+      await AsyncStorage.setItem(storageKey, JSON.stringify({ unsortedTasks }));
+      await AsyncStorage.setItem(settingsKey, JSON.stringify(settings));
     } catch (error) {
       console.error("Failed to save local state:", error);
     }
