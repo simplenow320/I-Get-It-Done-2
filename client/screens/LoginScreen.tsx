@@ -5,6 +5,7 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -66,10 +67,11 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
           <View style={styles.header}>
-            <View style={[styles.iconContainer, { backgroundColor: LaneColors.now.primary }]}>
-              <Feather name="check-circle" size={40} color="#FFFFFF" />
-            </View>
-            <ThemedText style={styles.title}>I GET IT DONE</ThemedText>
+            <Image
+              source={require("../../assets/images/logo-full.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
               Welcome back
             </ThemedText>
@@ -206,6 +208,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.lg,
+  },
+  logo: {
+    width: 200,
+    height: 200,
+    marginBottom: Spacing.md,
   },
   title: {
     fontSize: 28,

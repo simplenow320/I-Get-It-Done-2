@@ -5,6 +5,7 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -82,12 +83,13 @@ export default function RegisterScreen() {
         showsVerticalScrollIndicator={false}
       >
           <View style={styles.header}>
-            <View style={[styles.iconContainer, { backgroundColor: LaneColors.soon.primary }]}>
-              <Feather name="user-plus" size={40} color="#FFFFFF" />
-            </View>
-            <ThemedText style={styles.title}>Create Account</ThemedText>
+            <Image
+              source={require("../../assets/images/logo-full.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Start getting things done
+              Create your account
             </ThemedText>
           </View>
 
@@ -233,6 +235,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.lg,
+  },
+  logo: {
+    width: 200,
+    height: 200,
+    marginBottom: Spacing.md,
   },
   title: {
     fontSize: 28,
