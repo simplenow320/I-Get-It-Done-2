@@ -209,17 +209,14 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
-      console.log("Login attempt:", { email, passwordLength: password?.length });
       
       if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required" });
       }
       
       const normalizedEmail = email.toLowerCase().trim();
-      console.log("Normalized email:", normalizedEmail);
       
       const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
-      console.log("User found:", existing.length > 0);
       
       if (existing.length === 0) {
         return res.status(401).json({ error: "Invalid email or password" });
@@ -231,12 +228,7 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
         return res.status(401).json({ error: "Invalid email or password" });
       }
       
-      console.log("Comparing password...");
-      console.log("Input password:", password);
-      console.log("Input password length:", password.length);
-      console.log("Stored hash:", user.passwordHash);
       const validPassword = await bcrypt.compare(password, user.passwordHash);
-      console.log("Password valid:", validPassword);
       
       if (!validPassword) {
         return res.status(401).json({ error: "Invalid email or password" });
@@ -931,6 +923,58 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     } catch (error) {
       console.error("Create delegation note error:", error);
       res.status(500).json({ error: "Failed to create delegation note" });
+    }
+  });
+
+  app.delete("/api/account/:userId", async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const { password } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ error: "User ID is required" });
+      }
+      
+      if (!password) {
+        return res.status(400).json({ error: "Password is required to delete account" });
+      }
+      
+      const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      
+      if (userResult.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      const user = userResult[0];
+      
+      if (!user.passwordHash) {
+        return res.status(400).json({ error: "Account cannot be deleted - no password set" });
+      }
+      
+      const validPassword = await bcrypt.compare(password, user.passwordHash);
+      if (!validPassword) {
+        return res.status(401).json({ error: "Invalid password" });
+      }
+      
+      await db.delete(delegationNotes).where(eq(delegationNotes.authorId, userId));
+      await db.delete(subtasks).where(
+        inArray(subtasks.taskId, 
+          db.select({ id: tasks.id }).from(tasks).where(eq(tasks.userId, userId))
+        )
+      );
+      await db.delete(tasks).where(eq(tasks.userId, userId));
+      await db.delete(contacts).where(eq(contacts.userId, userId));
+      await db.delete(teamMembers).where(
+        or(eq(teamMembers.userId, userId), eq(teamMembers.teammateId, userId))
+      );
+      await db.delete(teamInvites).where(eq(teamInvites.inviterId, userId));
+      await db.delete(userStats).where(eq(userStats.userId, userId));
+      await db.delete(users).where(eq(users.id, userId));
+      
+      res.json({ success: true, message: "Account deleted successfully" });
+    } catch (error) {
+      console.error("Delete account error:", error);
+      res.status(500).json({ error: "Failed to delete account" });
     }
   });
 

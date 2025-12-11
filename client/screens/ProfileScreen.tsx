@@ -1,5 +1,5 @@
-import React from "react";
-import { StyleSheet, View, Pressable } from "react-native";
+import React, { useState } from "react";
+import { StyleSheet, View, Pressable, Alert, TextInput, Modal, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -20,6 +20,7 @@ import { useTaskStore } from "@/stores/TaskStore";
 import { useGamification, Level } from "@/stores/GamificationStore";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiRequest } from "@/lib/query-client";
 
 type NavigationProp = NativeStackNavigationProp<ProfileStackParamList, "Profile">;
 type ThemeMode = "light" | "dark" | "system";
@@ -48,6 +49,11 @@ export default function ProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { settings, userId } = useTaskStore();
   const { logout, user } = useAuth();
+  
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
   const {
     currentStreak,
     longestStreak,
@@ -98,6 +104,45 @@ export default function ProfileScreen() {
   const handleLogout = async () => {
     Haptics.selectionAsync();
     await logout();
+  };
+
+  const handleDeleteAccount = () => {
+    Haptics.selectionAsync();
+    setShowDeleteModal(true);
+    setDeletePassword("");
+    setDeleteError("");
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      setDeleteError("Please enter your password");
+      return;
+    }
+    
+    if (!userId) {
+      setDeleteError("Not logged in");
+      return;
+    }
+    
+    setIsDeleting(true);
+    setDeleteError("");
+    
+    try {
+      const response = await apiRequest("DELETE", `/api/account/${userId}`, { password: deletePassword });
+      const data = await response.json();
+      
+      if (!response.ok) {
+        setDeleteError(data.error || "Failed to delete account");
+        setIsDeleting(false);
+        return;
+      }
+      
+      setShowDeleteModal(false);
+      await logout();
+    } catch (error) {
+      setDeleteError("Failed to delete account");
+      setIsDeleting(false);
+    }
   };
 
   const themeOptions: { mode: ThemeMode; label: string; icon: string }[] = [
@@ -402,17 +447,103 @@ export default function ProfileScreen() {
               <ThemedText type="small" secondary>{user.email}</ThemedText>
             </View>
           ) : null}
-          <Pressable
-            style={[styles.logoutButton, { backgroundColor: LaneColors.now.primary + "15" }]}
-            onPress={handleLogout}
-          >
-            <Feather name="log-out" size={18} color={LaneColors.now.primary} />
-            <ThemedText style={[styles.logoutText, { color: LaneColors.now.primary }]}>
-              Sign Out
-            </ThemedText>
-          </Pressable>
+          <View style={styles.accountButtons}>
+            <Pressable
+              style={[styles.logoutButton, { backgroundColor: LaneColors.now.primary + "15" }]}
+              onPress={handleLogout}
+            >
+              <Feather name="log-out" size={18} color={LaneColors.now.primary} />
+              <ThemedText style={[styles.logoutText, { color: LaneColors.now.primary }]}>
+                Sign Out
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              style={[styles.deleteAccountButton, { backgroundColor: "rgba(255,59,48,0.1)" }]}
+              onPress={handleDeleteAccount}
+            >
+              <Feather name="trash-2" size={16} color="#FF3B30" />
+              <ThemedText style={[styles.deleteAccountText, { color: "#FF3B30" }]}>
+                Delete Account
+              </ThemedText>
+            </Pressable>
+          </View>
         </View>
       </Animated.View>
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIcon, { backgroundColor: "rgba(255,59,48,0.1)" }]}>
+                <Feather name="alert-triangle" size={24} color="#FF3B30" />
+              </View>
+              <ThemedText type="h3" style={styles.modalTitle}>Delete Account</ThemedText>
+            </View>
+            
+            <ThemedText type="body" secondary style={styles.modalMessage}>
+              This action cannot be undone. All your tasks, progress, and data will be permanently deleted.
+            </ThemedText>
+            
+            <ThemedText type="small" secondary style={styles.passwordLabel}>
+              Enter your password to confirm:
+            </ThemedText>
+            
+            <TextInput
+              style={[
+                styles.passwordInput,
+                { 
+                  backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
+                  color: theme.text,
+                  borderColor: deleteError ? "#FF3B30" : "transparent",
+                },
+              ]}
+              placeholder="Password"
+              placeholderTextColor={theme.textSecondary}
+              secureTextEntry
+              value={deletePassword}
+              onChangeText={(text) => {
+                setDeletePassword(text);
+                setDeleteError("");
+              }}
+              editable={!isDeleting}
+              autoCapitalize="none"
+            />
+            
+            {deleteError ? (
+              <ThemedText type="small" style={styles.errorText}>{deleteError}</ThemedText>
+            ) : null}
+            
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalButton, styles.cancelButton, { backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)" }]}
+                onPress={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+              >
+                <ThemedText type="body" style={{ fontWeight: "600" }}>Cancel</ThemedText>
+              </Pressable>
+              
+              <Pressable
+                style={[styles.modalButton, styles.deleteButton, { backgroundColor: "#FF3B30" }]}
+                onPress={confirmDeleteAccount}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <ThemedText type="body" style={{ fontWeight: "600", color: "#FFFFFF" }}>
+                    Delete
+                  </ThemedText>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAwareScrollViewCompat>
   );
 }
@@ -583,4 +714,82 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 16,
   },
+  accountButtons: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  deleteAccountButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  deleteAccountText: {
+    fontWeight: "500",
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.lg,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  modalIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalTitle: {
+    flex: 1,
+  },
+  modalMessage: {
+    lineHeight: 22,
+  },
+  passwordLabel: {
+    marginTop: Spacing.xs,
+  },
+  passwordInput: {
+    height: 48,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    fontSize: 16,
+    borderWidth: 1,
+  },
+  errorText: {
+    color: "#FF3B30",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  modalButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelButton: {},
+  deleteButton: {},
 });
