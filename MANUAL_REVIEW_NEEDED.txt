@@ -1,0 +1,74 @@
+MANUAL REVIEW NEEDED - I GET IT DONE Pre-Deployment
+Date: December 11, 2025
+
+============================================================
+ITEMS REQUIRING HUMAN REVIEW
+============================================================
+
+1. APP STORE METADATA
+   - App icon and screenshots are current
+   - App description matches functionality
+   - Privacy policy URL is accessible
+   - Support URL is valid
+
+2. ENVIRONMENT VARIABLES (Production)
+   Verify these are set in production environment:
+   - DATABASE_URL
+   - OPENAI_API_KEY (for AI task extraction)
+   - DEEPGRAM_API_KEY (for voice transcription)
+   - SESSION_SECRET
+
+3. PUSH NOTIFICATIONS
+   - Test notification delivery on physical devices
+   - Verify notification permissions are requested properly
+   - Confirm notification content is appropriate
+
+4. VOICE FEATURES
+   - Test voice-to-task on iOS and Android
+   - Verify microphone permission flow
+   - Check fallback message appears on web
+
+5. TEAM/DELEGATION FEATURES
+   - Test invite code generation and redemption
+   - Verify task delegation between team members
+   - Test status updates (pending → accepted → completed)
+
+6. LEGAL PAGES
+   - Ensure Terms of Service is accessible
+   - Ensure Privacy Policy is accessible
+   - Verify compliance with data protection laws
+
+============================================================
+RECOMMENDED TESTING CHECKLIST
+============================================================
+
+Before App Store Submission:
+
+[ ] Fresh install test on iOS device
+[ ] Fresh install test on Android device
+[ ] Complete user journey: register → onboard → create tasks → complete
+[ ] Test all 4 lanes: Now, Soon, Later, Park
+[ ] Test Quick Dump with voice input
+[ ] Test Focus Mode and timer
+[ ] Test Break It Down (subtasks)
+[ ] Verify streaks and XP increment correctly
+[ ] Test Weekly Reset flow
+[ ] Test team invitation and task delegation
+[ ] Test account deletion flow
+[ ] Verify offline behavior
+[ ] Test app backgrounding and foregrounding
+[ ] Verify memory usage is reasonable
+[ ] Test on older device if possible
+
+============================================================
+POTENTIAL FUTURE IMPROVEMENTS
+============================================================
+
+Non-blocking suggestions for future releases:
+
+1. Add Sentry or similar for crash reporting
+2. Implement biometric authentication (Face ID/Touch ID)
+3. Add rate limiting on API endpoints
+4. Implement refresh token rotation
+5. Add more detailed analytics
+6. Consider implementing data export feature
