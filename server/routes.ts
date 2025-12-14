@@ -379,21 +379,28 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
       }
       
       const normalizedEmail = email.toLowerCase().trim();
+      const normalizedCode = code.toString().trim();
+      
+      console.log("Reset password attempt:", { email: normalizedEmail, codeProvided: normalizedCode });
       
       const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
       
       if (existing.length === 0) {
+        console.log("Reset password: User not found for email:", normalizedEmail);
         return res.status(400).json({ error: "Invalid reset code" });
       }
       
       const user = existing[0];
       
-      if (!user.resetToken || user.resetToken !== code) {
+      console.log("Reset password: DB token:", user.resetToken, "Provided:", normalizedCode, "Match:", user.resetToken === normalizedCode);
+      
+      if (!user.resetToken || user.resetToken !== normalizedCode) {
         return res.status(400).json({ error: "Invalid reset code" });
       }
       
       if (!user.resetTokenExpiry || new Date(user.resetTokenExpiry) < new Date()) {
-        return res.status(400).json({ error: "Reset code has expired" });
+        console.log("Reset password: Token expired. Expiry:", user.resetTokenExpiry, "Now:", new Date());
+        return res.status(400).json({ error: "Reset code has expired. Please request a new code." });
       }
       
       const newPasswordHash = await bcrypt.hash(newPassword, 10);
