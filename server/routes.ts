@@ -288,6 +288,129 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
+  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
+      
+      if (existing.length === 0) {
+        return res.json({ success: true, message: "If an account exists with this email, you will receive a reset code" });
+      }
+      
+      const user = existing[0];
+      
+      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const resetExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      
+      await db.update(users).set({
+        resetToken: resetCode,
+        resetTokenExpiry: resetExpiry,
+      }).where(eq(users.id, user.id));
+      
+      const apiKey = process.env.SENDGRID_API_KEY;
+      if (!apiKey) {
+        console.error("SENDGRID_API_KEY not configured");
+        return res.status(500).json({ error: "Email service not configured" });
+      }
+      
+      const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          personalizations: [
+            {
+              to: [{ email: normalizedEmail }],
+            },
+          ],
+          from: { email: "info@simplenow.co", name: "I Get It Done" },
+          subject: "I Get It Done - Password Reset Code",
+          content: [
+            {
+              type: "text/plain",
+              value: `Your password reset code is: ${resetCode}\n\nThis code expires in 15 minutes.\n\nIf you did not request this reset, please ignore this email.`,
+            },
+            {
+              type: "text/html",
+              value: `<div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #FF3B30;">Password Reset Code</h2>
+                <p>Your password reset code is:</p>
+                <p style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #333; background: #f5f5f5; padding: 16px; border-radius: 8px; text-align: center;">${resetCode}</p>
+                <p style="color: #666;">This code expires in 15 minutes.</p>
+                <p style="color: #999; font-size: 12px;">If you did not request this reset, please ignore this email.</p>
+              </div>`,
+            },
+          ],
+        }),
+      });
+      
+      if (response.status !== 202 && !response.ok) {
+        const errorText = await response.text();
+        console.error("SendGrid error:", response.status, errorText);
+        return res.status(500).json({ error: "Failed to send reset email" });
+      }
+      
+      res.json({ success: true, message: "Reset code sent to your email" });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ error: "Failed to process request" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+    try {
+      const { email, code, newPassword } = req.body;
+      
+      if (!email || !code || !newPassword) {
+        return res.status(400).json({ error: "All fields are required" });
+      }
+      
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+      
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
+      
+      if (existing.length === 0) {
+        return res.status(400).json({ error: "Invalid reset code" });
+      }
+      
+      const user = existing[0];
+      
+      if (!user.resetToken || user.resetToken !== code) {
+        return res.status(400).json({ error: "Invalid reset code" });
+      }
+      
+      if (!user.resetTokenExpiry || new Date(user.resetTokenExpiry) < new Date()) {
+        return res.status(400).json({ error: "Reset code has expired" });
+      }
+      
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+      
+      await db.update(users).set({
+        passwordHash: newPasswordHash,
+        resetToken: null,
+        resetTokenExpiry: null,
+      }).where(eq(users.id, user.id));
+      
+      res.json({ success: true, message: "Password reset successfully" });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+
   app.post("/api/support/contact", async (req: Request, res: Response) => {
     try {
       const { name, email, message } = req.body;

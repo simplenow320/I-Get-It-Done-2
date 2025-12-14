@@ -13,6 +13,8 @@ export const users = pgTable("users", {
   deviceId: varchar("device_id", { length: 255 }),
   pushToken: varchar("push_token", { length: 255 }),
   notificationsEnabled: boolean("notifications_enabled").default(false),
+  resetToken: varchar("reset_token", { length: 6 }),
+  resetTokenExpiry: timestamp("reset_token_expiry"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

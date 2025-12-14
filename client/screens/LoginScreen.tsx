@@ -132,23 +132,31 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            <Pressable
-              style={styles.rememberContainer}
-              onPress={() => setRememberMe(!rememberMe)}
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  { borderColor: colors.border },
-                  rememberMe && { backgroundColor: LaneColors.now.primary, borderColor: LaneColors.now.primary },
-                ]}
+            <View style={styles.optionsRow}>
+              <Pressable
+                style={styles.rememberContainer}
+                onPress={() => setRememberMe(!rememberMe)}
               >
-                {rememberMe ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
-              </View>
-              <ThemedText style={[styles.rememberText, { color: colors.textSecondary }]}>
-                Remember me
-              </ThemedText>
-            </Pressable>
+                <View
+                  style={[
+                    styles.checkbox,
+                    { borderColor: colors.border },
+                    rememberMe && { backgroundColor: LaneColors.now.primary, borderColor: LaneColors.now.primary },
+                  ]}
+                >
+                  {rememberMe ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
+                </View>
+                <ThemedText style={[styles.rememberText, { color: colors.textSecondary }]}>
+                  Remember me
+                </ThemedText>
+              </Pressable>
+
+              <Pressable onPress={() => navigation.navigate("ForgotPassword")}>
+                <ThemedText style={[styles.forgotLink, { color: LaneColors.now.primary }]}>
+                  Forgot Password?
+                </ThemedText>
+              </Pressable>
+            </View>
 
             <Pressable
               style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
@@ -275,6 +283,15 @@ const styles = StyleSheet.create({
   },
   rememberText: {
     fontSize: 14,
+  },
+  optionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  forgotLink: {
+    fontSize: 14,
+    fontWeight: "500",
   },
   loginButton: {
     borderRadius: BorderRadius.lg,
