@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Pressable, Platform, Alert, useColorScheme } from "react-native";
-import { useAudioRecorder, AudioModule, RecordingPresets } from "expo-audio";
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -79,6 +79,13 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         setPermissionStatus("granted");
       }
 
+      // Enable recording mode on iOS - required before calling record()
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+
+      await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
       setState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -94,6 +101,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
     try {
       await audioRecorder.stop();
+      // Reset audio mode after recording
+      await setAudioModeAsync({
+        allowsRecording: false,
+      });
     } catch (error) {
       console.error("Failed to stop recorder:", error);
       onError?.("Couldn't stop recording");
