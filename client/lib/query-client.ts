@@ -6,10 +6,12 @@ import { Platform } from "react-native";
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
-  // On web, use window.location.origin - the Express server serves both the app and API
+  // On web, use window.location.origin with port 5000 for the Express API
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    // Web browser - use current origin (same-origin requests)
-    return window.location.origin;
+    // Web browser - construct URL with port 5000 for Express server
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:5000`;
   }
 
   // On native (Expo Go), use the Replit dev domain WITHOUT port
