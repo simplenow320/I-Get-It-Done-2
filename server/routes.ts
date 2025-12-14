@@ -247,6 +247,107 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
+  app.post("/api/auth/change-password", async (req: Request, res: Response) => {
+    try {
+      const { userId, currentPassword, newPassword } = req.body;
+      
+      if (!userId || !currentPassword || !newPassword) {
+        return res.status(400).json({ error: "All fields are required" });
+      }
+      
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters" });
+      }
+      
+      const existing = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      
+      if (existing.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      const user = existing[0];
+      
+      if (!user.passwordHash) {
+        return res.status(400).json({ error: "Cannot change password for this account" });
+      }
+      
+      const validPassword = await bcrypt.compare(currentPassword, user.passwordHash);
+      
+      if (!validPassword) {
+        return res.status(401).json({ error: "Current password is incorrect" });
+      }
+      
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+      
+      await db.update(users).set({ passwordHash: newPasswordHash }).where(eq(users.id, userId));
+      
+      res.json({ success: true, message: "Password changed successfully" });
+    } catch (error) {
+      console.error("Change password error:", error);
+      res.status(500).json({ error: "Failed to change password" });
+    }
+  });
+
+  app.post("/api/support/contact", async (req: Request, res: Response) => {
+    try {
+      const { name, email, message } = req.body;
+      
+      if (!name || !email || !message) {
+        return res.status(400).json({ error: "Name, email, and message are required" });
+      }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
+      }
+      
+      const apiKey = process.env.SENDGRID_API_KEY;
+      if (!apiKey) {
+        console.error("SENDGRID_API_KEY not configured");
+        return res.status(500).json({ error: "Email service not configured" });
+      }
+      
+      const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          personalizations: [
+            {
+              to: [{ email: "info@simplenow.co" }],
+            },
+          ],
+          from: { email: "info@simplenow.co", name: "I Get It Done Support" },
+          reply_to: { email: email, name: name },
+          subject: `Support Request from ${name}`,
+          content: [
+            {
+              type: "text/plain",
+              value: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
+            },
+            {
+              type: "text/html",
+              value: `<h2>Support Request</h2><p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><hr><p><strong>Message:</strong></p><p>${message.replace(/\n/g, '<br>')}</p>`,
+            },
+          ],
+        }),
+      });
+      
+      if (response.status !== 202 && !response.ok) {
+        const errorText = await response.text();
+        console.error("SendGrid error:", response.status, errorText);
+        return res.status(500).json({ error: "Failed to send message" });
+      }
+      
+      res.json({ success: true, message: "Message sent successfully" });
+    } catch (error) {
+      console.error("Support contact error:", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
   app.post("/api/users/init", async (req: Request, res: Response) => {
     try {
       const { deviceId } = req.body;

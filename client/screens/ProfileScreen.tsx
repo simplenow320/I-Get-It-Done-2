@@ -96,6 +96,16 @@ export default function ProfileScreen() {
     navigation.navigate("TourLanding", { isTour: true });
   };
 
+  const handleChangePassword = () => {
+    Haptics.selectionAsync();
+    navigation.navigate("ChangePassword");
+  };
+
+  const handleSupport = () => {
+    Haptics.selectionAsync();
+    navigation.navigate("Support");
+  };
+
   const handleThemeChange = (newMode: ThemeMode) => {
     Haptics.selectionAsync();
     setMode(newMode);
@@ -432,6 +442,52 @@ export default function ProfileScreen() {
               </ThemedText>
               <ThemedText type="small" secondary>
                 {settings.mode === "solo" ? "Solo" : "Team"}
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          </Pressable>
+          {user?.email ? (
+            <>
+              <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+              <Pressable
+                onPress={handleChangePassword}
+                style={({ pressed }) => [
+                  styles.menuItemInGroup,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: LaneColors.later.primary }]}>
+                  <Feather name="lock" size={20} color="#FFFFFF" />
+                </View>
+                <View style={styles.menuContent}>
+                  <ThemedText type="body" style={{ fontWeight: "500" }}>
+                    Change Password
+                  </ThemedText>
+                  <ThemedText type="small" secondary>
+                    Update your password
+                  </ThemedText>
+                </View>
+                <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+              </Pressable>
+            </>
+          ) : null}
+          <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+          <Pressable
+            onPress={handleSupport}
+            style={({ pressed }) => [
+              styles.menuItemInGroup,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: LaneColors.soon.primary }]}>
+              <Feather name="mail" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.menuContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                Support
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                Get help or send feedback
               </ThemedText>
             </View>
             <Feather name="chevron-right" size={20} color={theme.textSecondary} />

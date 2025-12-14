@@ -6,6 +6,8 @@ import WeeklyResetScreen from "@/screens/WeeklyResetScreen";
 import LaneTimingsSettingsScreen from "@/screens/LaneTimingsSettingsScreen";
 import ModeSettingsScreen from "@/screens/ModeSettingsScreen";
 import HowItWorksScreen from "@/screens/HowItWorksScreen";
+import ChangePasswordScreen from "@/screens/ChangePasswordScreen";
+import SupportScreen from "@/screens/SupportScreen";
 import LandingScreen from "@/screens/LandingScreen";
 import LearnMoreScreen from "@/screens/LearnMoreScreen";
 import FAQScreen from "@/screens/FAQScreen";
@@ -17,6 +19,8 @@ export type ProfileStackParamList = {
   LaneTimingsSettings: undefined;
   ModeSettings: undefined;
   HowItWorks: undefined;
+  ChangePassword: undefined;
+  Support: undefined;
   TourLanding: { isTour: boolean };
   TourLearnMore: { isTour: boolean };
   TourFAQ: { isTour: boolean };
@@ -62,6 +66,20 @@ export default function ProfileStackNavigator() {
         component={HowItWorksScreen}
         options={{
           title: "How It Works",
+        }}
+      />
+      <Stack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{
+          title: "Change Password",
+        }}
+      />
+      <Stack.Screen
+        name="Support"
+        component={SupportScreen}
+        options={{
+          title: "Support",
         }}
       />
       <Stack.Screen
