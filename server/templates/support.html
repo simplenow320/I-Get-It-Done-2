@@ -1,0 +1,269 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Support - I GET IT DONE</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        min-height: 100vh;
+      }
+      .container {
+        background: white;
+        border-radius: 16px;
+        padding: 40px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      }
+      h1 {
+        font-size: 32px;
+        font-weight: 700;
+        margin: 0 0 8px 0;
+        color: #1a1a2e;
+      }
+      .subtitle {
+        color: #6B4EFF;
+        font-size: 16px;
+        font-weight: 500;
+        margin-bottom: 32px;
+      }
+      .section {
+        margin-bottom: 32px;
+      }
+      h2 {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin: 0 0 12px 0;
+      }
+      p {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #555;
+        margin: 0 0 16px 0;
+      }
+      .contact-info {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 32px;
+      }
+      .contact-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .contact-item:last-child {
+        margin-bottom: 0;
+      }
+      .contact-icon {
+        width: 24px;
+        margin-right: 12px;
+        font-size: 18px;
+      }
+      .contact-link {
+        color: #6B4EFF;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .contact-link:hover {
+        text-decoration: underline;
+      }
+      .faq-item {
+        border-bottom: 1px solid #eee;
+        padding: 16px 0;
+      }
+      .faq-item:last-child {
+        border-bottom: none;
+      }
+      .faq-question {
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 8px;
+      }
+      .faq-answer {
+        color: #666;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .back-link {
+        display: inline-block;
+        margin-top: 24px;
+        color: #6B4EFF;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .back-link:hover {
+        text-decoration: underline;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        font-weight: 500;
+        color: #1a1a2e;
+        margin-bottom: 8px;
+      }
+      input, textarea {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 15px;
+        font-family: inherit;
+      }
+      input:focus, textarea:focus {
+        outline: none;
+        border-color: #6B4EFF;
+      }
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+      button {
+        background: linear-gradient(135deg, #6B4EFF 0%, #9B6DFF 100%);
+        color: white;
+        border: none;
+        padding: 14px 32px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        width: 100%;
+      }
+      button:hover {
+        opacity: 0.9;
+      }
+      .success-message {
+        background: #e8f5e9;
+        color: #2e7d32;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: none;
+      }
+      .error-message {
+        background: #ffebee;
+        color: #c62828;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Support</h1>
+      <div class="subtitle">We're here to help</div>
+
+      <div class="contact-info">
+        <div class="contact-item">
+          <span class="contact-icon">&#9993;</span>
+          <a href="mailto:info@simplenow.co" class="contact-link">info@simplenow.co</a>
+        </div>
+        <div class="contact-item">
+          <span class="contact-icon">&#128336;</span>
+          <span>Response within 24-48 hours</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Contact Us</h2>
+        <div id="success-message" class="success-message">
+          Thank you! Your message has been sent. We'll get back to you soon.
+        </div>
+        <div id="error-message" class="error-message">
+          Something went wrong. Please try again or email us directly.
+        </div>
+        <form id="contact-form">
+          <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" required placeholder="Your name">
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required placeholder="your@email.com">
+          </div>
+          <div class="form-group">
+            <label for="message">Message</label>
+            <textarea id="message" name="message" required placeholder="How can we help you?"></textarea>
+          </div>
+          <button type="submit">Send Message</button>
+        </form>
+      </div>
+
+      <div class="section">
+        <h2>Frequently Asked Questions</h2>
+        
+        <div class="faq-item">
+          <div class="faq-question">How do I reset my password?</div>
+          <div class="faq-answer">On the login screen, tap "Forgot Password" and enter your email. You'll receive a link to create a new password.</div>
+        </div>
+        
+        <div class="faq-item">
+          <div class="faq-question">Is my data backed up?</div>
+          <div class="faq-answer">Yes! All your tasks and progress are automatically synced to our secure cloud servers in real-time.</div>
+        </div>
+        
+        <div class="faq-item">
+          <div class="faq-question">How does the 4-lane system work?</div>
+          <div class="faq-answer">Tasks are organized into Now (today), Soon (next few days), Later (future weeks), and Park (on hold). Tasks automatically move between lanes based on their timing.</div>
+        </div>
+        
+        <div class="faq-item">
+          <div class="faq-question">Can I use the app on multiple devices?</div>
+          <div class="faq-answer">Yes! Sign in with your account on any device to access all your tasks and progress.</div>
+        </div>
+        
+        <div class="faq-item">
+          <div class="faq-question">How do I cancel my account?</div>
+          <div class="faq-answer">Contact us at info@simplenow.co and we'll help you with account deletion. Your data will be permanently removed within 30 days.</div>
+        </div>
+      </div>
+
+      <a href="/" class="back-link">Back to App</a>
+    </div>
+
+    <script>
+      document.getElementById('contact-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const name = document.getElementById('name').value;
+        const email = document.getElementById('email').value;
+        const message = document.getElementById('message').value;
+        
+        const successEl = document.getElementById('success-message');
+        const errorEl = document.getElementById('error-message');
+        
+        successEl.style.display = 'none';
+        errorEl.style.display = 'none';
+        
+        try {
+          const response = await fetch('/api/support/contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, message })
+          });
+          
+          if (response.ok) {
+            successEl.style.display = 'block';
+            this.reset();
+          } else {
+            errorEl.style.display = 'block';
+          }
+        } catch (err) {
+          errorEl.style.display = 'block';
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,400 @@
+<!doctype html>
+<html>
+  <head>
+    <title>I GET IT DONE - Task Management for ADHD Brains</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="I GET IT DONE is an ADHD-optimized task management app with visual timers, quick capture, streak tracking, and a unique 4-lane system designed for how your brain actually works.">
+    <meta property="og:title" content="I GET IT DONE - Task Management for ADHD Brains">
+    <meta property="og:description" content="Finally, a productivity app that works with your ADHD brain, not against it. Now. Soon. Done.">
+    <meta property="og:type" content="website">
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+        color: white;
+        min-height: 100vh;
+      }
+      .hero {
+        text-align: center;
+        padding: 80px 20px 60px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .logo {
+        font-size: 48px;
+        font-weight: 800;
+        background: linear-gradient(135deg, #FF6B6B 0%, #FFE66D 50%, #6B4EFF 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 16px;
+      }
+      .tagline {
+        font-size: 24px;
+        font-weight: 600;
+        color: #a5b4fc;
+        margin-bottom: 32px;
+      }
+      .hero-description {
+        font-size: 18px;
+        line-height: 1.8;
+        color: #c4c4c4;
+        max-width: 600px;
+        margin: 0 auto 40px;
+      }
+      .cta-buttons {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 60px;
+      }
+      .cta-button {
+        display: inline-flex;
+        align-items: center;
+        padding: 16px 32px;
+        border-radius: 12px;
+        text-decoration: none;
+        font-size: 16px;
+        font-weight: 600;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .cta-button:hover {
+        transform: translateY(-2px);
+      }
+      .cta-primary {
+        background: linear-gradient(135deg, #6B4EFF 0%, #9B6DFF 100%);
+        color: white;
+        box-shadow: 0 4px 20px rgba(107, 78, 255, 0.4);
+      }
+      .cta-secondary {
+        background: rgba(255,255,255,0.1);
+        color: white;
+        border: 1px solid rgba(255,255,255,0.2);
+      }
+      .store-icon {
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+      }
+      .features {
+        background: white;
+        padding: 80px 20px;
+      }
+      .features-container {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+      .section-title {
+        text-align: center;
+        font-size: 36px;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 48px;
+      }
+      .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 32px;
+      }
+      .feature-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+        border-radius: 16px;
+        padding: 32px;
+        border: 1px solid #eee;
+      }
+      .feature-icon {
+        font-size: 40px;
+        margin-bottom: 16px;
+      }
+      .feature-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 12px;
+      }
+      .feature-description {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #666;
+      }
+      .lanes-section {
+        background: linear-gradient(135deg, #f0edff 0%, #e8f4ff 100%);
+        padding: 80px 20px;
+      }
+      .lanes-container {
+        max-width: 900px;
+        margin: 0 auto;
+        text-align: center;
+      }
+      .lanes-title {
+        font-size: 32px;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 16px;
+      }
+      .lanes-subtitle {
+        font-size: 18px;
+        color: #666;
+        margin-bottom: 48px;
+      }
+      .lanes-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+      }
+      .lane-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      }
+      .lane-name {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+      .lane-now { color: #FF6B6B; }
+      .lane-soon { color: #FF9F43; }
+      .lane-later { color: #6B4EFF; }
+      .lane-park { color: #54a0ff; }
+      .lane-benefit {
+        font-size: 14px;
+        color: #666;
+        line-height: 1.6;
+      }
+      .adhd-section {
+        background: #1a1a2e;
+        padding: 80px 20px;
+        color: white;
+      }
+      .adhd-container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .adhd-title {
+        text-align: center;
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 48px;
+      }
+      .adhd-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 24px;
+      }
+      .adhd-item {
+        display: flex;
+        gap: 16px;
+        padding: 20px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 12px;
+      }
+      .adhd-icon {
+        font-size: 28px;
+        flex-shrink: 0;
+      }
+      .adhd-problem {
+        font-size: 16px;
+        font-weight: 600;
+        color: #FF6B6B;
+        margin-bottom: 4px;
+      }
+      .adhd-solution {
+        font-size: 14px;
+        color: #a5b4fc;
+        line-height: 1.6;
+      }
+      .footer {
+        background: #0f0f1a;
+        padding: 40px 20px;
+        text-align: center;
+      }
+      .footer-links {
+        display: flex;
+        gap: 32px;
+        justify-content: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+      }
+      .footer-link {
+        color: #888;
+        text-decoration: none;
+        font-size: 14px;
+      }
+      .footer-link:hover {
+        color: white;
+      }
+      .footer-copyright {
+        color: #555;
+        font-size: 13px;
+      }
+      @media (max-width: 600px) {
+        .logo {
+          font-size: 36px;
+        }
+        .tagline {
+          font-size: 20px;
+        }
+        .hero-description {
+          font-size: 16px;
+        }
+        .section-title, .lanes-title, .adhd-title {
+          font-size: 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <section class="hero">
+      <h1 class="logo">I GET IT DONE</h1>
+      <div class="tagline">Now. Soon. Done.</div>
+      <p class="hero-description">
+        Finally, a productivity app designed for how your ADHD brain actually works. 
+        Quick capture, visual timers, dopamine-friendly rewards, and a unique 4-lane system 
+        that keeps you focused without the overwhelm.
+      </p>
+      <div class="cta-buttons">
+        <a href="https://apps.apple.com/app/id982107779" class="cta-button cta-primary" target="_blank">
+          <img src="https://apps.apple.com/assets/images/favicon/favicon-apps-48-fad34e0d87e86dcf72ded1faff4ba9d0.png" class="store-icon" alt="">
+          Download for iOS
+        </a>
+        <a href="https://play.google.com/store/apps/details?id=host.exp.exponent" class="cta-button cta-secondary" target="_blank">
+          <img src="https://www.gstatic.com/android/market_images/web/favicon_v3.ico" class="store-icon" alt="">
+          Get for Android
+        </a>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="features-container">
+        <h2 class="section-title">Built Different, On Purpose</h2>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">&#9889;</div>
+            <h3 class="feature-title">Quick Dump</h3>
+            <p class="feature-description">Voice capture and rapid entry. Get thoughts out of your head and into the app in seconds, before they disappear.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#9201;</div>
+            <h3 class="feature-title">Focus Timer</h3>
+            <p class="feature-description">Visual countdown rings fight time blindness. Sprint sessions with built-in breaks keep you in the zone.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#128200;</div>
+            <h3 class="feature-title">Break It Down</h3>
+            <p class="feature-description">Big tasks become tiny wins. AI-assisted subtask creation makes starting easy and progress visible.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#127942;</div>
+            <h3 class="feature-title">Gamification</h3>
+            <p class="feature-description">Streaks, XP, levels, and achievements. Turn productivity into a game your dopamine-seeking brain loves.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#128101;</div>
+            <h3 class="feature-title">Team Mode</h3>
+            <p class="feature-description">Delegate tasks, collaborate with notes, and track hand-offs. Perfect for work teams or family task sharing.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#128260;</div>
+            <h3 class="feature-title">Weekly Reset</h3>
+            <p class="feature-description">Celebrate wins, clean up stale tasks, and plan ahead. A weekly ritual that keeps momentum going.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="lanes-section">
+      <div class="lanes-container">
+        <h2 class="lanes-title">The 4-Lane System</h2>
+        <p class="lanes-subtitle">A simple structure that reduces overwhelm and keeps priorities clear</p>
+        <div class="lanes-grid">
+          <div class="lane-card">
+            <div class="lane-name lane-now">NOW</div>
+            <p class="lane-benefit">Today's focus. Short list, clear priorities. No decision fatigue.</p>
+          </div>
+          <div class="lane-card">
+            <div class="lane-name lane-soon">SOON</div>
+            <p class="lane-benefit">Next few days. Visible but not urgent. Smooth transitions.</p>
+          </div>
+          <div class="lane-card">
+            <div class="lane-name lane-later">LATER</div>
+            <p class="lane-benefit">Future weeks. Captured, not forgotten. Out of today's mental space.</p>
+          </div>
+          <div class="lane-card">
+            <div class="lane-name lane-park">PARK</div>
+            <p class="lane-benefit">On hold. Safe zone for ideas. Reduces guilt, preserves creativity.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="adhd-section">
+      <div class="adhd-container">
+        <h2 class="adhd-title">ADHD Problems We Solve</h2>
+        <div class="adhd-grid">
+          <div class="adhd-item">
+            <div class="adhd-icon">&#128337;</div>
+            <div>
+              <div class="adhd-problem">Time Blindness</div>
+              <div class="adhd-solution">Visual countdown timers and auto-lane movement keep you grounded in real time.</div>
+            </div>
+          </div>
+          <div class="adhd-item">
+            <div class="adhd-icon">&#128679;</div>
+            <div>
+              <div class="adhd-problem">Task Initiation</div>
+              <div class="adhd-solution">One-tap Quick Dump, sprint modes, and "Break It Down" make starting frictionless.</div>
+            </div>
+          </div>
+          <div class="adhd-item">
+            <div class="adhd-icon">&#128165;</div>
+            <div>
+              <div class="adhd-problem">Overwhelm</div>
+              <div class="adhd-solution">Subtasks, progress bars, and the 4-lane system chunk big tasks into tiny wins.</div>
+            </div>
+          </div>
+          <div class="adhd-item">
+            <div class="adhd-icon">&#128640;</div>
+            <div>
+              <div class="adhd-problem">Low Dopamine</div>
+              <div class="adhd-solution">Streaks, completion celebrations, XP, levels, and achievements fuel motivation.</div>
+            </div>
+          </div>
+          <div class="adhd-item">
+            <div class="adhd-icon">&#128173;</div>
+            <div>
+              <div class="adhd-problem">Working Memory</div>
+              <div class="adhd-solution">Voice capture and quick add let you dump ideas before they vanish.</div>
+            </div>
+          </div>
+          <div class="adhd-item">
+            <div class="adhd-icon">&#128269;</div>
+            <div>
+              <div class="adhd-problem">Lost Priorities</div>
+              <div class="adhd-solution">Auto-lane movement and gentle nudges surface what matters when it matters.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="footer-links">
+        <a href="/" class="footer-link">Home</a>
+        <a href="/support" class="footer-link">Support</a>
+        <a href="/privacy" class="footer-link">Privacy Policy</a>
+        <a href="mailto:info@simplenow.co" class="footer-link">Contact</a>
+      </div>
+      <div class="footer-copyright">
+        &copy; 2025 SimpleNow. All rights reserved.
+      </div>
+    </footer>
+  </body>
+</html>
