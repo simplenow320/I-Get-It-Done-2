@@ -18,12 +18,26 @@ function setupCors(app: express.Application) {
     const origins = new Set<string>();
 
     if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+      const devDomain = process.env.REPLIT_DEV_DOMAIN;
+      origins.add(`https://${devDomain}`);
+      // Also add the port-5000 subdomain variant for Expo Go native apps
+      if (devDomain.includes(".riker.replit.dev")) {
+        origins.add(`https://${devDomain.replace(".riker.replit.dev", "-5000.riker.replit.dev")}`);
+      } else if (devDomain.includes(".replit.dev")) {
+        origins.add(`https://${devDomain.replace(".replit.dev", "-5000.replit.dev")}`);
+      }
     }
 
     if (process.env.REPLIT_DOMAINS) {
       process.env.REPLIT_DOMAINS.split(",").forEach((d: string) => {
-        origins.add(`https://${d.trim()}`);
+        const domain = d.trim();
+        origins.add(`https://${domain}`);
+        // Also add port-5000 subdomain variants
+        if (domain.includes(".riker.replit.dev")) {
+          origins.add(`https://${domain.replace(".riker.replit.dev", "-5000.riker.replit.dev")}`);
+        } else if (domain.includes(".replit.dev")) {
+          origins.add(`https://${domain.replace(".replit.dev", "-5000.replit.dev")}`);
+        }
       });
     }
 

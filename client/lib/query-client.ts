@@ -14,17 +14,38 @@ export function getApiUrl(): string {
     return `${protocol}//${hostname}:5000`;
   }
 
-  // On native (Expo Go), use the Replit dev domain WITHOUT port
-  // Replit's proxy automatically routes external HTTPS (port 443) to internal port 5000
+  // On native (Expo Go), use the Replit port-based subdomain format
+  // Replit routes external requests to internal ports via subdomain pattern:
+  // https://<base-domain>-<port>.riker.replit.dev
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
   if (!host) {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  // Remove any port number - external URLs use HTTPS on port 443
-  // Replit proxy handles routing to internal port 5000
-  host = host.replace(/:5000$/, '').replace(/:[\d]+$/, '');
+  // Convert domain:port format to Replit's port-subdomain format
+  // e.g., "abc123.riker.replit.dev:5000" -> "abc123-5000.riker.replit.dev"
+  if (host.includes(":5000")) {
+    const baseDomain = host.replace(":5000", "");
+    // Insert -5000 before .riker.replit.dev (or similar patterns)
+    if (baseDomain.includes(".riker.replit.dev")) {
+      host = baseDomain.replace(".riker.replit.dev", "-5000.riker.replit.dev");
+    } else if (baseDomain.includes(".replit.dev")) {
+      host = baseDomain.replace(".replit.dev", "-5000.replit.dev");
+    } else {
+      // Fallback: append -5000 before the first dot
+      const parts = baseDomain.split(".");
+      parts[0] = parts[0] + "-5000";
+      host = parts.join(".");
+    }
+  } else {
+    // If no port specified, assume we need port 5000 for Express
+    if (host.includes(".riker.replit.dev")) {
+      host = host.replace(".riker.replit.dev", "-5000.riker.replit.dev");
+    } else if (host.includes(".replit.dev")) {
+      host = host.replace(".replit.dev", "-5000.replit.dev");
+    }
+  }
 
   return `https://${host}`;
 }
