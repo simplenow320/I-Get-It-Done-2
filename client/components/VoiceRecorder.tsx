@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Pressable, Platform, Alert, useColorScheme } from "react-native";
-import { Audio } from "expo-av";
+import { useAudioRecorder, AudioModule, RecordingPresets } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -30,7 +30,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const [state, setState] = useState<RecordingState>("idle");
   const [permissionStatus, setPermissionStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   
   const pulseScale = useSharedValue(1);
   const buttonScale = useSharedValue(1);
@@ -56,8 +56,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const checkPermissionOnce = async () => {
     try {
-      const { status } = await Audio.getPermissionsAsync();
-      if (status === "granted") {
+      const status = await AudioModule.getRecordingPermissionsAsync();
+      if (status.granted) {
         setPermissionStatus("granted");
       } else {
         setPermissionStatus("unknown");
@@ -70,8 +70,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const startRecording = async () => {
     try {
       if (permissionStatus !== "granted") {
-        const { status } = await Audio.requestPermissionsAsync();
-        if (status !== "granted") {
+        const status = await AudioModule.requestRecordingPermissionsAsync();
+        if (!status.granted) {
           setPermissionStatus("denied");
           onError?.("Tap to allow mic access");
           return;
@@ -79,16 +79,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         setPermissionStatus("granted");
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      
-      recordingRef.current = recording;
+      audioRecorder.record();
       setState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
@@ -101,16 +92,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     setState("processing");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const recording = recordingRef.current;
-    if (!recording) {
-      console.error("No recording reference");
-      onError?.("Recording failed");
-      setState("idle");
-      return;
-    }
-
     try {
-      await recording.stopAndUnloadAsync();
+      await audioRecorder.stop();
     } catch (error) {
       console.error("Failed to stop recorder:", error);
       onError?.("Couldn't stop recording");
@@ -118,17 +101,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       return;
     }
     
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
-    } catch (error) {
-      console.error("Failed to reset audio mode:", error);
-    }
-    
-    const uri = recording.getURI();
+    const uri = audioRecorder.uri;
     console.log("Recording URI:", uri);
-    recordingRef.current = null;
 
     if (!uri) {
       console.error("No recording URI available");
@@ -144,7 +118,6 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     try {
       console.log("Starting transcription for:", uri);
       
-      // Verify file exists and has content
       const fileInfo = await FileSystem.getInfoAsync(uri);
       console.log("File info:", JSON.stringify(fileInfo));
       
@@ -160,7 +133,6 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       const uploadUrl = `${apiUrl}/api/transcribe`;
       console.log("Uploading to:", uploadUrl);
       
-      // Use FileSystem.uploadAsync for reliable file uploads on iOS/Android
       const response = await FileSystem.uploadAsync(uploadUrl, uri, {
         fieldName: "audio",
         httpMethod: "POST",
@@ -233,7 +205,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   return (
     <View style={styles.container}>
-      {state === "recording" && (
+      {state === "recording" ? (
         <Animated.View
           style={[
             styles.pulse,
@@ -246,7 +218,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
             },
           ]}
         />
-      )}
+      ) : null}
       
       <Animated.View style={buttonAnimatedStyle}>
         <Pressable
