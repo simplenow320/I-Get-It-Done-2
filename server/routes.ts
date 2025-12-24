@@ -569,6 +569,10 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
       const { id } = req.params;
       const updates = req.body;
       
+      const existingTask = await db.select().from(tasks).where(eq(tasks.id, id));
+      const wasCompleted = existingTask.length > 0 && existingTask[0].completedAt !== null;
+      const isBeingCompleted = updates.completedAt && !wasCompleted;
+      
       if (updates.dueDate) updates.dueDate = new Date(updates.dueDate);
       if (updates.completedAt) updates.completedAt = new Date(updates.completedAt);
       if (updates.delegatedAt) updates.delegatedAt = new Date(updates.delegatedAt);
@@ -582,6 +586,49 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
       
       if (result.length === 0) {
         return res.status(404).json({ error: "Task not found" });
+      }
+      
+      if (isBeingCompleted && existingTask[0].userId) {
+        const userId = existingTask[0].userId;
+        const existingStats = await db.select().from(userStats).where(eq(userStats.userId, userId));
+        
+        if (existingStats.length > 0) {
+          const stats = existingStats[0];
+          const today = new Date().toISOString().split('T')[0];
+          const lastActive = stats.lastActiveDate ? new Date(stats.lastActiveDate).toISOString().split('T')[0] : null;
+          
+          let newStreak = stats.currentStreak || 0;
+          if (lastActive !== today) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+            
+            if (lastActive === yesterdayStr) {
+              newStreak = (stats.currentStreak || 0) + 1;
+            } else if (lastActive !== today) {
+              newStreak = 1;
+            }
+          }
+          
+          const newPoints = (stats.points || 0) + 10;
+          const newTotalCompleted = (stats.totalTasksCompleted || 0) + 1;
+          const newLongestStreak = Math.max(stats.longestStreak || 0, newStreak);
+          
+          let newLevel = 'starter';
+          if (newPoints >= 1000) newLevel = 'master';
+          else if (newPoints >= 500) newLevel = 'expert';
+          else if (newPoints >= 200) newLevel = 'focused';
+          else if (newPoints >= 100) newLevel = 'achiever';
+          
+          await db.update(userStats).set({
+            points: newPoints,
+            totalTasksCompleted: newTotalCompleted,
+            currentStreak: newStreak,
+            longestStreak: newLongestStreak,
+            level: newLevel,
+            lastActiveDate: new Date().toISOString().split('T')[0],
+          }).where(eq(userStats.userId, userId));
+        }
       }
       
       res.json({ task: result[0] });
