@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, Alert, TextInput, Modal, ActivityIndicator } from "react-native";
+import { StyleSheet, View, Pressable, Alert, TextInput, Modal, ActivityIndicator, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -104,6 +104,15 @@ export default function ProfileScreen() {
   const handleSupport = () => {
     Haptics.selectionAsync();
     navigation.navigate("Support");
+  };
+
+  const handlePrivacyPolicy = async () => {
+    Haptics.selectionAsync();
+    try {
+      await Linking.openURL("https://www.igetitdone.co/privacy");
+    } catch (error) {
+      Alert.alert("Error", "Could not open Privacy Policy");
+    }
   };
 
   const handleThemeChange = (newMode: ThemeMode) => {
@@ -491,6 +500,27 @@ export default function ProfileScreen() {
               </ThemedText>
             </View>
             <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          </Pressable>
+          <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+          <Pressable
+            onPress={handlePrivacyPolicy}
+            style={({ pressed }) => [
+              styles.menuItemInGroup,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: LaneColors.later.primary }]}>
+              <Feather name="shield" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.menuContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                Privacy Policy
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                How we protect your data
+              </ThemedText>
+            </View>
+            <Feather name="external-link" size={20} color={theme.textSecondary} />
           </Pressable>
         </View>
       </Animated.View>
