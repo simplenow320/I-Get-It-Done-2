@@ -592,9 +592,10 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
         const userId = existingTask[0].userId;
         const existingStats = await db.select().from(userStats).where(eq(userStats.userId, userId));
         
+        const today = new Date().toISOString().split('T')[0];
+        
         if (existingStats.length > 0) {
           const stats = existingStats[0];
-          const today = new Date().toISOString().split('T')[0];
           const lastActive = stats.lastActiveDate ? new Date(stats.lastActiveDate).toISOString().split('T')[0] : null;
           
           let newStreak = stats.currentStreak || 0;
@@ -605,7 +606,7 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
             
             if (lastActive === yesterdayStr) {
               newStreak = (stats.currentStreak || 0) + 1;
-            } else if (lastActive !== today) {
+            } else {
               newStreak = 1;
             }
           }
@@ -626,8 +627,18 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
             currentStreak: newStreak,
             longestStreak: newLongestStreak,
             level: newLevel,
-            lastActiveDate: new Date().toISOString().split('T')[0],
+            lastActiveDate: today,
           }).where(eq(userStats.userId, userId));
+        } else {
+          await db.insert(userStats).values({
+            userId,
+            points: 10,
+            totalTasksCompleted: 1,
+            currentStreak: 1,
+            longestStreak: 1,
+            level: 'starter',
+            lastActiveDate: today,
+          });
         }
       }
       
