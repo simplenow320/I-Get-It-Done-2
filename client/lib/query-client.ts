@@ -14,22 +14,19 @@ export function getApiUrl(): string {
     return `${protocol}//${hostname}:5000`;
   }
 
-  // On native (Expo Go), use the Replit domain with port 5000
-  // EXPO_PUBLIC_DOMAIN is set to "domain.riker.replit.dev:5000"
+  // On native (Expo Go), use the Replit domain WITHOUT port
+  // The Metro bundler proxies /api/* requests to Express on port 5000
+  // This avoids mobile network blocking of non-standard ports
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
   if (!host) {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  // If host already includes port, use it directly
-  // Format: https://domain.riker.replit.dev:5000
-  if (host.includes(":")) {
-    return `https://${host}`;
-  }
-
-  // If no port, append :5000 for Express server
-  return `https://${host}:5000`;
+  // Strip any port number - API calls go through Metro bundler proxy
+  const hostWithoutPort = host.split(":")[0];
+  
+  return `https://${hostWithoutPort}`;
 }
 
 async function throwIfResNotOk(res: Response) {

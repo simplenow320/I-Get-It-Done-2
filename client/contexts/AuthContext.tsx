@@ -50,38 +50,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("API URL:", apiUrl);
       console.log("Email:", email);
       
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
 
-      console.log("Login response status:", response.status);
-      console.log("Login response ok:", response.ok);
-      const data = await response.json();
-      console.log("Login response data:", data);
+        console.log("Login response status:", response.status);
+        console.log("Login response ok:", response.ok);
+        const data = await response.json();
+        console.log("Login response data:", data);
 
-      if (!response.ok) {
-        console.log("Login failed with error:", data.error);
-        return { success: false, error: data.error || "Login failed" };
+        if (!response.ok) {
+          console.log("Login failed with error:", data.error);
+          return { success: false, error: data.error || "Login failed" };
+        }
+
+        const authUser: AuthUser = {
+          id: data.user.id,
+          email: data.user.email,
+        };
+
+        setUser(authUser);
+
+        if (rememberMe) {
+          await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+        }
+
+        return { success: true };
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          console.error("Login request timed out after 30s");
+          return { success: false, error: "Connection timed out. Please check your internet connection and try again." };
+        }
+        throw fetchError;
       }
-
-      const authUser: AuthUser = {
-        id: data.user.id,
-        email: data.user.email,
-      };
-
-      setUser(authUser);
-
-      if (rememberMe) {
-        await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
-      }
-
-      return { success: true };
     } catch (error: any) {
       console.error("Login error:", error);
       const errorMessage = error?.message || "Connection failed";
-      return { success: false, error: `Network error: ${errorMessage}` };
+      return { success: false, error: `Unable to connect. Please try again.` };
     }
   };
 
