@@ -1,8 +1,9 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 
 /**
- * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
+ * Gets the base URL for the Express API server
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
@@ -14,19 +15,25 @@ export function getApiUrl(): string {
     return `${protocol}//${hostname}:5000`;
   }
 
-  // On native (Expo Go), use the Replit domain WITHOUT port
-  // The Metro bundler proxies /api/* requests to Express on port 5000
-  // This avoids mobile network blocking of non-standard ports
-  let host = process.env.EXPO_PUBLIC_DOMAIN;
-
-  if (!host) {
-    throw new Error("EXPO_PUBLIC_DOMAIN is not set");
+  // On native (iOS/Android), use the production API URL from app config
+  // This is baked in at build time and works for App Store builds
+  const apiUrl = Constants.expoConfig?.extra?.apiUrl;
+  
+  if (apiUrl) {
+    return apiUrl;
   }
 
-  // Strip any port number - API calls go through Metro bundler proxy
-  const hostWithoutPort = host.split(":")[0];
+  // Fallback: Try EXPO_PUBLIC_DOMAIN for development (Expo Go)
+  const host = process.env.EXPO_PUBLIC_DOMAIN;
   
-  return `https://${hostWithoutPort}`;
+  if (host) {
+    // Strip any port number - API calls go through Metro bundler proxy
+    const hostWithoutPort = host.split(":")[0];
+    return `https://${hostWithoutPort}`;
+  }
+
+  // Last resort: Production URL hardcoded
+  return "https://i-get-it-done.replit.app";
 }
 
 async function throwIfResNotOk(res: Response) {

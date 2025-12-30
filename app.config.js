@@ -44,7 +44,8 @@ module.exports = {
     },
     extra: {
       supabaseUrl: process.env.SUPABASE_URL || "",
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ""
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
+      apiUrl: process.env.EXPO_PUBLIC_API_URL || "https://i-get-it-done.replit.app"
     }
   }
 };
