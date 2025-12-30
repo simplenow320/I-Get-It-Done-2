@@ -33,7 +33,7 @@ export function getApiUrl(): string {
   }
 
   // Last resort: Production URL hardcoded
-  return "https://i-get-it-done.replit.app";
+  return "https://igetitdone.co";
 }
 
 async function throwIfResNotOk(res: Response) {
