@@ -103,9 +103,17 @@ export function TaskCard({ task, onComplete, onPress, onMove }: TaskCardProps) {
         >
           <View style={[styles.lanePill, { backgroundColor: laneColor }]} />
           <View style={styles.content}>
-            <ThemedText type="h4" numberOfLines={2}>
-              {task.title}
-            </ThemedText>
+            <View style={styles.titleRow}>
+              <ThemedText type="h4" numberOfLines={2} style={styles.title}>
+                {task.title}
+              </ThemedText>
+              {task.delegatedToUserId ? (
+                <View style={[styles.sharedBadge, { backgroundColor: theme.link + '20' }]}>
+                  <Feather name="users" size={12} color={theme.link} />
+                  <ThemedText type="small" style={{ color: theme.link, marginLeft: 4 }}>Shared</ThemedText>
+                </View>
+              ) : null}
+            </View>
             {task.notes ? (
               <ThemedText type="small" secondary numberOfLines={1} style={styles.notes}>
                 {task.notes}
@@ -159,6 +167,22 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+  },
+  title: {
+    flex: 1,
+  },
+  sharedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
   },
   notes: {
     marginTop: Spacing.xs,
