@@ -124,7 +124,7 @@ export default function TeamHubScreen() {
     if (!generatedInvite) return;
     try {
       await Share.share({
-        message: `Join my team on I GET IT DONE! Use invite code: ${generatedInvite.inviteCode}`,
+        message: `Join my team on I GET IT DONE! Use invite code: ${generatedInvite.inviteCode}\n\nDownload the app: https://www.igetitdone.co`,
       });
     } catch (error) {
       console.error("Share error:", error);
