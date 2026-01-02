@@ -14,98 +14,46 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  async function transcribeWithGroq(audioBuffer: Buffer, mimeType: string): Promise<string> {
-    const groqKey = process.env.GROQ_API_KEY;
-    if (!groqKey) throw new Error("GROQ_API_KEY not configured");
-
-    const formData = new FormData();
-    const uint8Array = new Uint8Array(audioBuffer);
-    const blob = new Blob([uint8Array], { type: mimeType });
-    formData.append("file", blob, "audio.m4a");
-    formData.append("model", "whisper-large-v3-turbo");
-    formData.append("response_format", "json");
-
-    const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${groqKey}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Groq error:", response.status, errorText);
-      throw new Error(`Groq API error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result.text || "";
-  }
-
-  async function transcribeWithOpenAI(audioBuffer: Buffer, mimeType: string): Promise<string> {
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) throw new Error("OPENAI_API_KEY not configured");
-
-    const formData = new FormData();
-    const uint8Array = new Uint8Array(audioBuffer);
-    const blob = new Blob([uint8Array], { type: mimeType });
-    formData.append("file", blob, "audio.m4a");
-    formData.append("model", "whisper-1");
-    formData.append("response_format", "json");
-
-    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiKey}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenAI error:", response.status, errorText);
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result.text || "";
-  }
-
   app.post("/api/transcribe", upload.single("audio"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No audio file provided" });
       }
 
-      const audioFilePath = req.file.path;
-      const audioBuffer = fs.readFileSync(audioFilePath);
-      const mimeType = req.file.mimetype || "audio/m4a";
-      
-      console.log("Transcribing audio, size:", audioBuffer.length, "bytes");
-
-      let transcript = "";
-      let usedProvider = "";
-
-      // Try Groq first (free tier), fallback to OpenAI
-      try {
-        if (process.env.GROQ_API_KEY) {
-          transcript = await transcribeWithGroq(audioBuffer, mimeType);
-          usedProvider = "Groq";
-        } else {
-          throw new Error("Groq not configured, using fallback");
-        }
-      } catch (groqError) {
-        console.log("Groq failed, falling back to OpenAI:", groqError);
-        transcript = await transcribeWithOpenAI(audioBuffer, mimeType);
-        usedProvider = "OpenAI";
+      const apiKey = process.env.DEEPGRAM_API_KEY;
+      if (!apiKey) {
+        console.error("DEEPGRAM_API_KEY not configured");
+        return res.status(500).json({ error: "Transcription service not configured" });
       }
 
-      console.log(`Transcription via ${usedProvider}:`, transcript.substring(0, 100));
+      const audioFilePath = req.file.path;
+      const audioBuffer = fs.readFileSync(audioFilePath);
+      
+      console.log("Sending audio to Deepgram, size:", audioBuffer.length, "bytes");
+
+      const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true", {
+        method: "POST",
+        headers: {
+          "Authorization": `Token ${apiKey}`,
+          "Content-Type": "audio/m4a",
+        },
+        body: audioBuffer,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Deepgram error:", response.status, errorText);
+        throw new Error(`Deepgram API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("Deepgram response:", JSON.stringify(result, null, 2));
 
       fs.unlink(audioFilePath, (err) => {
         if (err) console.error("Failed to delete temp file:", err);
       });
+
+      const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
       
       res.json({ text: transcript });
     } catch (error: any) {
