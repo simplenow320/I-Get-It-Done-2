@@ -14,29 +14,29 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  async function transcribeWithGloo(audioBuffer: Buffer, mimeType: string): Promise<string> {
-    const glooToken = process.env.GLOO_ACCESS_TOKEN;
-    if (!glooToken) throw new Error("GLOO_ACCESS_TOKEN not configured");
+  async function transcribeWithGroq(audioBuffer: Buffer, mimeType: string): Promise<string> {
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) throw new Error("GROQ_API_KEY not configured");
 
     const formData = new FormData();
     const uint8Array = new Uint8Array(audioBuffer);
     const blob = new Blob([uint8Array], { type: mimeType });
     formData.append("file", blob, "audio.m4a");
-    formData.append("model", "whisper-1");
+    formData.append("model", "whisper-large-v3-turbo");
     formData.append("response_format", "json");
 
-    const response = await fetch("https://platform.ai.gloo.com/ai/v1/audio/transcriptions", {
+    const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${glooToken}`,
+        "Authorization": `Bearer ${groqKey}`,
       },
       body: formData,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gloo error:", response.status, errorText);
-      throw new Error(`Gloo API error: ${response.status}`);
+      console.error("Groq error:", response.status, errorText);
+      throw new Error(`Groq API error: ${response.status}`);
     }
 
     const result = await response.json();
@@ -87,16 +87,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let transcript = "";
       let usedProvider = "";
 
-      // Try Gloo first (free), fallback to OpenAI
+      // Try Groq first (free tier), fallback to OpenAI
       try {
-        if (process.env.GLOO_ACCESS_TOKEN) {
-          transcript = await transcribeWithGloo(audioBuffer, mimeType);
-          usedProvider = "Gloo";
+        if (process.env.GROQ_API_KEY) {
+          transcript = await transcribeWithGroq(audioBuffer, mimeType);
+          usedProvider = "Groq";
         } else {
-          throw new Error("Gloo not configured, using fallback");
+          throw new Error("Groq not configured, using fallback");
         }
-      } catch (glooError) {
-        console.log("Gloo failed, falling back to OpenAI:", glooError);
+      } catch (groqError) {
+        console.log("Groq failed, falling back to OpenAI:", groqError);
         transcript = await transcribeWithOpenAI(audioBuffer, mimeType);
         usedProvider = "OpenAI";
       }
