@@ -15,6 +15,10 @@ export const users = pgTable("users", {
   notificationsEnabled: boolean("notifications_enabled").default(false),
   resetToken: varchar("reset_token", { length: 6 }),
   resetTokenExpiry: timestamp("reset_token_expiry"),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+  subscriptionStatus: varchar("subscription_status", { length: 50 }).default("none"),
+  trialEndsAt: timestamp("trial_ends_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

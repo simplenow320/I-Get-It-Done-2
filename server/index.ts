@@ -1,6 +1,9 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import { runMigrations } from 'stripe-replit-sync';
 import { registerRoutes } from "./routes";
+import { getStripeSync } from "./stripeClient";
+import { WebhookHandlers } from "./webhookHandlers";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -250,15 +253,89 @@ function setupErrorHandler(app: express.Application) {
   });
 }
 
+async function initStripe() {
+  const databaseUrl = process.env.DATABASE_URL;
+
+  if (!databaseUrl) {
+    log('DATABASE_URL not set, skipping Stripe initialization');
+    return;
+  }
+
+  try {
+    log('Initializing Stripe schema...');
+    await runMigrations({ 
+      databaseUrl
+    });
+    log('Stripe schema ready');
+
+    const stripeSync = await getStripeSync();
+
+    log('Setting up managed webhook...');
+    const webhookBaseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+    try {
+      const result = await stripeSync.findOrCreateManagedWebhook(
+        `${webhookBaseUrl}/api/stripe/webhook`
+      );
+      if (result?.webhook?.url) {
+        log(`Webhook configured: ${result.webhook.url}`);
+      } else {
+        log('Managed webhook setup completed');
+      }
+    } catch (webhookError: any) {
+      log('Managed webhook setup skipped:', webhookError.message);
+    }
+
+    log('Syncing Stripe data...');
+    stripeSync.syncBackfill()
+      .then(() => {
+        log('Stripe data synced');
+      })
+      .catch((err: any) => {
+        console.error('Error syncing Stripe data:', err);
+      });
+  } catch (error) {
+    console.error('Failed to initialize Stripe:', error);
+  }
+}
+
 (async () => {
   setupCors(app);
+
+  app.post(
+    '/api/stripe/webhook',
+    express.raw({ type: 'application/json' }),
+    async (req, res) => {
+      const signature = req.headers['stripe-signature'];
+
+      if (!signature) {
+        return res.status(400).json({ error: 'Missing stripe-signature' });
+      }
+
+      try {
+        const sig = Array.isArray(signature) ? signature[0] : signature;
+
+        if (!Buffer.isBuffer(req.body)) {
+          console.error('STRIPE WEBHOOK ERROR: req.body is not a Buffer');
+          return res.status(500).json({ error: 'Webhook processing error' });
+        }
+
+        await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+
+        res.status(200).json({ received: true });
+      } catch (error: any) {
+        console.error('Webhook error:', error.message);
+        res.status(400).json({ error: 'Webhook processing error' });
+      }
+    }
+  );
+
   setupBodyParsing(app);
   setupRequestLogging(app);
 
-  // Register API routes BEFORE static files so /api/* routes are handled
+  await initStripe();
+
   const server = await registerRoutes(app);
 
-  // Static file serving comes after API routes
   configureExpoAndLanding(app);
 
   setupErrorHandler(app);

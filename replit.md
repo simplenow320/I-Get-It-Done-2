@@ -4,7 +4,7 @@
 A premium ADHD-optimized mobile task management app that helps users stay focused, start tasks, finish tasks, and avoid overwhelm. Built on research-backed insights about how ADHD brains work: fast, intuitive, idea-heavy, easily overloaded, and motivated by small wins, structure, and clear feedback.
 
 ## Current State
-- **Phase**: All 6 Phases Complete (Full MVP)
+- **Phase**: All 6 Phases Complete (Full MVP) + Stripe Payment Integration
 - **Status**: Quick Dump, Break It Down, Focus Mode, Focus Timer, Gamification, Enhanced Weekly Reset, and Delegation all implemented
 - **Authentication**: Custom email/password auth with bcrypt hashing, show/hide password toggle, remember me functionality
 - **Design**: Premium iOS 26-inspired liquid glass design with bold gradients
@@ -13,6 +13,44 @@ A premium ADHD-optimized mobile task management app that helps users stay focuse
 - **Delegation**: Team Hub, task hand-off, delegation status tracking, in-app notes/communication
 - **Data Persistence**: Full PostgreSQL cloud sync via Express REST API (migrated from Supabase)
 - **Auto-Lane Movement**: Overdue tasks automatically move from Later→Soon→Now
+- **Stripe Payments**: Subscription monetization with 7-day trial, monthly ($6.99) and annual ($49.99) plans
+
+## Stripe Payment Integration
+
+### Pricing Structure
+- **7-day free trial** (credit card required upfront)
+- **Monthly**: $6.99/month
+- **Annual**: $49.99/year (40% savings)
+
+### Product IDs (Test Mode)
+- Product ID: `prod_TiSUvTJvNQ9Fnt`
+- Monthly Price ID: `price_1Sl1ZHBSXqQ56VqQTD2NbWAn`
+- Annual Price ID: `price_1Sl1ZIBSXqQ56VqQtJCW2cZu`
+
+### API Endpoints
+- `GET /api/stripe/publishable-key` - Get Stripe publishable key for frontend
+- `GET /api/stripe/prices` - List available subscription prices
+- `POST /api/stripe/create-checkout-session` - Create Stripe Checkout session
+- `POST /api/stripe/create-portal-session` - Create Stripe Customer Portal session
+- `GET /api/subscription/:userId` - Get user's subscription status
+- `POST /api/stripe/webhook` - Stripe webhook handler (managed by stripe-replit-sync)
+
+### User Schema Fields
+- `stripeCustomerId` - Stripe customer ID
+- `stripeSubscriptionId` - Active subscription ID
+- `subscriptionStatus` - none, trialing, active, past_due, canceled
+- `trialEndsAt` - Trial end timestamp
+
+### Files
+- `server/stripeClient.ts` - Stripe SDK initialization via Replit connection API
+- `server/webhookHandlers.ts` - Webhook processing for subscription events
+- `server/seed-products.ts` - Script to create products in Stripe (run once)
+
+### P&L Summary
+- **AI Cost per user**: $0.30/month (Deepgram Nova-2 + GPT-4o-mini)
+- **Stripe fee**: ~8.5% ($0.59 on $6.99)
+- **Net per monthly subscriber**: $6.10/month
+- **Gross margin**: 95%
 
 ## ADHD Problems This App Solves
 - Time blindness → Focus timers, countdown rings, auto-move
