@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { StyleSheet, View, Pressable, Platform, Alert, useColorScheme } from "react-native";
-import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
-import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Animated, { 
@@ -29,17 +27,53 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const isDark = colorScheme === "dark";
   const [state, setState] = useState<RecordingState>("idle");
   const [permissionStatus, setPermissionStatus] = useState<"unknown" | "granted" | "denied">("unknown");
+  const [audioModulesLoaded, setAudioModulesLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const audioRecorderRef = useRef<any>(null);
+  const AudioModuleRef = useRef<any>(null);
+  const setAudioModeAsyncRef = useRef<any>(null);
+  const FileSystemRef = useRef<any>(null);
+  const RecordingPresetsRef = useRef<any>(null);
+  const AudioRecorderClassRef = useRef<any>(null);
   
   const pulseScale = useSharedValue(1);
   const buttonScale = useSharedValue(1);
 
   useEffect(() => {
     if (Platform.OS !== "web") {
-      checkPermissionOnce();
+      loadAudioModules();
     }
   }, []);
+
+  const loadAudioModules = async () => {
+    try {
+      const [audioModule, fileSystemModule] = await Promise.all([
+        import("expo-audio"),
+        import("expo-file-system/legacy"),
+      ]);
+      
+      AudioModuleRef.current = audioModule.AudioModule;
+      setAudioModeAsyncRef.current = audioModule.setAudioModeAsync;
+      RecordingPresetsRef.current = audioModule.RecordingPresets;
+      AudioRecorderClassRef.current = audioModule.AudioRecorder;
+      FileSystemRef.current = fileSystemModule;
+      
+      setAudioModulesLoaded(true);
+      
+      try {
+        const status = await AudioModuleRef.current.getRecordingPermissionsAsync();
+        if (status.granted) {
+          setPermissionStatus("granted");
+        }
+      } catch (permError) {
+        console.warn("Permission check error:", permError);
+      }
+    } catch (error) {
+      console.error("Failed to load audio modules:", error);
+      setLoadError(true);
+    }
+  };
 
   useEffect(() => {
     if (state === "recording") {
@@ -54,23 +88,15 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
   }, [state]);
 
-  const checkPermissionOnce = async () => {
-    try {
-      const status = await AudioModule.getRecordingPermissionsAsync();
-      if (status.granted) {
-        setPermissionStatus("granted");
-      } else {
-        setPermissionStatus("unknown");
-      }
-    } catch (error) {
-      console.error("Permission check error:", error);
-    }
-  };
-
   const startRecording = async () => {
+    if (!audioModulesLoaded || !AudioRecorderClassRef.current) {
+      onError?.("Voice not available");
+      return;
+    }
+
     try {
       if (permissionStatus !== "granted") {
-        const status = await AudioModule.requestRecordingPermissionsAsync();
+        const status = await AudioModuleRef.current.requestRecordingPermissionsAsync();
         if (!status.granted) {
           setPermissionStatus("denied");
           onError?.("Tap to allow mic access");
@@ -79,14 +105,16 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         setPermissionStatus("granted");
       }
 
-      // Enable recording mode on iOS - required before calling record()
-      await setAudioModeAsync({
+      await setAudioModeAsyncRef.current({
         allowsRecording: true,
         playsInSilentMode: true,
       });
 
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
+      const recorder = new AudioRecorderClassRef.current();
+      await recorder.prepareToRecordAsync(RecordingPresetsRef.current.HIGH_QUALITY);
+      await recorder.record();
+      audioRecorderRef.current = recorder;
+      
       setState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
@@ -100,36 +128,45 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      await audioRecorder.stop();
-      // Reset audio mode after recording
-      await setAudioModeAsync({
+      const recorder = audioRecorderRef.current;
+      if (!recorder) {
+        throw new Error("No active recording");
+      }
+      
+      await recorder.stop();
+      await setAudioModeAsyncRef.current({
         allowsRecording: false,
       });
+      
+      const uri = recorder.uri;
+      console.log("Recording URI:", uri);
+
+      if (!uri) {
+        console.error("No recording URI available");
+        onError?.("Recording failed");
+        setState("idle");
+        return;
+      }
+
+      await transcribeAudio(uri);
     } catch (error) {
       console.error("Failed to stop recorder:", error);
       onError?.("Couldn't stop recording");
       setState("idle");
-      return;
     }
-    
-    const uri = audioRecorder.uri;
-    console.log("Recording URI:", uri);
+  };
 
-    if (!uri) {
-      console.error("No recording URI available");
-      onError?.("Recording failed");
+  const transcribeAudio = async (uri: string) => {
+    if (!FileSystemRef.current) {
+      onError?.("Upload not available");
       setState("idle");
       return;
     }
 
-    await transcribeAudio(uri);
-  };
-
-  const transcribeAudio = async (uri: string) => {
     try {
       console.log("Starting transcription for:", uri);
       
-      const fileInfo = await FileSystem.getInfoAsync(uri);
+      const fileInfo = await FileSystemRef.current.getInfoAsync(uri);
       console.log("File info:", JSON.stringify(fileInfo));
       
       if (!fileInfo.exists) {
@@ -144,10 +181,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       const uploadUrl = `${apiUrl}/api/transcribe`;
       console.log("Uploading to:", uploadUrl);
       
-      const response = await FileSystem.uploadAsync(uploadUrl, uri, {
+      const response = await FileSystemRef.current.uploadAsync(uploadUrl, uri, {
         fieldName: "audio",
         httpMethod: "POST",
-        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        uploadType: FileSystemRef.current.FileSystemUploadType.MULTIPART,
         mimeType: "audio/m4a",
       });
       
@@ -189,6 +226,16 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       return;
     }
 
+    if (loadError) {
+      onError?.("Voice not available on this device");
+      return;
+    }
+
+    if (!audioModulesLoaded) {
+      onError?.("Loading voice...");
+      return;
+    }
+
     if (state === "idle") {
       startRecording();
     } else if (state === "recording") {
@@ -209,8 +256,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const iconSize = compact ? 20 : 24;
 
   const getButtonColor = () => {
+    if (loadError) return isDark ? "#555555" : "#999999";
     if (state === "recording") return LaneColors.now.primary;
     if (state === "processing") return isDark ? "#888888" : "#666666";
+    if (!audioModulesLoaded) return isDark ? "#666666" : "#888888";
     return LaneColors.soon.primary;
   };
 
