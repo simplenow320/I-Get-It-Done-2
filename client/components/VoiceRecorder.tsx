@@ -36,15 +36,42 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const FileSystemRef = useRef<any>(null);
   const RecordingPresetsRef = useRef<any>(null);
   const AudioRecorderClassRef = useRef<any>(null);
+  const isMountedRef = useRef(true);
   
   const pulseScale = useSharedValue(1);
   const buttonScale = useSharedValue(1);
 
   useEffect(() => {
+    isMountedRef.current = true;
+    
     if (Platform.OS !== "web") {
       loadAudioModules();
     }
+    
+    return () => {
+      isMountedRef.current = false;
+      cleanupRecorder();
+    };
   }, []);
+
+  const cleanupRecorder = async () => {
+    if (audioRecorderRef.current) {
+      try {
+        await audioRecorderRef.current.stop();
+      } catch (e) {
+      }
+      audioRecorderRef.current = null;
+    }
+    if (setAudioModeAsyncRef.current) {
+      try {
+        await setAudioModeAsyncRef.current({
+          allowsRecording: false,
+          playsInSilentMode: false,
+        });
+      } catch (e) {
+      }
+    }
+  };
 
   const loadAudioModules = async () => {
     try {
@@ -52,6 +79,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         import("expo-audio"),
         import("expo-file-system/legacy"),
       ]);
+      
+      if (!isMountedRef.current) return;
       
       AudioModuleRef.current = audioModule.AudioModule;
       setAudioModeAsyncRef.current = audioModule.setAudioModeAsync;
@@ -63,7 +92,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       
       try {
         const status = await AudioModuleRef.current.getRecordingPermissionsAsync();
-        if (status.granted) {
+        if (isMountedRef.current && status.granted) {
           setPermissionStatus("granted");
         }
       } catch (permError) {
@@ -71,7 +100,9 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       }
     } catch (error) {
       console.error("Failed to load audio modules:", error);
-      setLoadError(true);
+      if (isMountedRef.current) {
+        setLoadError(true);
+      }
     }
   };
 
@@ -97,6 +128,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     try {
       if (permissionStatus !== "granted") {
         const status = await AudioModuleRef.current.requestRecordingPermissionsAsync();
+        if (!isMountedRef.current) return;
         if (!status.granted) {
           setPermissionStatus("denied");
           onError?.("Tap to allow mic access");
@@ -110,20 +142,38 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         playsInSilentMode: true,
       });
 
+      if (audioRecorderRef.current) {
+        try {
+          await audioRecorderRef.current.stop();
+        } catch (e) {}
+        audioRecorderRef.current = null;
+      }
+      
       const recorder = new AudioRecorderClassRef.current();
-      await recorder.prepareToRecordAsync(RecordingPresetsRef.current.HIGH_QUALITY);
-      await recorder.record();
       audioRecorderRef.current = recorder;
+      
+      await recorder.prepareToRecordAsync(RecordingPresetsRef.current.HIGH_QUALITY);
+      recorder.record();
+      
+      if (!isMountedRef.current) {
+        try { await recorder.stop(); } catch (e) {}
+        audioRecorderRef.current = null;
+        return;
+      }
       
       setState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       console.error("Failed to start recording:", error);
-      onError?.("Couldn't start recording");
+      if (isMountedRef.current) {
+        onError?.("Couldn't start recording");
+      }
     }
   };
 
   const stopRecording = async () => {
+    if (!isMountedRef.current) return;
+    
     setState("processing");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -134,32 +184,42 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       }
       
       await recorder.stop();
+      
       await setAudioModeAsyncRef.current({
         allowsRecording: false,
+        playsInSilentMode: false,
       });
       
       const uri = recorder.uri;
       console.log("Recording URI:", uri);
 
+      audioRecorderRef.current = null;
+
       if (!uri) {
         console.error("No recording URI available");
-        onError?.("Recording failed");
-        setState("idle");
+        if (isMountedRef.current) {
+          onError?.("Recording failed");
+          setState("idle");
+        }
         return;
       }
 
       await transcribeAudio(uri);
     } catch (error) {
       console.error("Failed to stop recorder:", error);
-      onError?.("Couldn't stop recording");
-      setState("idle");
+      if (isMountedRef.current) {
+        onError?.("Couldn't stop recording");
+        setState("idle");
+      }
     }
   };
 
   const transcribeAudio = async (uri: string) => {
     if (!FileSystemRef.current) {
-      onError?.("Upload not available");
-      setState("idle");
+      if (isMountedRef.current) {
+        onError?.("Upload not available");
+        setState("idle");
+      }
       return;
     }
 
@@ -190,6 +250,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       
       console.log("Response status:", response.status);
 
+      if (!isMountedRef.current) return;
+
       if (response.status !== 200) {
         const errorData = JSON.parse(response.body || "{}");
         console.error("Transcription API error:", errorData);
@@ -207,9 +269,13 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       }
     } catch (error: any) {
       console.error("Transcription error:", error);
-      onError?.("Couldn't understand audio");
+      if (isMountedRef.current) {
+        onError?.("Couldn't understand audio");
+      }
     } finally {
-      setState("idle");
+      if (isMountedRef.current) {
+        setState("idle");
+      }
     }
   };
 
