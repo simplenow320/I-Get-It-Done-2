@@ -10,6 +10,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { LaneSelector } from "@/components/LaneSelector";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/contexts/AuthContext";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
 
@@ -20,6 +21,7 @@ type RouteParams = {
 export default function AddTaskScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, "AddTask">>();
   const { addTask } = useTaskStore();
@@ -102,6 +104,7 @@ export default function AddTaskScreen() {
               onTranscriptionComplete={handleVoiceTranscription}
               onError={handleVoiceError}
               compact
+              userId={user?.id}
             />
           </View>
         </View>

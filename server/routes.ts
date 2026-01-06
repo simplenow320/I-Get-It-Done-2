@@ -4,7 +4,9 @@ import multer from "multer";
 import * as fs from "fs";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers } from "@shared/schema";
+import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers, voiceUsage } from "@shared/schema";
+
+const DAILY_VOICE_LIMIT_SECONDS = 600;
 import { eq, and, inArray, or, sql } from "drizzle-orm";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 
@@ -15,10 +17,64 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  app.get("/api/voice-usage/:userId", async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const today = new Date().toISOString().split('T')[0];
+      
+      const existing = await db.select().from(voiceUsage)
+        .where(and(eq(voiceUsage.userId, userId), eq(voiceUsage.date, today)))
+        .limit(1);
+      
+      const secondsUsed = existing.length > 0 ? existing[0].secondsUsed || 0 : 0;
+      const secondsRemaining = Math.max(0, DAILY_VOICE_LIMIT_SECONDS - secondsUsed);
+      
+      res.json({
+        secondsUsed,
+        secondsRemaining,
+        dailyLimitSeconds: DAILY_VOICE_LIMIT_SECONDS,
+        limitReached: secondsRemaining === 0,
+      });
+    } catch (error) {
+      console.error("Voice usage error:", error);
+      res.status(500).json({ error: "Failed to get voice usage" });
+    }
+  });
+
   app.post("/api/transcribe", upload.single("audio"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No audio file provided" });
+      }
+
+      const userId = req.body.userId;
+      const durationSeconds = parseInt(req.body.durationSeconds) || 0;
+      
+      if (userId && durationSeconds > 0) {
+        const today = new Date().toISOString().split('T')[0];
+        
+        const existing = await db.select().from(voiceUsage)
+          .where(and(eq(voiceUsage.userId, userId), eq(voiceUsage.date, today)))
+          .limit(1);
+        
+        const currentUsage = existing.length > 0 ? existing[0].secondsUsed || 0 : 0;
+        
+        const secondsRemaining = DAILY_VOICE_LIMIT_SECONDS - currentUsage;
+        
+        if (currentUsage + durationSeconds > DAILY_VOICE_LIMIT_SECONDS) {
+          if (req.file?.path) {
+            fs.unlink(req.file.path, () => {});
+          }
+          return res.status(429).json({ 
+            error: secondsRemaining <= 0 
+              ? "Daily voice limit reached" 
+              : `Recording would exceed daily limit. You have ${Math.floor(secondsRemaining / 60)} min ${secondsRemaining % 60} sec remaining.`,
+            limitReached: secondsRemaining <= 0,
+            secondsUsed: currentUsage,
+            secondsRemaining,
+            dailyLimitSeconds: DAILY_VOICE_LIMIT_SECONDS,
+          });
+        }
       }
 
       const apiKey = process.env.DEEPGRAM_API_KEY;
@@ -55,6 +111,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
+      
+      if (userId && durationSeconds > 0) {
+        const today = new Date().toISOString().split('T')[0];
+        
+        const existing = await db.select().from(voiceUsage)
+          .where(and(eq(voiceUsage.userId, userId), eq(voiceUsage.date, today)))
+          .limit(1);
+        
+        if (existing.length > 0) {
+          await db.update(voiceUsage)
+            .set({ 
+              secondsUsed: (existing[0].secondsUsed || 0) + durationSeconds,
+              updatedAt: new Date(),
+            })
+            .where(eq(voiceUsage.id, existing[0].id));
+        } else {
+          await db.insert(voiceUsage).values({
+            userId,
+            date: today,
+            secondsUsed: durationSeconds,
+          });
+        }
+      }
       
       res.json({ text: transcript });
     } catch (error: any) {

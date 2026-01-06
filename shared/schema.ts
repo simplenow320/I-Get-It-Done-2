@@ -115,6 +115,17 @@ export const userStats = pgTable("user_stats", {
   streakProtectionUsed: boolean("streak_protection_used").default(false),
 });
 
+export const voiceUsage = pgTable("voice_usage", {
+  id: varchar("id", { length: 255 })
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  userId: varchar("user_id", { length: 255 }).references(() => users.id, { onDelete: "cascade" }),
+  date: date("date").notNull(),
+  secondsUsed: integer("seconds_used").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -150,3 +161,7 @@ export type TeamInvite = typeof teamInvites.$inferSelect;
 export const insertTeamMemberSchema = createInsertSchema(teamMembers);
 export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
 export type TeamMember = typeof teamMembers.$inferSelect;
+
+export const insertVoiceUsageSchema = createInsertSchema(voiceUsage);
+export type InsertVoiceUsage = z.infer<typeof insertVoiceUsageSchema>;
+export type VoiceUsage = typeof voiceUsage.$inferSelect;

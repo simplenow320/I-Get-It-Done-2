@@ -13,6 +13,7 @@ import Button from "@/components/Button";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTaskStore, Lane, UnsortedTask } from "@/stores/TaskStore";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { getApiUrl } from "@/lib/query-client";
@@ -30,6 +31,7 @@ export default function QuickDumpScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme, isDark } = useTheme();
+  const { user } = useAuth();
   const navigation = useNavigation();
   const inputRef = useRef<TextInput>(null);
   
@@ -232,6 +234,7 @@ export default function QuickDumpScreen() {
             onTranscriptionComplete={handleVoiceTranscription}
             onError={handleVoiceError}
             compact
+            userId={user?.id}
           />
           <Pressable
             onPress={handleAddTask}

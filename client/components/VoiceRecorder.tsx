@@ -18,17 +18,22 @@ interface VoiceRecorderProps {
   onTranscriptionComplete: (text: string) => void;
   onError?: (error: string) => void;
   compact?: boolean;
+  userId?: string;
 }
 
 type RecordingState = "idle" | "recording" | "processing";
 
-export default function VoiceRecorder({ onTranscriptionComplete, onError, compact = false }: VoiceRecorderProps) {
+const DAILY_LIMIT_SECONDS = 600;
+
+export default function VoiceRecorder({ onTranscriptionComplete, onError, compact = false, userId }: VoiceRecorderProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const [state, setState] = useState<RecordingState>("idle");
   const [permissionStatus, setPermissionStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   const [audioModulesLoaded, setAudioModulesLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [limitReached, setLimitReached] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(DAILY_LIMIT_SECONDS);
   
   const audioRecorderRef = useRef<any>(null);
   const AudioModuleRef = useRef<any>(null);
@@ -37,9 +42,33 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const RecordingPresetsRef = useRef<any>(null);
   const AudioRecorderClassRef = useRef<any>(null);
   const isMountedRef = useRef(true);
+  const recordingStartTimeRef = useRef<number>(0);
   
   const pulseScale = useSharedValue(1);
   const buttonScale = useSharedValue(1);
+
+  useEffect(() => {
+    if (userId) {
+      checkVoiceUsage();
+    }
+  }, [userId]);
+
+  const checkVoiceUsage = async () => {
+    if (!userId) return;
+    try {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/voice-usage/${userId}`, {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSecondsRemaining(data.secondsRemaining);
+        setLimitReached(data.limitReached);
+      }
+    } catch (error) {
+      console.error("Failed to check voice usage:", error);
+    }
+  };
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -125,6 +154,11 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       return;
     }
 
+    if (limitReached) {
+      onError?.("Daily voice limit reached");
+      return;
+    }
+
     try {
       if (permissionStatus !== "granted") {
         const status = await AudioModuleRef.current.requestRecordingPermissionsAsync();
@@ -153,6 +187,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       audioRecorderRef.current = recorder;
       
       await recorder.prepareToRecordAsync(RecordingPresetsRef.current.HIGH_QUALITY);
+      recordingStartTimeRef.current = Date.now();
       recorder.record();
       
       if (!isMountedRef.current) {
@@ -177,6 +212,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     setState("processing");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    const durationSeconds = Math.ceil((Date.now() - recordingStartTimeRef.current) / 1000);
+
     try {
       const recorder = audioRecorderRef.current;
       if (!recorder) {
@@ -191,7 +228,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       });
       
       const uri = recorder.uri;
-      console.log("Recording URI:", uri);
+      console.log("Recording URI:", uri, "Duration:", durationSeconds, "seconds");
 
       audioRecorderRef.current = null;
 
@@ -204,7 +241,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         return;
       }
 
-      await transcribeAudio(uri);
+      await transcribeAudio(uri, durationSeconds);
     } catch (error) {
       console.error("Failed to stop recorder:", error);
       if (isMountedRef.current) {
@@ -214,7 +251,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
   };
 
-  const transcribeAudio = async (uri: string) => {
+  const transcribeAudio = async (uri: string, durationSeconds: number) => {
     if (!FileSystemRef.current) {
       if (isMountedRef.current) {
         onError?.("Upload not available");
@@ -224,7 +261,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
 
     try {
-      console.log("Starting transcription for:", uri);
+      console.log("Starting transcription for:", uri, "duration:", durationSeconds);
       
       const fileInfo = await FileSystemRef.current.getInfoAsync(uri);
       console.log("File info:", JSON.stringify(fileInfo));
@@ -246,11 +283,24 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         httpMethod: "POST",
         uploadType: FileSystemRef.current.FileSystemUploadType.MULTIPART,
         mimeType: "audio/m4a",
+        parameters: {
+          userId: userId || "",
+          durationSeconds: String(durationSeconds),
+        },
       });
       
       console.log("Response status:", response.status);
 
       if (!isMountedRef.current) return;
+
+      if (response.status === 429) {
+        const errorData = JSON.parse(response.body || "{}");
+        setLimitReached(true);
+        setSecondsRemaining(0);
+        onError?.("Daily voice limit reached");
+        setState("idle");
+        return;
+      }
 
       if (response.status !== 200) {
         const errorData = JSON.parse(response.body || "{}");
@@ -264,6 +314,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       if (data.text && data.text.trim()) {
         onTranscriptionComplete(data.text.trim());
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        checkVoiceUsage();
       } else {
         onError?.("Didn't catch that");
       }
@@ -302,6 +353,15 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       return;
     }
 
+    if (limitReached) {
+      const minutesLimit = Math.floor(DAILY_LIMIT_SECONDS / 60);
+      Alert.alert(
+        "Daily Limit Reached",
+        `You've used your ${minutesLimit} minutes of voice capture for today. You can still add tasks manually. Your limit resets tomorrow.`
+      );
+      return;
+    }
+
     if (state === "idle") {
       startRecording();
     } else if (state === "recording") {
@@ -323,6 +383,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const getButtonColor = () => {
     if (loadError) return isDark ? "#555555" : "#999999";
+    if (limitReached) return isDark ? "#555555" : "#999999";
     if (state === "recording") return LaneColors.now.primary;
     if (state === "processing") return isDark ? "#888888" : "#666666";
     if (!audioModulesLoaded) return isDark ? "#666666" : "#888888";
