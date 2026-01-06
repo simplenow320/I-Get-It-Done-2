@@ -242,10 +242,10 @@
         <tbody>
           <tr><td>Email Address</td><td>Yes</td></tr>
           <tr><td>Name</td><td>Yes</td></tr>
-          <tr><td>Audio Data</td><td>No (processed immediately, not stored)</td></tr>
+          <tr><td>Audio Data</td><td>Yes (transcripts stored with user tasks)</td></tr>
           <tr><td>User Content (Tasks)</td><td>Yes</td></tr>
           <tr><td>User ID</td><td>Yes</td></tr>
-          <tr><td>Device ID</td><td>No</td></tr>
+          <tr><td>Device ID</td><td>Yes (linked via push notification tokens)</td></tr>
           <tr><td>Product Interaction</td><td>Yes</td></tr>
           <tr><td>Purchase History</td><td>Yes</td></tr>
         </tbody>
@@ -256,13 +256,15 @@
         <p><strong>Answer: NO</strong> - We do NOT use any collected data for tracking purposes. We do not share data with data brokers, advertising networks, or use it to target ads.</p>
       </div>
 
-      <h2>Third-Party SDKs</h2>
+      <h2>Third-Party SDKs and Services</h2>
       <p>Disclose these third-party integrations:</p>
       <ul>
         <li><strong>Expo SDK:</strong> App framework (analytics disabled)</li>
-        <li><strong>Stripe:</strong> Payment processing (for non-iOS payments)</li>
-        <li><strong>OpenAI API:</strong> AI task extraction (server-side only, no SDK)</li>
-        <li><strong>Deepgram API:</strong> Voice transcription (server-side only, no SDK)</li>
+        <li><strong>Stripe:</strong> Payment processing (for web/Android payments)</li>
+        <li><strong>Apple StoreKit:</strong> In-app purchases and subscriptions (for iOS)</li>
+        <li><strong>OpenAI API:</strong> AI task extraction (server-side only, no client SDK)</li>
+        <li><strong>Deepgram API:</strong> Voice transcription (server-side only, no client SDK)</li>
+        <li><strong>SendGrid:</strong> Transactional emails (password reset, notifications)</li>
       </ul>
 
       <h2>Privacy Policy URL</h2>
