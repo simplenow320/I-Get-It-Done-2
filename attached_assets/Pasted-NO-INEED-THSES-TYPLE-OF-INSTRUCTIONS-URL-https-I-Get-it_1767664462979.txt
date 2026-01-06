@@ -1,0 +1,44 @@
+NO INEED THSES TYPLE OF INSTRUCTIONS 
+
+URL 
+
+https://I-Get-it-done.replit.app
+
+Complete Stripe Setup Instructions
+Step 1: Create Products in Stripe Dashboard
+Go to Stripe Dashboard → Products → + Add Product
+
+Product 1: START Bundle
+* Name: MULTIPLY START Bundle
+* Description: Perfect for churches beginning their discipleship journey. Includes 50 Thrive users for spiritual growth tracking, 3 Multiply leaders for leadership development, and 2,000 MyInvite invitations for guest outreach. Ideal for small churches or those piloting the platform.
+* Pricing: $99.00 / month (Recurring)
+* Click Save Product
+* Copy the Price ID (starts with price_)
+
+Product 2: GROW Bundle
+* Name: MULTIPLY GROW Bundle
+* Description: Our most popular plan for growing churches. Includes 150 Thrive users for spiritual growth tracking, 7 Multiply leaders for leadership development, and 6,000 MyInvite invitations for guest outreach. Built for churches ready to scale their discipleship impact.
+* Pricing: $199.00 / month (Recurring)
+* Click Save Product
+* Copy the Price ID (starts with price_)
+
+Product 3: MULTIPLY Bundle
+* Name: MULTIPLY Premium Bundle
+* Description: Maximum impact for larger churches. Includes 300 Thrive users for spiritual growth tracking, 15 Multiply leaders for leadership development, and 12,000 MyInvite invitations for guest outreach. Full platform access for churches committed to multiplication.
+* Pricing: $349.00 / month (Recurring)
+* Click Save Product
+* Copy the Price ID (starts with price_)
+
+Step 2: Register Webhook
+Go to Stripe Dashboard → Developers → Webhooks → + Add Endpoint
+* Endpoint URL: https://MultiplyNow.replit.app/api/stripe/webhook
+* Events to send: Select these events:
+    * checkout.session.completed
+    * customer.subscription.updated
+    * customer.subscription.deleted
+    * invoice.payment_succeeded
+    * invoice.payment_failed
+* Click Add Endpoint
+
+Step 3: Add Price IDs to Replit
+Once you have the 3 Price IDs, let me know and I'll add them to the app so the checkout buttons work.
