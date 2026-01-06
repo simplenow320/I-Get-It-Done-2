@@ -52,8 +52,19 @@ export default function AddTaskScreen() {
   }, []);
 
   const handleAdd = () => {
-    if (!isValid || !selectedLane) return;
+    if (!title.trim()) {
+      setVoiceError("Enter a task title first");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      titleInputRef.current?.focus();
+      return;
+    }
+    if (!selectedLane) {
+      setVoiceError("Choose when to handle this task");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setVoiceError(null);
     addTask(title.trim(), selectedLane, notes.trim() || undefined);
     navigation.goBack();
   };
@@ -71,7 +82,7 @@ export default function AddTaskScreen() {
           </ThemedText>
         </Pressable>
         <ThemedText type="h4">New Task</ThemedText>
-        <Pressable onPress={handleAdd} disabled={!isValid} hitSlop={8}>
+        <Pressable onPress={handleAdd} hitSlop={8}>
           <ThemedText
             type="body"
             style={{
