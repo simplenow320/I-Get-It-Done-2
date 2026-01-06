@@ -104,6 +104,10 @@ export default function QuickDumpScreen() {
       addUnsortedTask(inputValue.trim());
       setInputValue("");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setVoiceError("Type something first, or tap the mic to speak");
+      setTimeout(() => setVoiceError(null), 2000);
     }
   }, [inputValue, addUnsortedTask]);
 
@@ -238,10 +242,12 @@ export default function QuickDumpScreen() {
           />
           <Pressable
             onPress={handleAddTask}
-            disabled={!inputValue.trim()}
-            style={[
+            style={({ pressed }) => [
               styles.addButton,
-              { backgroundColor: inputValue.trim() ? LaneColors.now.primary : theme.backgroundSecondary },
+              { 
+                backgroundColor: inputValue.trim() ? LaneColors.now.primary : theme.backgroundSecondary,
+                opacity: pressed ? 0.7 : 1,
+              },
             ]}
           >
             <Feather name="plus" size={24} color={inputValue.trim() ? "#FFFFFF" : theme.textSecondary} />

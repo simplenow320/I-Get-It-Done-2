@@ -181,8 +181,13 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   }, [state]);
 
   const checkConsentAndStart = async () => {
-    if (!audioModulesLoaded || !AudioRecorderClassRef.current) {
-      onError?.("Voice not available");
+    if (!audioModulesLoaded) {
+      onError?.("Loading voice... try again");
+      return;
+    }
+    
+    if (!AudioRecorderClassRef.current) {
+      onError?.("Voice not available on this device");
       return;
     }
 
