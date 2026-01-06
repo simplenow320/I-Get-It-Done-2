@@ -1,0 +1,294 @@
+<!doctype html>
+<html>
+  <head>
+    <title>App Store Privacy Disclosure - I GET IT DONE</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        background: #f5f7fa;
+        min-height: 100vh;
+      }
+      .container {
+        background: white;
+        border-radius: 16px;
+        padding: 48px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      }
+      h1 {
+        font-size: 32px;
+        font-weight: 700;
+        margin: 0 0 8px 0;
+        color: #1a1a2e;
+      }
+      .subtitle {
+        color: #666;
+        font-size: 16px;
+        margin-bottom: 32px;
+      }
+      h2 {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin: 28px 0 16px 0;
+        padding-top: 16px;
+        border-top: 1px solid #eee;
+      }
+      h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #6B4EFF;
+        margin: 20px 0 8px 0;
+      }
+      p, li {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #444;
+      }
+      ul { padding-left: 20px; margin: 8px 0 16px 0; }
+      li { margin-bottom: 6px; }
+      .category-box {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 16px 0;
+        border-left: 4px solid #6B4EFF;
+      }
+      .category-title {
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 8px;
+      }
+      .data-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #eee;
+      }
+      .data-item:last-child { border-bottom: none; }
+      .data-label { color: #333; }
+      .data-value {
+        font-weight: 500;
+        color: #6B4EFF;
+      }
+      .warning-box {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin: 20px 0;
+      }
+      .warning-box strong { color: #856404; }
+      .warning-box p { margin: 0; color: #856404; }
+      .info-box {
+        background: #e7f3ff;
+        border-left: 4px solid #007AFF;
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin: 20px 0;
+      }
+      .info-box p { margin: 0; color: #004085; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0;
+        font-size: 14px;
+      }
+      th, td {
+        border: 1px solid #e0e0e0;
+        padding: 10px;
+        text-align: left;
+      }
+      th {
+        background: #f8f9fa;
+        font-weight: 600;
+        color: #1a1a2e;
+      }
+      .back-link {
+        display: inline-block;
+        margin-top: 24px;
+        color: #6B4EFF;
+        text-decoration: none;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>App Store Connect Privacy Disclosure</h1>
+      <p class="subtitle">Information for completing the App Privacy section in App Store Connect</p>
+
+      <div class="info-box">
+        <p><strong>Quick Summary:</strong> I GET IT DONE collects email, optional display name, audio (processed only - not stored), usage data, device identifiers, and push notification tokens. We do NOT use data for tracking or share with data brokers.</p>
+      </div>
+
+      <h2>Data Types Collected</h2>
+      <p>When filling out App Store Connect's privacy questionnaire, select the following:</p>
+
+      <div class="category-box">
+        <div class="category-title">Contact Info</div>
+        <div class="data-item">
+          <span class="data-label">Email Address</span>
+          <span class="data-value">Yes - Required for account</span>
+        </div>
+        <div class="data-item">
+          <span class="data-label">Name</span>
+          <span class="data-value">Optional - Display name</span>
+        </div>
+      </div>
+
+      <div class="category-box">
+        <div class="category-title">User Content</div>
+        <div class="data-item">
+          <span class="data-label">Audio Data</span>
+          <span class="data-value">Voice recordings (processed, not stored)</span>
+        </div>
+        <div class="data-item">
+          <span class="data-label">Other User Content</span>
+          <span class="data-value">Tasks, notes, subtasks</span>
+        </div>
+      </div>
+
+      <div class="category-box">
+        <div class="category-title">Identifiers</div>
+        <div class="data-item">
+          <span class="data-label">User ID</span>
+          <span class="data-value">Yes - Account identifier</span>
+        </div>
+        <div class="data-item">
+          <span class="data-label">Device ID</span>
+          <span class="data-value">Yes - For device management</span>
+        </div>
+      </div>
+
+      <div class="category-box">
+        <div class="category-title">Usage Data</div>
+        <div class="data-item">
+          <span class="data-label">Product Interaction</span>
+          <span class="data-value">Feature usage, streaks, achievements</span>
+        </div>
+      </div>
+
+      <div class="category-box">
+        <div class="category-title">Purchases</div>
+        <div class="data-item">
+          <span class="data-label">Purchase History</span>
+          <span class="data-value">Via App Store / Stripe (subscription status)</span>
+        </div>
+      </div>
+
+      <h2>Data Use Purposes</h2>
+      <p>For each data type, select these purposes:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Data Type</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Email Address</td>
+            <td>App Functionality, Account Management</td>
+          </tr>
+          <tr>
+            <td>Name</td>
+            <td>App Functionality (personalization)</td>
+          </tr>
+          <tr>
+            <td>Audio Data</td>
+            <td>App Functionality (voice-to-text for task capture)</td>
+          </tr>
+          <tr>
+            <td>User Content</td>
+            <td>App Functionality</td>
+          </tr>
+          <tr>
+            <td>User ID</td>
+            <td>App Functionality, Account Management</td>
+          </tr>
+          <tr>
+            <td>Device ID</td>
+            <td>App Functionality (push notifications)</td>
+          </tr>
+          <tr>
+            <td>Product Interaction</td>
+            <td>App Functionality (gamification features)</td>
+          </tr>
+          <tr>
+            <td>Purchase History</td>
+            <td>App Functionality (subscription access)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Data Linking</h2>
+      <p>Answer these questions in App Store Connect:</p>
+
+      <h3>Is this data linked to the user's identity?</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Data Type</th>
+            <th>Linked to Identity</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Email Address</td><td>Yes</td></tr>
+          <tr><td>Name</td><td>Yes</td></tr>
+          <tr><td>Audio Data</td><td>No (processed immediately, not stored)</td></tr>
+          <tr><td>User Content (Tasks)</td><td>Yes</td></tr>
+          <tr><td>User ID</td><td>Yes</td></tr>
+          <tr><td>Device ID</td><td>No</td></tr>
+          <tr><td>Product Interaction</td><td>Yes</td></tr>
+          <tr><td>Purchase History</td><td>Yes</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Is this data used for tracking?</h3>
+      <div class="warning-box">
+        <p><strong>Answer: NO</strong> - We do NOT use any collected data for tracking purposes. We do not share data with data brokers, advertising networks, or use it to target ads.</p>
+      </div>
+
+      <h2>Third-Party SDKs</h2>
+      <p>Disclose these third-party integrations:</p>
+      <ul>
+        <li><strong>Expo SDK:</strong> App framework (analytics disabled)</li>
+        <li><strong>Stripe:</strong> Payment processing (for non-iOS payments)</li>
+        <li><strong>OpenAI API:</strong> AI task extraction (server-side only, no SDK)</li>
+        <li><strong>Deepgram API:</strong> Voice transcription (server-side only, no SDK)</li>
+      </ul>
+
+      <h2>Privacy Policy URL</h2>
+      <p>Enter this URL in App Store Connect:</p>
+      <div class="category-box">
+        <code style="font-size: 14px; color: #6B4EFF;">https://[your-domain]/privacy</code>
+      </div>
+
+      <h2>Demo Account for App Review</h2>
+      <p>Provide these credentials to Apple during app review:</p>
+      <div class="category-box">
+        <div class="data-item">
+          <span class="data-label">Email</span>
+          <span class="data-value">demo@igetitdone.co</span>
+        </div>
+        <div class="data-item">
+          <span class="data-label">Password</span>
+          <span class="data-value">AppleReview2024!</span>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <p><strong>Note:</strong> The demo account has sample tasks and data pre-loaded to demonstrate app functionality during review.</p>
+      </div>
+
+      <a href="/privacy" class="back-link">View Full Privacy Policy</a>
+    </div>
+  </body>
+</html>
