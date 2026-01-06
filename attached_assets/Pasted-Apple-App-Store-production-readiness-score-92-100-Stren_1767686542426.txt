@@ -1,0 +1,55 @@
+Apple App Store production readiness score: 92/100
+
+Strengths: account deletion flow with password verification is implemented in both client UI and server API, satisfying Apple 5.1.1(v). (client/screens/ProfileScreen.tsx; server/routes.ts)
+
+Broad feature coverage and prior audit show compliance and stability across security, device handling, and UX. (AUDIT_REPORT.md; replit.md)
+
+Remaining gap to 100%: manual production checks and device-level verification still outstanding. (MANUAL_REVIEW_NEEDED.txt)
+
+Replit-ready to-do list to reach 100%
+Validate App Store assets and metadata
+
+Confirm icon, screenshots, description, privacy URL, and support URL are final and reachable. (MANUAL_REVIEW_NEEDED.txt)
+
+Lock in production environment secrets
+
+Double-check DATABASE_URL, OPENAI_API_KEY, DEEPGRAM_API_KEY, and SESSION_SECRET in Replit secrets. (MANUAL_REVIEW_NEEDED.txt; package.json scripts rely on these)
+
+End-to-end push notification test on devices
+
+Send test notifications on physical iOS/Android; verify permission prompts and payload content. (MANUAL_REVIEW_NEEDED.txt)
+
+Voice capture verification
+
+On iOS/Android, run the Quick Dump voice flow and ensure microphone permission copy is appropriate; confirm web shows fallback. (MANUAL_REVIEW_NEEDED.txt)
+
+Team/delegation QA
+
+Generate and redeem invites, delegate tasks, and walk statuses through pending → accepted → completed. (MANUAL_REVIEW_NEEDED.txt)
+
+Legal page availability
+
+Open Terms and Privacy endpoints from the live server build to ensure uptime and content accuracy. (MANUAL_REVIEW_NEEDED.txt; server/templates/privacy.html)
+
+Fresh install & core journey smoke tests
+
+On real devices: register → onboard → create tasks across all four lanes → Break It Down → Focus timer → Weekly Reset → delete account. (MANUAL_REVIEW_NEEDED.txt)
+
+Stripe production dry run
+
+Run through checkout and customer portal flows with test cards in production mode; verify publishable key exposure route works. (server/routes.ts: /api/stripe/publishable-key)
+
+Performance/foreground-background sanity
+
+Check offline behavior, background/foreground resume, and memory usage on at least one older device. (MANUAL_REVIEW_NEEDED.txt)
+
+Evidence and context
+Feature set, architecture, and compliance groundwork summarized in replit.md.
+
+Prior audit findings and non-blocking recommendations documented in AUDIT_REPORT.md.
+
+Account deletion UI and confirmation flow live in client/screens/ProfileScreen.tsx; server-side deletion with password verification lives in server/routes.ts.
+
+Manual production checks outstanding are enumerated in MANUAL_REVIEW_NEEDED.txt.
+
+Build/serve commands and dependency versions are defined in package.json.
