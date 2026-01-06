@@ -12,6 +12,7 @@ import { FloatingAddButton } from "@/components/FloatingAddButton";
 import QuickDumpButton from "@/components/QuickDumpButton";
 import StreakBadge from "@/components/StreakBadge";
 import { ThemedText } from "@/components/ThemedText";
+import { PaymentStatusBanner } from "@/components/PaymentStatusBanner";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
@@ -60,6 +61,8 @@ export default function DashboardScreen() {
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
+        <PaymentStatusBanner />
+        
         {currentStreak > 0 ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)} style={styles.streakContainer}>
             <StreakBadge streak={currentStreak} compact />

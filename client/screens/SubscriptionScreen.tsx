@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, ActivityIndicator, Alert, Linking, Platform } from "react-native";
+import { StyleSheet, View, Pressable, ActivityIndicator, Alert, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
@@ -13,7 +13,15 @@ import { useTheme } from "@/hooks/useTheme";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiRequest, queryClient, getApiUrl } from "@/lib/query-client";
+import { queryClient, getApiUrl } from "@/lib/query-client";
+import { 
+  shouldUseStoreKit, 
+  purchaseSubscription, 
+  openSubscriptionManagement,
+  restorePurchases,
+  IOS_PRICES,
+  PlanType 
+} from "@/lib/billing";
 
 type PricingPlan = "monthly" | "annual";
 
@@ -59,27 +67,20 @@ export default function SubscriptionScreen() {
     },
   });
 
+  const isIOS = shouldUseStoreKit();
+  
   const checkoutMutation = useMutation({
-    mutationFn: async (priceId: string) => {
-      const response = await apiRequest("POST", "/api/stripe/create-checkout-session", {
-        userId: user?.id,
-        priceId,
-      });
-      return response.json();
+    mutationFn: async ({ planType, priceId }: { planType: PlanType; priceId?: string }) => {
+      if (!user?.id) throw new Error("Not signed in");
+      return purchaseSubscription(user.id, planType, priceId);
     },
-    onSuccess: async (data) => {
-      if (data.url) {
+    onSuccess: async (result) => {
+      if (result.success) {
         if (user?.id) {
           await queryClient.invalidateQueries({ queryKey: ["/api/subscription", user.id] });
         }
-        if (Platform.OS === "web") {
-          window.location.href = data.url;
-        } else {
-          await Linking.openURL(data.url);
-        }
-      } else {
-        const errorMessage = data.error || "Could not start checkout.";
-        Alert.alert("Error", errorMessage);
+      } else if (result.error && !result.error.includes("not available")) {
+        Alert.alert("Error", result.error);
       }
     },
     onError: (error: Error) => {
@@ -89,30 +90,47 @@ export default function SubscriptionScreen() {
 
   const portalMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/stripe/create-portal-session", {
-        userId: user?.id,
-      });
-      return response.json();
-    },
-    onSuccess: async (data) => {
-      if (data.url) {
-        if (Platform.OS === "web") {
-          window.location.href = data.url;
-        } else {
-          await Linking.openURL(data.url);
-        }
-      } else {
-        Alert.alert("Error", data.error || "Could not open subscription management.");
-      }
+      if (!user?.id) throw new Error("Not signed in");
+      await openSubscriptionManagement(user.id);
+      return { success: true };
     },
     onError: (error: Error) => {
       Alert.alert("Error", error.message || "Something went wrong. Please try again.");
+    },
+  });
+  
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error("Not signed in");
+      return restorePurchases(user.id);
+    },
+    onSuccess: async (result) => {
+      if (result.success) {
+        if (user?.id) {
+          await queryClient.invalidateQueries({ queryKey: ["/api/subscription", user.id] });
+        }
+        Alert.alert("Success", "Purchases restored successfully");
+      }
+    },
+    onError: (error: Error) => {
+      Alert.alert("Error", error.message || "Could not restore purchases");
     },
   });
 
   const prices = pricesData?.prices || [];
   const monthlyPriceData = prices.find((p) => p.recurring?.interval === "month");
   const annualPriceData = prices.find((p) => p.recurring?.interval === "year");
+  
+  const monthlyPrice = isIOS 
+    ? IOS_PRICES.monthly.formatted.replace("$", "") 
+    : monthlyPriceData ? (monthlyPriceData.unit_amount / 100).toFixed(2) : "6.99";
+  const annualPrice = isIOS 
+    ? IOS_PRICES.annual.formatted.replace("$", "") 
+    : annualPriceData ? (annualPriceData.unit_amount / 100).toFixed(2) : "49.99";
+  const annualMonthly = isIOS
+    ? (IOS_PRICES.annual.amount / 12).toFixed(2)
+    : annualPriceData ? ((annualPriceData.unit_amount / 100) / 12).toFixed(2) : "4.17";
+  const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
 
   const handleSelectPlan = (plan: PricingPlan) => {
     Haptics.selectionAsync();
@@ -126,13 +144,18 @@ export default function SubscriptionScreen() {
     }
 
     const priceId = selectedPlan === "monthly" ? monthlyPriceData?.id : annualPriceData?.id;
-    if (!priceId) {
+    if (!isIOS && !priceId) {
       Alert.alert("Error", "Pricing not available. Please try again later.");
       return;
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    checkoutMutation.mutate(priceId);
+    checkoutMutation.mutate({ planType: selectedPlan, priceId });
+  };
+  
+  const handleRestore = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    restoreMutation.mutate();
   };
 
   const handleManageSubscription = () => {
@@ -140,12 +163,7 @@ export default function SubscriptionScreen() {
     portalMutation.mutate();
   };
 
-  const monthlyPrice = monthlyPriceData ? (monthlyPriceData.unit_amount / 100).toFixed(2) : "6.99";
-  const annualPrice = annualPriceData ? (annualPriceData.unit_amount / 100).toFixed(2) : "49.99";
-  const annualMonthly = annualPriceData ? ((annualPriceData.unit_amount / 100) / 12).toFixed(2) : "4.17";
-  const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
-
-  const isLoading = checkoutMutation.isPending || portalMutation.isPending;
+  const isLoading = checkoutMutation.isPending || portalMutation.isPending || restoreMutation.isPending;
 
   const getStatusMessage = () => {
     if (isPastDue) {
@@ -476,6 +494,17 @@ export default function SubscriptionScreen() {
               <ThemedText type="caption" secondary style={styles.cancelNote}>
                 Cancel anytime. No commitment.
               </ThemedText>
+              {isIOS ? (
+                <Pressable 
+                  onPress={handleRestore}
+                  disabled={isLoading}
+                  style={styles.restoreButton}
+                >
+                  <ThemedText type="caption" style={{ color: LaneColors.later.primary }}>
+                    Restore Purchases
+                  </ThemedText>
+                </Pressable>
+              ) : null}
             </Animated.View>
           </>
         )}
@@ -653,5 +682,9 @@ const styles = StyleSheet.create({
   },
   cancelNote: {
     textAlign: "center",
+  },
+  restoreButton: {
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
 });

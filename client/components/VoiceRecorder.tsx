@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { StyleSheet, View, Pressable, Platform, Alert, useColorScheme } from "react-native";
+import { StyleSheet, View, Pressable, Platform, Alert, useColorScheme, Text } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Animated, { 
@@ -13,8 +13,9 @@ import Animated, {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { getApiUrl } from "@/lib/query-client";
-import { LaneColors } from "@/constants/theme";
+import { LaneColors, Spacing } from "@/constants/theme";
 import { ConsentDisclosure } from "./ConsentDisclosure";
+import { ThemedText } from "./ThemedText";
 
 const MIC_CONSENT_KEY = "microphone_consent_shown";
 const MIC_CONSENT_DECLINED_KEY = "microphone_consent_declined";
@@ -24,13 +25,14 @@ interface VoiceRecorderProps {
   onError?: (error: string) => void;
   compact?: boolean;
   userId?: string;
+  showQuota?: boolean;
 }
 
 type RecordingState = "idle" | "recording" | "processing";
 
 const DAILY_LIMIT_SECONDS = 600;
 
-export default function VoiceRecorder({ onTranscriptionComplete, onError, compact = false, userId }: VoiceRecorderProps) {
+export default function VoiceRecorder({ onTranscriptionComplete, onError, compact = false, userId, showQuota = false }: VoiceRecorderProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const [state, setState] = useState<RecordingState>("idle");
@@ -41,7 +43,12 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const [secondsRemaining, setSecondsRemaining] = useState(DAILY_LIMIT_SECONDS);
   const [showConsentDisclosure, setShowConsentDisclosure] = useState(false);
   const [consentDeclined, setConsentDeclined] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
+  const [quotaLoaded, setQuotaLoaded] = useState(false);
   const pendingRecordingRef = useRef(false);
+  const lastRecordingUriRef = useRef<string | null>(null);
+  const lastRecordingDurationRef = useRef<number>(0);
   
   const audioRecorderRef = useRef<any>(null);
   const AudioModuleRef = useRef<any>(null);
@@ -70,8 +77,13 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       });
       if (response.ok) {
         const data = await response.json();
-        setSecondsRemaining(data.secondsRemaining);
-        setLimitReached(data.limitReached);
+        if (typeof data.secondsRemaining === "number") {
+          setSecondsRemaining(data.secondsRemaining);
+        }
+        if (typeof data.limitReached === "boolean") {
+          setLimitReached(data.limitReached);
+        }
+        setQuotaLoaded(true);
       }
     } catch (error) {
       console.error("Failed to check voice usage:", error);
@@ -397,12 +409,50 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     } catch (error: any) {
       console.error("Transcription error:", error);
       if (isMountedRef.current) {
-        onError?.("Couldn't understand audio");
+        const errorMessage = error.message?.includes("network") || error.message?.includes("fetch")
+          ? "Connection failed. Check your internet."
+          : "Couldn't understand audio";
+        setLastError(errorMessage);
+        setCanRetry(true);
+        lastRecordingUriRef.current = uri;
+        lastRecordingDurationRef.current = durationSeconds;
+        onError?.(errorMessage);
       }
     } finally {
       if (isMountedRef.current) {
         setState("idle");
       }
+    }
+  };
+  
+  const retryTranscription = async () => {
+    const uri = lastRecordingUriRef.current;
+    const duration = lastRecordingDurationRef.current;
+    
+    if (!uri || !FileSystemRef.current) {
+      setLastError(null);
+      setCanRetry(false);
+      checkConsentAndStart();
+      return;
+    }
+    
+    try {
+      const fileInfo = await FileSystemRef.current.getInfoAsync(uri);
+      if (!fileInfo.exists) {
+        setLastError(null);
+        setCanRetry(false);
+        checkConsentAndStart();
+        return;
+      }
+      
+      setLastError(null);
+      setCanRetry(false);
+      setState("processing");
+      await transcribeAudio(uri, duration);
+    } catch (error) {
+      setLastError(null);
+      setCanRetry(false);
+      checkConsentAndStart();
     }
   };
 
@@ -456,6 +506,19 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const size = compact ? 44 : 56;
   const iconSize = compact ? 20 : 24;
+  
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+  
+  const getQuotaColor = (): string => {
+    const percentUsed = 1 - (secondsRemaining / DAILY_LIMIT_SECONDS);
+    if (percentUsed >= 0.9) return LaneColors.now.primary;
+    if (percentUsed >= 0.7) return LaneColors.soon.primary;
+    return LaneColors.later.primary;
+  };
 
   const getButtonColor = () => {
     if (loadError) return isDark ? "#555555" : "#999999";
@@ -468,53 +531,107 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   return (
     <View style={styles.container}>
-      {state === "recording" ? (
-        <Animated.View
-          style={[
-            styles.pulse,
-            pulseStyle,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              backgroundColor: LaneColors.now.primary,
-            },
-          ]}
-        />
+      {showQuota && !compact && quotaLoaded ? (
+        <View style={styles.quotaContainer}>
+          <View style={styles.quotaRow}>
+            <ThemedText type="caption" secondary>
+              Voice Quota
+            </ThemedText>
+            <ThemedText type="caption" style={{ color: getQuotaColor() }}>
+              {formatTime(secondsRemaining)} remaining
+            </ThemedText>
+          </View>
+          <View style={[styles.quotaBar, { backgroundColor: isDark ? "#333333" : "#E0E0E0" }]}>
+            <View 
+              style={[
+                styles.quotaFill, 
+                { 
+                  width: `${(secondsRemaining / DAILY_LIMIT_SECONDS) * 100}%`,
+                  backgroundColor: getQuotaColor(),
+                }
+              ]} 
+            />
+          </View>
+          {limitReached ? (
+            <ThemedText type="caption" style={{ color: LaneColors.now.primary, marginTop: 4 }}>
+              Daily limit reached. Resets at midnight.
+            </ThemedText>
+          ) : null}
+        </View>
       ) : null}
       
-      <Animated.View style={buttonAnimatedStyle}>
-        <Pressable
-          onPress={handlePress}
-          disabled={state === "processing"}
-          style={[
-            styles.button,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              backgroundColor: getButtonColor(),
-            },
-          ]}
-        >
-          {state === "processing" ? (
-            <Animated.View
-              style={[
-                styles.processingDot,
-                {
-                  backgroundColor: isDark ? "#0A0A0A" : "#FFFFFF",
-                },
-              ]}
-            />
-          ) : (
-            <Feather
-              name={state === "recording" ? "square" : "mic"}
-              size={iconSize}
-              color="#FFFFFF"
-            />
-          )}
-        </Pressable>
-      </Animated.View>
+      <View style={styles.buttonContainer}>
+        {state === "recording" ? (
+          <Animated.View
+            style={[
+              styles.pulse,
+              pulseStyle,
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                backgroundColor: LaneColors.now.primary,
+              },
+            ]}
+          />
+        ) : null}
+        
+        <Animated.View style={buttonAnimatedStyle}>
+          <Pressable
+            onPress={handlePress}
+            disabled={state === "processing"}
+            style={[
+              styles.button,
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                backgroundColor: getButtonColor(),
+              },
+            ]}
+          >
+            {state === "processing" ? (
+              <Animated.View
+                style={[
+                  styles.processingDot,
+                  {
+                    backgroundColor: isDark ? "#0A0A0A" : "#FFFFFF",
+                  },
+                ]}
+              />
+            ) : (
+              <Feather
+                name={state === "recording" ? "square" : "mic"}
+                size={iconSize}
+                color="#FFFFFF"
+              />
+            )}
+          </Pressable>
+        </Animated.View>
+        
+        {state === "idle" && !limitReached && Platform.OS !== "web" ? (
+          <ThemedText type="caption" secondary style={styles.hint}>
+            Tap to record
+          </ThemedText>
+        ) : null}
+      </View>
+      
+      {lastError && canRetry ? (
+        <View style={styles.errorContainer}>
+          <ThemedText type="caption" style={{ color: LaneColors.now.primary }}>
+            {lastError}
+          </ThemedText>
+          <Pressable 
+            onPress={retryTranscription}
+            style={styles.retryButton}
+          >
+            <Feather name="refresh-cw" size={14} color={LaneColors.later.primary} />
+            <ThemedText type="caption" style={{ color: LaneColors.later.primary, marginLeft: 4 }}>
+              Try Again
+            </ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
       
       <ConsentDisclosure
         visible={showConsentDisclosure}
@@ -531,6 +648,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  buttonContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   pulse: {
     position: "absolute",
   },
@@ -542,5 +663,38 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  quotaContainer: {
+    width: "100%",
+    marginBottom: Spacing.lg,
+  },
+  quotaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: Spacing.xs,
+  },
+  quotaBar: {
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  quotaFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  hint: {
+    marginTop: Spacing.sm,
+    textAlign: "center",
+  },
+  errorContainer: {
+    marginTop: Spacing.md,
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  retryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
   },
 });
