@@ -1,0 +1,47 @@
+ummary
+
+Production readiness score: 55/100 — the app has core functionality but lacks critical security, compliance, and release-readiness safeguards required for the App Store.
+
+APIs are effectively unauthenticated/unauthorized: all task/contacts/team/subscription routes trust a userId in the URL/body and return or mutate data without verifying the caller, so any user can read/write any account’s data. Password-based login exists but is not tied to session tokens or middleware checks. (server/routes.ts, client/lib/query-client.ts)
+
+Sensitive logging and weak platform hardening: request logging captures full JSON responses (including PII) for every /api call, there is no rate limiting or abuse protection, and CORS is restricted to Replit dev domains (not production), blocking real devices while also not mitigating cross-origin threats. (server/index.ts)
+
+Account lifecycle and compliance gaps: device-created accounts cannot be deleted because /api/account/:userId requires a password hash; there is no in-app account deletion for anonymous/device users, and no verification of email ownership. (server/routes.ts, shared/schema.ts)
+
+Privacy/permissions gaps for App Store review: the app uses microphone (voice transcription via Deepgram), push notifications, AI (OpenAI), and payments (Stripe) but the bundled privacy policy and app metadata are not linked to data flows; push tokens and voice recordings are persisted/sent to third parties without explicit user consent messaging in-app. (server/routes.ts, server/templates/privacy.html, app.config.js, client/lib/notifications.ts)
+
+Release engineering risks: production API base URL is hardcoded/fallback, Stripe webhooks and SendGrid rely on REPLIT_* domains, and there is no build-time sanity check that required secrets (Deepgram, OpenAI, SendGrid, Stripe, DATABASE_URL) are present, creating a high chance of runtime failures during review. (package.json, app.config.js, server/index.ts, server/routes.ts)
+
+Top fixes for Replit to reach 100% production-ready
+
+Add authenticated API access:
+
+Introduce session/JWT auth middleware and enforce it on every /api route (tasks, contacts, stats, team, subscription, sync, voice, AI). Block requests lacking a valid session tied to the authenticated user instead of trusting userId params. (server/routes.ts, client/lib/query-client.ts)
+
+Harden platform security:
+
+Add rate limiting, input validation, and structured error handling; scrub or minimize API logging to avoid leaking PII; enable HTTPS-only cookies/tokens and rotate credentials. (server/index.ts, server/routes.ts)
+
+Fix account deletion & user identity:
+
+Provide an in-app deletion path for device/anonymous users (or block creating device-only accounts for production); ensure email ownership verification and enforce password reset/login flows that can’t be bypassed. (server/routes.ts)
+
+Compliance & privacy readiness:
+
+Update the privacy policy to explicitly cover microphone/audio uploads (Deepgram), AI processing (OpenAI), push tokens, analytics/storage, and payments; surface in-app consent/just-in-time disclosures for microphone and notifications before first use. Align App Store privacy nutrition labels with these flows. (server/templates/privacy.html, client/lib/notifications.ts)
+
+Release configuration:
+
+Replace REPLIT-specific domains with production API/landing URLs, ensure Expo build extra.apiUrl points to the production backend, and add CI checks that required env vars (Deepgram, OpenAI, SendGrid, Stripe, DATABASE_URL) are set before building. (app.config.js, package.json, server/index.ts)
+
+Payments & webhooks:
+
+Confirm Stripe webhook URLs point to a stable production host (not Replit ephemeral domains), secure webhook validation, and handle subscription status sync robustly. (server/index.ts, server/routes.ts)
+
+QA & monitoring:
+
+Add crash/error reporting (e.g., Sentry) on client and server, plus automated lint/type/test runs and health checks; currently no automated checks are configured/executed for release. (package.json)
+
+Testing
+
+⚠️ No automated tests or builds were run (review-only request).
