@@ -14,11 +14,26 @@ interface AuthContextType {
   login: (email: string, password: string, rememberMe: boolean) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  getAuthToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_STORAGE_KEY = "@auth_user";
+const AUTH_TOKEN_KEY = "@auth_token";
+
+let cachedToken: string | null = null;
+
+export async function getStoredAuthToken(): Promise<string | null> {
+  if (cachedToken) return cachedToken;
+  try {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    cachedToken = token;
+    return token;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -30,10 +45,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadStoredAuth = async () => {
     try {
-      const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
+      const [stored, token] = await Promise.all([
+        AsyncStorage.getItem(AUTH_STORAGE_KEY),
+        AsyncStorage.getItem(AUTH_TOKEN_KEY),
+      ]);
+      
+      if (stored && token) {
         const parsed = JSON.parse(stored);
         setUser(parsed);
+        cachedToken = token;
+      } else if (stored || token) {
+        await AsyncStorage.multiRemove([AUTH_STORAGE_KEY, AUTH_TOKEN_KEY]);
+        cachedToken = null;
       }
     } catch (error) {
       console.error("Failed to load auth state:", error);
@@ -42,17 +65,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const getAuthToken = async (): Promise<string | null> => {
+    return getStoredAuthToken();
+  };
+
   const login = async (email: string, password: string, rememberMe: boolean): Promise<{ success: boolean; error?: string }> => {
     try {
       const apiUrl = getApiUrl();
       const url = new URL("/api/auth/login", apiUrl).toString();
-      console.log("Attempting login to:", url);
-      console.log("API URL:", apiUrl);
-      console.log("Email:", email);
       
-      // Create AbortController for timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       try {
         const response = await fetch(url, {
@@ -60,17 +83,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
           signal: controller.signal,
+          credentials: "include",
         });
         
         clearTimeout(timeoutId);
 
-        console.log("Login response status:", response.status);
-        console.log("Login response ok:", response.ok);
         const data = await response.json();
-        console.log("Login response data:", data);
 
         if (!response.ok) {
-          console.log("Login failed with error:", data.error);
           return { success: false, error: data.error || "Login failed" };
         }
 
@@ -80,23 +100,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         setUser(authUser);
+        cachedToken = data.token;
 
         if (rememberMe) {
-          await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+          await AsyncStorage.multiSet([
+            [AUTH_STORAGE_KEY, JSON.stringify(authUser)],
+            [AUTH_TOKEN_KEY, data.token],
+          ]);
+        } else {
+          cachedToken = data.token;
         }
 
         return { success: true };
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
-          console.error("Login request timed out after 30s");
           return { success: false, error: "Connection timed out. Please check your internet connection and try again." };
         }
         throw fetchError;
       }
     } catch (error: any) {
       console.error("Login error:", error);
-      const errorMessage = error?.message || "Connection failed";
       return { success: false, error: `Unable to connect. Please try again.` };
     }
   };
@@ -107,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        credentials: "include",
       });
 
       const data = await response.json();
@@ -121,7 +146,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
 
       setUser(authUser);
-      await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+      cachedToken = data.token;
+      
+      await AsyncStorage.multiSet([
+        [AUTH_STORAGE_KEY, JSON.stringify(authUser)],
+        [AUTH_TOKEN_KEY, data.token],
+      ]);
 
       return { success: true };
     } catch (error) {
@@ -132,7 +162,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+      try {
+        await fetch(new URL("/api/auth/logout", getApiUrl()).toString(), {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch {
+      }
+      
+      await AsyncStorage.multiRemove([AUTH_STORAGE_KEY, AUTH_TOKEN_KEY]);
+      cachedToken = null;
       setUser(null);
     } catch (error) {
       console.error("Logout error:", error);
@@ -148,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        getAuthToken,
       }}
     >
       {children}

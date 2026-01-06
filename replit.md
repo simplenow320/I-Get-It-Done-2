@@ -1,380 +1,9 @@
 # I GET IT DONE
 
 ## Overview
-A premium ADHD-optimized mobile task management app that helps users stay focused, start tasks, finish tasks, and avoid overwhelm. Built on research-backed insights about how ADHD brains work: fast, intuitive, idea-heavy, easily overloaded, and motivated by small wins, structure, and clear feedback.
+"I GET IT DONE" is a premium, ADHD-optimized mobile task management application designed to help users with ADHD overcome common challenges like task initiation, overwhelm, and focus maintenance. It integrates research-backed insights to provide a fast, intuitive, and rewarding experience. The app aims to keep users focused, facilitate task completion, and prevent mental overload through features like quick capture, task chunking, and gamification.
 
-## Current State
-- **Phase**: All 6 Phases Complete (Full MVP) + Stripe Payment Integration
-- **Status**: Quick Dump, Break It Down, Focus Mode, Focus Timer, Gamification, Enhanced Weekly Reset, and Delegation all implemented
-- **Authentication**: Custom email/password auth with bcrypt hashing, show/hide password toggle, remember me functionality
-- **Design**: Premium iOS 26-inspired liquid glass design with bold gradients
-- **Gamification**: Streak tracking, points/XP system, level progression, achievement unlock notifications
-- **Weekly Reset**: Wins display, cleanup suggestions, future planning, gamification stats integration
-- **Delegation**: Team Hub, task hand-off, delegation status tracking, in-app notes/communication
-- **Data Persistence**: Full PostgreSQL cloud sync via Express REST API (migrated from Supabase)
-- **Auto-Lane Movement**: Overdue tasks automatically move from Later→Soon→Now
-- **Stripe Payments**: Subscription monetization with 7-day trial, monthly ($6.99) and annual ($49.99) plans
-
-## Stripe Payment Integration
-
-### Pricing Structure
-- **7-day free trial** (credit card required upfront)
-- **Monthly**: $6.99/month
-- **Annual**: $49.99/year (40% savings)
-
-### Product IDs (Test Mode)
-- Product ID: `prod_TiSUvTJvNQ9Fnt`
-- Monthly Price ID: `price_1Sl1ZHBSXqQ56VqQTD2NbWAn`
-- Annual Price ID: `price_1Sl1ZIBSXqQ56VqQtJCW2cZu`
-
-### API Endpoints
-- `GET /api/stripe/publishable-key` - Get Stripe publishable key for frontend
-- `GET /api/stripe/prices` - List available subscription prices
-- `POST /api/stripe/create-checkout-session` - Create Stripe Checkout session
-- `POST /api/stripe/create-portal-session` - Create Stripe Customer Portal session
-- `GET /api/subscription/:userId` - Get user's subscription status
-- `POST /api/stripe/webhook` - Stripe webhook handler (managed by stripe-replit-sync)
-
-### User Schema Fields
-- `stripeCustomerId` - Stripe customer ID
-- `stripeSubscriptionId` - Active subscription ID
-- `subscriptionStatus` - none, trialing, active, past_due, canceled
-- `trialEndsAt` - Trial end timestamp
-
-### Files
-- `server/stripeClient.ts` - Stripe SDK initialization via Replit connection API
-- `server/webhookHandlers.ts` - Webhook processing for subscription events
-- `server/seed-products.ts` - Script to create products in Stripe (run once)
-
-### P&L Summary
-- **AI Cost per user**: $0.30/month (Deepgram Nova-2 + GPT-4o-mini)
-- **Stripe fee**: ~8.5% ($0.59 on $6.99)
-- **Net per monthly subscriber**: $6.10/month
-- **Gross margin**: 95%
-
-## ADHD Problems This App Solves
-- Time blindness → Focus timers, countdown rings, auto-move
-- Task initiation trouble → Break It Down, sprint timers, Quick Dump
-- Overwhelm from big tasks → Subtasks, progress bars, chunking
-- Difficulty estimating effort → Time windows instead of exact deadlines
-- Losing track of priorities → Auto-lane movement, gentle nudges
-- Low dopamine → Streaks, completion animations, micro-wins
-- Working memory issues → Quick capture, layered reminders
-
-## Architecture
-
-### Technology Stack
-- **Frontend**: React Native with Expo SDK 54
-- **Backend**: Express.js (prepared for persistence)
-- **Database**: PostgreSQL (schema ready for integration)
-- **State Management**: React Context API (TaskStore)
-
-### Core Concept - The 4-Lane System
-| Lane | Purpose | ADHD Benefit |
-|------|---------|--------------|
-| **Now** | Tasks for today | Short list reduces overwhelm |
-| **Soon** | Next few days | Short horizon without sudden pressure |
-| **Later** | Future weeks | Keeps tasks visible, out of today's mental space |
-| **Park** | Set aside for later | Safe holding zone for idea-heavy brains |
-
-### Navigation Structure
-```
-RootStackNavigator
-├── Auth (Unauthenticated)
-│   ├── Login (Email/password with remember me)
-│   └── Register (Email/password with confirmation)
-├── Onboarding (Authenticated, not onboarded)
-│   ├── Welcome
-│   ├── LaneSetup
-│   └── ModeSelection
-└── Main (Authenticated + Onboarded, Tab Navigator)
-    ├── Dashboard Tab
-    │   ├── Dashboard (4-lane overview + Quick Dump button)
-    │   ├── LaneDetail
-    │   ├── AddTask
-    │   ├── TaskDetail
-    │   └── QuickDump (Brain dump modal)
-    ├── Focus Tab
-    │   ├── FocusMode (One task at a time)
-    │   └── FocusTimer (Sprint timer overlay)
-    ├── Team Tab (Conditional - only in team mode)
-    │   └── TeamHub (Delegation overview + contacts)
-    └── Profile Tab
-        ├── Profile (Stats + Gamification + Sign Out)
-        └── WeeklyReset (Enhanced with wins)
-```
-
-### Authentication System
-- **Login Screen**: Email/password with show/hide toggle, remember me checkbox
-- **Register Screen**: Email/password/confirm password with validation
-- **Password Security**: bcrypt hashing (10 salt rounds)
-- **Session Storage**: AsyncStorage for persistent auth state
-- **Profile Integration**: Email display and Sign Out button
-
-## ADHD Feature Implementation Plan
-
-### Phase 1: Enhanced Task Model & Quick Capture
-**Goal**: Enable rapid task entry and subtask management
-
-1. **Extended Task Model**
-   ```typescript
-   interface Task {
-     id: string;
-     title: string;
-     notes?: string;
-     lane: Lane;
-     createdAt: Date;
-     dueDate?: Date;
-     completedAt?: Date;
-     assignedTo?: string;
-     // NEW ADHD fields
-     subtasks: Subtask[];
-     reminderType: 'soft' | 'strong' | 'persistent' | 'none';
-     focusTime?: number; // minutes spent in focus mode
-     isOverdue: boolean;
-   }
-   
-   interface Subtask {
-     id: string;
-     title: string;
-     completed: boolean;
-   }
-   ```
-
-2. **Quick Dump Screen**
-   - Large prominent button on dashboard
-   - Rapid-fire text entry
-   - Tasks land in "Unsure" state for later sorting
-   - Guided lane selection one-by-one
-
-3. **Brain Dump Sorting Flow**
-   - One task at a time presentation
-   - Swipe or tap to assign lane
-   - Skip option for later
-
-### Phase 2: Task Chunking & Progress
-**Goal**: Make big tasks feel doable
-
-1. **Break It Down Feature**
-   - "Break It Down" button on each task
-   - Add custom subtasks
-   - Visual progress bar showing completion %
-   - Each subtask completion = dopamine hit
-
-2. **Progress Visualization**
-   - Circular progress ring on task cards
-   - Animated fill as subtasks complete
-   - Confetti/glow on full completion
-
-### Phase 3: Focus Mode & Timer
-**Goal**: Combat time blindness and support hyperfocus
-
-1. **Daily Focus Mode Screen**
-   - Shows only Now tasks
-   - One task at a time view option
-   - Swipe to complete or defer
-   - Launch focus timer directly
-
-2. **Focus Timer (Sprint Mode)**
-   - Preset options: 10, 15, 25, custom minutes
-   - Visual countdown ring
-   - Haptic feedback at intervals
-   - Celebratory message on completion
-   - "Want another sprint?" prompt
-
-### Phase 4: Gamification & Motivation
-**Goal**: Sustain motivation with micro-rewards
-
-1. **Streak System**
-   - "Days you cleared Now" counter
-   - Streak badge on dashboard
-   - Streak protection for one missed day
-
-2. **Completion Celebrations**
-   - Confetti animation on task complete
-   - Points for completing chunks
-   - Level badges (Starter → Focused → Unstoppable)
-
-3. **Stats & Achievements**
-   - Weekly task completion count
-   - Total focus minutes
-   - Longest streak
-   - Current level progress
-
-### Phase 5: Enhanced Weekly Reset
-**Goal**: Provide structure and feedback loops
-
-1. **Wins Section**
-   - Show all completed tasks (dopamine booster)
-   - Highlight streaks maintained
-
-2. **Auto-Move Summary**
-   - Tasks that moved between lanes
-   - Overdue items flagged gently
-
-3. **Cleanup Suggestions**
-   - Stale Park items to review
-   - Tasks stuck in Soon too long
-
-4. **Future Planning**
-   - Quick look at next week
-   - Optional goal setting
-
-### Phase 6: Delegation (Future)
-**Goal**: Reduce mental load through hand-off
-
-1. **Contact Management**
-   - Add people during onboarding
-   - Simple contact list
-
-2. **Hand-Off Flow**
-   - "Hand-off" button on tasks
-   - Choose a person
-   - Track progress
-
-## File Structure
-```
-client/
-├── App.tsx
-├── components/
-│   ├── Button.tsx
-│   ├── Card.tsx
-│   ├── EmptyState.tsx
-│   ├── ErrorBoundary.tsx
-│   ├── FloatingAddButton.tsx
-│   ├── HeaderTitle.tsx
-│   ├── KeyboardAwareScrollViewCompat.tsx
-│   ├── LaneCard.tsx
-│   ├── LaneSelector.tsx
-│   ├── ProgressRing.tsx          # NEW
-│   ├── QuickDumpButton.tsx       # NEW
-│   ├── Spacer.tsx
-│   ├── StreakBadge.tsx           # NEW
-│   ├── SubtaskItem.tsx           # NEW
-│   ├── TaskCard.tsx
-│   ├── ThemedText.tsx
-│   ├── ThemedView.tsx
-│   └── TimerRing.tsx             # NEW
-├── constants/
-│   └── theme.ts
-├── contexts/
-│   └── ThemeContext.tsx
-├── hooks/
-│   ├── useScreenOptions.ts
-│   └── useTheme.ts
-├── navigation/
-│   ├── DashboardStackNavigator.tsx
-│   ├── FocusStackNavigator.tsx   # NEW
-│   ├── MainTabNavigator.tsx
-│   ├── OnboardingStackNavigator.tsx
-│   ├── ProfileStackNavigator.tsx
-│   └── RootStackNavigator.tsx
-├── screens/
-│   ├── AddTaskScreen.tsx
-│   ├── DashboardScreen.tsx
-│   ├── FocusModeScreen.tsx       # NEW
-│   ├── FocusTimerScreen.tsx      # NEW
-│   ├── LandingScreen.tsx
-│   ├── LaneDetailScreen.tsx
-│   ├── LaneSetupScreen.tsx
-│   ├── ModeSelectionScreen.tsx
-│   ├── NowScreen.tsx
-│   ├── ProfileScreen.tsx
-│   ├── QuickDumpScreen.tsx       # NEW
-│   ├── TaskDetailScreen.tsx
-│   ├── WeeklyResetScreen.tsx
-│   └── WelcomeScreen.tsx
-└── stores/
-    ├── GamificationStore.tsx     # NEW
-    └── TaskStore.tsx
-```
-
-## Design System
-
-### Lane Colors
-- **Now** (Urgent Red): #FF3B30 → #FF6B60
-- **Soon** (Action Orange): #FF9500 → #FFB340
-- **Later** (Calm Blue): #007AFF → #4DA6FF
-- **Park** (Neutral Purple): #AF52DE → #C77EEA
-
-### Typography
-- Hero Numbers: 72px, weight 700
-- Large Title: 34px, weight 700
-- Headlines: 17-28px, weight 600
-- Body: 17px, weight 400
-
-### Visual Elements
-- Border Radius: 8-24px scale
-- Spacing: 4-40px scale
-- Haptic feedback on interactions
-- Spring animations for smooth transitions
-- Confetti animations for celebrations
-
-## Backend Schema (Prepared for Future)
-```sql
--- Tasks with ADHD fields
-CREATE TABLE tasks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title VARCHAR(500) NOT NULL,
-  notes TEXT,
-  lane VARCHAR(20) NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW(),
-  due_date TIMESTAMP,
-  completed_at TIMESTAMP,
-  assigned_to UUID REFERENCES users(id),
-  reminder_type VARCHAR(20) DEFAULT 'soft',
-  focus_time_minutes INTEGER DEFAULT 0,
-  is_overdue BOOLEAN DEFAULT FALSE
-);
-
--- Subtasks for chunking
-CREATE TABLE subtasks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
-  title VARCHAR(500) NOT NULL,
-  completed BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Gamification tracking
-CREATE TABLE user_stats (
-  user_id UUID PRIMARY KEY REFERENCES users(id),
-  current_streak INTEGER DEFAULT 0,
-  longest_streak INTEGER DEFAULT 0,
-  total_tasks_completed INTEGER DEFAULT 0,
-  total_focus_minutes INTEGER DEFAULT 0,
-  current_level INTEGER DEFAULT 1,
-  points INTEGER DEFAULT 0
-);
-
--- Focus sessions
-CREATE TABLE focus_sessions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id),
-  task_id UUID REFERENCES tasks(id),
-  duration_minutes INTEGER NOT NULL,
-  completed_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-## Recent Changes
-- **Dec 8, 2025**: Initial MVP with 4-lane system, onboarding, dashboard
-- **Dec 8, 2025**: Added light/dark mode toggle with persistence
-- **Dec 8, 2025**: Created marketing landing page
-- **Dec 8, 2025**: Voice-to-task capture implemented:
-  - VoiceRecorder component using expo-audio for audio recording
-  - Backend /api/transcribe endpoint using OpenAI Whisper API
-  - Quick Dump: Voice input adds tasks directly to unsorted list (splits sentences into multiple tasks)
-  - Add Task: Voice input populates title field for editing before creation
-  - Web fallback directs users to use Expo Go for voice features
-- **Dec 8, 2025**: Implemented ADHD-optimized features:
-  - Quick Dump: Brain dump screen for rapid task capture with sorting flow
-  - Break It Down: Subtask management with progress ring visualization
-  - Focus Mode: Single-task view with swipe gestures for complete/defer
-  - Focus Timer: Sprint timer with 10/15/25 minute presets and countdown ring
-  - New components: QuickDumpButton, SubtaskItem, ProgressRing, TimerRing
-  - Updated navigation: Focus tab replaces Now tab
-  - Extended TaskStore with subtask methods and unsorted task management
+The project has reached its Full MVP stage, including essential features like Quick Dump, Break It Down, Focus Mode, Focus Timer, Gamification, an Enhanced Weekly Reset, and Delegation capabilities. It also incorporates robust JWT-based authentication with security hardening and Stripe integration for subscription monetization, offering a 7-day free trial, monthly, and annual plans.
 
 ## User Preferences
 - Premium, modern aesthetic (Apple meets ESPN)
@@ -383,15 +12,49 @@ CREATE TABLE focus_sessions (
 - Focus on productivity and quick interactions
 - ADHD-friendly: reduced decision fatigue, clear feedback
 
-## Current Implementation Status
-Completed:
-1. Quick Dump button + screen (with brain dump and sorting flow)
-2. Enhanced Task model with subtasks
-3. Break It Down feature with progress bars
-4. Focus Mode (single task view with swipe gestures)
-5. Focus Timer with countdown ring
+## System Architecture
 
-Next Steps:
-6. Streak tracking + dashboard badge (GamificationStore)
-7. Completion celebrations (confetti animations)
-8. Enhanced Weekly Reset with wins section
+### Technology Stack
+- **Frontend**: React Native with Expo SDK 54
+- **Backend**: Express.js
+- **Database**: PostgreSQL (cloud sync via Express REST API, migrated from Supabase)
+- **State Management**: React Context API (TaskStore)
+
+### Core Concept - The 4-Lane System
+The application organizes tasks into four distinct lanes to manage mental load and prioritize effectively:
+-   **Now**: Tasks for immediate action today.
+-   **Soon**: Tasks scheduled for the next few days.
+-   **Later**: Tasks for future weeks, keeping them visible but out of current mental space.
+-   **Park**: A holding zone for ideas and tasks to be revisited later.
+Overdue tasks automatically move between Now, Soon, and Later lanes to maintain relevance.
+
+### UI/UX Design Decisions
+-   **Design Language**: Premium iOS 26-inspired liquid glass design with bold gradients.
+-   **Typography**: Uses a scale from 72px for hero numbers down to 17px for body text, with varying weights for hierarchy.
+-   **Visual Elements**: Features 8-24px border radii, 4-40px spacing, haptic feedback, spring animations, and confetti animations for celebrations.
+-   **Lane Colors**: Distinct color scheme for each lane (Urgent Red for Now, Action Orange for Soon, Calm Blue for Later, Neutral Purple for Park).
+
+### Feature Specifications
+-   **Quick Dump**: Rapid-fire task entry with an "Unsure" state for later sorting.
+-   **Break It Down**: Enables creation of subtasks with visual progress bars and completion feedback.
+-   **Focus Mode & Timer**: Dedicated screen for single-task focus, with swipe actions and a customizable sprint timer (10, 15, 25 minutes) with visual countdown.
+-   **Gamification**: Includes streak tracking, points/XP, level progression, and achievement notifications to sustain motivation.
+-   **Enhanced Weekly Reset**: Provides a structured review of completed tasks, auto-move summaries, cleanup suggestions, and future planning.
+-   **Delegation**: A "Team Hub" for task hand-off, status tracking, and in-app communication.
+-   **Authentication**: JWT-based authentication with bcrypt hashing, `requireAuth` middleware for all API routes, and user identity verification. Rate limiting is applied to authentication endpoints.
+
+### Navigation Structure
+The application uses a `RootStackNavigator` that branches into `Auth`, `Onboarding`, and `Main` (Tab Navigator). The `Main` tab navigator includes `Dashboard`, `Focus`, `Team` (conditional), and `Profile` tabs, each with its own stack.
+
+### Backend Schema Prepared for Future Features
+The PostgreSQL schema includes tables for `tasks` (with ADHD-specific fields like subtasks, reminder type, focus time, and overdue status), `subtasks`, `user_stats` (for gamification), and `focus_sessions`.
+
+## External Dependencies
+
+-   **Stripe**: Integrated for subscription monetization, including a 7-day free trial, monthly ($6.99), and annual ($49.99) plans. Uses Stripe Customer Portal and Checkout sessions.
+-   **OpenAI Whisper API**: Used for voice-to-text transcription for quick task capture via the `/api/transcribe` endpoint.
+-   **Deepgram Nova-2**: Utilized for AI-powered voice processing.
+-   **GPT-4o-mini**: Used for AI capabilities.
+-   **AsyncStorage**: For persistent authentication state on the client-side.
+-   **Expo SDK 54**: The framework for React Native development.
+-   **bcrypt**: For password hashing in authentication.

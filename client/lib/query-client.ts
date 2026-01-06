@@ -1,39 +1,37 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import { getStoredAuthToken } from "@/contexts/AuthContext";
 
-/**
- * Gets the base URL for the Express API server
- * @returns {string} The API base URL
- */
 export function getApiUrl(): string {
-  // On web, use window.location.origin with port 5000 for the Express API
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    // Web browser - construct URL with port 5000 for Express server
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
     return `${protocol}//${hostname}:5000`;
   }
 
-  // On native (iOS/Android), use the production API URL from app config
-  // This is baked in at build time and works for App Store builds
   const apiUrl = Constants.expoConfig?.extra?.apiUrl;
   
   if (apiUrl) {
     return apiUrl;
   }
 
-  // Fallback: Try EXPO_PUBLIC_DOMAIN for development (Expo Go)
   const host = process.env.EXPO_PUBLIC_DOMAIN;
   
   if (host) {
-    // Strip any port number - API calls go through Metro bundler proxy
     const hostWithoutPort = host.split(":")[0];
     return `https://${hostWithoutPort}`;
   }
 
-  // Last resort: Production URL hardcoded
   return "https://igetitdone.co";
+}
+
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const token = await getStoredAuthToken();
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
 }
 
 async function throwIfResNotOk(res: Response) {
@@ -50,10 +48,14 @@ export async function apiRequest(
 ): Promise<Response> {
   const baseUrl = getApiUrl();
   const url = new URL(route, baseUrl);
+  const authHeaders = await getAuthHeaders();
 
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...authHeaders,
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -70,9 +72,11 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const baseUrl = getApiUrl();
     const url = new URL(queryKey.join("/") as string, baseUrl);
+    const authHeaders = await getAuthHeaders();
 
     const res = await fetch(url, {
       credentials: "include",
+      headers: authHeaders,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

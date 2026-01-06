@@ -5,6 +5,7 @@ import * as fs from "fs";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers, voiceUsage } from "@shared/schema";
+import { generateToken, requireAuth, optionalAuth, validateUserAccess, type AuthenticatedRequest } from "./authMiddleware";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
 import { eq, and, inArray, or, sql } from "drizzle-orm";
@@ -17,9 +18,14 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  app.get("/api/voice-usage/:userId", async (req: Request, res: Response) => {
+  app.get("/api/voice-usage/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
+      
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const today = new Date().toISOString().split('T')[0];
       
       const existing = await db.select().from(voiceUsage)
@@ -41,16 +47,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/transcribe", upload.single("audio"), async (req: Request, res: Response) => {
+  app.post("/api/transcribe", requireAuth, upload.single("audio"), async (req: AuthenticatedRequest, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No audio file provided" });
       }
 
-      const userId = req.body.userId;
+      const userId = req.user?.userId;
+      if (!userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const durationSeconds = parseInt(req.body.durationSeconds) || 0;
       
-      if (userId && durationSeconds > 0) {
+      if (durationSeconds > 0) {
         const today = new Date().toISOString().split('T')[0];
         
         const existing = await db.select().from(voiceUsage)
@@ -112,7 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
       
-      if (userId && durationSeconds > 0) {
+      if (durationSeconds > 0) {
         const today = new Date().toISOString().split('T')[0];
         
         const existing = await db.select().from(voiceUsage)
@@ -151,8 +161,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/tasks/extract", async (req: Request, res: Response) => {
+  app.post("/api/tasks/extract", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
+      if (!req.user) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const { transcript } = req.body;
 
       if (!transcript || typeof transcript !== "string") {
@@ -273,12 +287,22 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
         userId: user.id,
       });
       
+      const token = generateToken({ userId: user.id, email: normalizedEmail });
+      
+      res.cookie("authToken", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      
       res.json({ 
         user: { 
           id: user.id, 
-          email: user.email,
+          email: normalizedEmail,
           createdAt: user.createdAt,
-        } 
+        },
+        token,
       });
     } catch (error) {
       console.error("Registration error:", error);
@@ -314,16 +338,58 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
         return res.status(401).json({ error: "Invalid email or password" });
       }
       
+      const token = generateToken({ userId: user.id, email: normalizedEmail });
+      
+      res.cookie("authToken", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      
       res.json({ 
         user: { 
           id: user.id, 
-          email: user.email,
+          email: normalizedEmail,
           createdAt: user.createdAt,
-        } 
+        },
+        token,
       });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req: Request, res: Response) => {
+    res.clearCookie("authToken");
+    res.json({ success: true });
+  });
+
+  app.get("/api/auth/me", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const existing = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+      
+      if (existing.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      const user = existing[0];
+      
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          createdAt: user.createdAt,
+        }
+      });
+    } catch (error) {
+      console.error("Get user error:", error);
+      res.status(500).json({ error: "Failed to get user" });
     }
   });
 
@@ -589,9 +655,13 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.get("/api/tasks/:userId", async (req: Request, res: Response) => {
+  app.get("/api/tasks/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
+      
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       
       const userTasks = await db.select().from(tasks).where(eq(tasks.userId, userId));
       
@@ -617,9 +687,13 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.post("/api/tasks", async (req: Request, res: Response) => {
+  app.post("/api/tasks", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id, userId, title, notes, lane, reminderType, dueDate, assignedTo } = req.body;
+      
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       
       const taskValues: any = {
         userId,
@@ -644,12 +718,16 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.put("/api/tasks/:id", async (req: Request, res: Response) => {
+  app.put("/api/tasks/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
       const updates = req.body;
       
       const existingTask = await db.select().from(tasks).where(eq(tasks.id, id));
+      
+      if (existingTask.length > 0 && existingTask[0].userId !== req.user?.userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const wasCompleted = existingTask.length > 0 && existingTask[0].completedAt !== null;
       const isBeingCompleted = updates.completedAt && !wasCompleted;
       
@@ -729,9 +807,15 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.delete("/api/tasks/:id", async (req: Request, res: Response) => {
+  app.delete("/api/tasks/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
+      
+      const existingTask = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+      if (existingTask.length > 0 && existingTask[0].userId !== req.user?.userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       await db.delete(tasks).where(eq(tasks.id, id));
       res.json({ success: true });
     } catch (error) {
@@ -792,9 +876,14 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.get("/api/contacts/:userId", async (req: Request, res: Response) => {
+  app.get("/api/contacts/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
+      
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const userContacts = await db.select().from(contacts).where(eq(contacts.userId, userId));
       res.json({ contacts: userContacts });
     } catch (error) {
@@ -803,9 +892,13 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.post("/api/contacts", async (req: Request, res: Response) => {
+  app.post("/api/contacts", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id, userId, name, role, color } = req.body;
+      
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       
       const contactValues: any = {
         userId,
@@ -838,9 +931,14 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.put("/api/users/:id/push-token", async (req: Request, res: Response) => {
+  app.put("/api/users/:id/push-token", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
+      
+      if (!req.user || req.user.userId !== id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const { pushToken, notificationsEnabled } = req.body;
       
       const updates: any = {};
@@ -860,9 +958,14 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.get("/api/stats/:userId", async (req: Request, res: Response) => {
+  app.get("/api/stats/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
+      
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const stats = await db.select().from(userStats).where(eq(userStats.userId, userId)).limit(1);
       
       if (stats.length === 0) {
@@ -877,9 +980,14 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.put("/api/stats/:userId", async (req: Request, res: Response) => {
+  app.put("/api/stats/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
+      
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const updates = req.body;
       
       delete updates.id;
@@ -901,9 +1009,13 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.post("/api/sync", async (req: Request, res: Response) => {
+  app.post("/api/sync", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId, tasks: clientTasks, contacts: clientContacts, stats: clientStats } = req.body;
+      
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       
       for (const task of clientTasks || []) {
         const existing = await db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1);
@@ -1295,17 +1407,13 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.delete("/api/account/:userId", async (req: Request, res: Response) => {
+  app.delete("/api/account/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
       const { password } = req.body;
       
-      if (!userId) {
-        return res.status(400).json({ error: "User ID is required" });
-      }
-      
-      if (!password) {
-        return res.status(400).json({ error: "Password is required to delete account" });
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
       
       const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
@@ -1316,13 +1424,13 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
       
       const user = userResult[0];
       
-      if (!user.passwordHash) {
-        return res.status(400).json({ error: "Account cannot be deleted - no password set" });
-      }
-      
-      const validPassword = await bcrypt.compare(password, user.passwordHash);
-      if (!validPassword) {
-        return res.status(401).json({ error: "Invalid password" });
+      if (user.passwordHash && password) {
+        const validPassword = await bcrypt.compare(password, user.passwordHash);
+        if (!validPassword) {
+          return res.status(401).json({ error: "Invalid password" });
+        }
+      } else if (user.passwordHash && !password) {
+        return res.status(400).json({ error: "Password is required to delete account" });
       }
       
       await db.delete(delegationNotes).where(eq(delegationNotes.authorId, userId));
@@ -1381,12 +1489,16 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.post("/api/stripe/create-checkout-session", async (req: Request, res: Response) => {
+  app.post("/api/stripe/create-checkout-session", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId, priceId } = req.body;
 
       if (!userId || !priceId) {
         return res.status(400).json({ error: "userId and priceId are required" });
+      }
+
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
@@ -1431,12 +1543,12 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.post("/api/stripe/create-portal-session", async (req: Request, res: Response) => {
+  app.post("/api/stripe/create-portal-session", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.body;
 
-      if (!userId) {
-        return res.status(400).json({ error: "userId is required" });
+      if (!userId || !req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
@@ -1464,9 +1576,13 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
-  app.get("/api/subscription/:userId", async (req: Request, res: Response) => {
+  app.get("/api/subscription/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
+
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
 
       const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
       if (userResult.length === 0) {
