@@ -8,6 +8,7 @@ import ModeSettingsScreen from "@/screens/ModeSettingsScreen";
 import HowItWorksScreen from "@/screens/HowItWorksScreen";
 import ChangePasswordScreen from "@/screens/ChangePasswordScreen";
 import SupportScreen from "@/screens/SupportScreen";
+import SubscriptionScreen from "@/screens/SubscriptionScreen";
 import LandingScreen from "@/screens/LandingScreen";
 import LearnMoreScreen from "@/screens/LearnMoreScreen";
 import FAQScreen from "@/screens/FAQScreen";
@@ -21,6 +22,7 @@ export type ProfileStackParamList = {
   HowItWorks: undefined;
   ChangePassword: undefined;
   Support: undefined;
+  Subscription: undefined;
   TourLanding: { isTour: boolean };
   TourLearnMore: { isTour: boolean };
   TourFAQ: { isTour: boolean };
@@ -80,6 +82,13 @@ export default function ProfileStackNavigator() {
         component={SupportScreen}
         options={{
           title: "Support",
+        }}
+      />
+      <Stack.Screen
+        name="Subscription"
+        component={SubscriptionScreen}
+        options={{
+          title: "Pro Membership",
         }}
       />
       <Stack.Screen

@@ -15,6 +15,7 @@ import { ThemedText } from "@/components/ThemedText";
 import StreakBadge from "@/components/StreakBadge";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { useTheme } from "@/hooks/useTheme";
+import { useSubscriptionWithFocusRefetch } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore } from "@/stores/TaskStore";
 import { useGamification, Level } from "@/stores/GamificationStore";
@@ -49,6 +50,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { settings, userId } = useTaskStore();
   const { logout, user } = useAuth();
+  const { isPro, isTrialing } = useSubscriptionWithFocusRefetch();
   
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
@@ -89,6 +91,11 @@ export default function ProfileScreen() {
   const handleHowItWorks = () => {
     Haptics.selectionAsync();
     navigation.navigate("HowItWorks");
+  };
+
+  const handleSubscription = () => {
+    Haptics.selectionAsync();
+    navigation.navigate("Subscription");
   };
 
   const handleShowTour = () => {
@@ -332,7 +339,54 @@ export default function ProfileScreen() {
         </View>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(350).duration(400)}>
+      {!isPro ? (
+        <Animated.View entering={FadeInUp.delay(350).duration(400)}>
+          <Pressable onPress={handleSubscription} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
+            <LinearGradient
+              colors={LaneColors.now.gradient as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.proCard}
+            >
+              <View style={styles.proCardContent}>
+                <View style={styles.proIconContainer}>
+                  <Feather name="star" size={24} color="#FFFFFF" />
+                </View>
+                <View style={styles.proTextContainer}>
+                  <ThemedText type="h4" style={styles.proTitle}>
+                    Upgrade to Pro
+                  </ThemedText>
+                  <ThemedText type="small" style={styles.proSubtitle}>
+                    7-day free trial included
+                  </ThemedText>
+                </View>
+                <Feather name="chevron-right" size={24} color="#FFFFFF" />
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
+      ) : (
+        <Animated.View entering={FadeInUp.delay(350).duration(400)}>
+          <View style={[styles.proActiveCard, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={[styles.proBadge, { backgroundColor: LaneColors.now.primary + "15" }]}>
+              <Feather name="check-circle" size={20} color={LaneColors.now.primary} />
+            </View>
+            <View style={styles.proActiveContent}>
+              <ThemedText type="h4">Pro Member</ThemedText>
+              <ThemedText type="small" secondary>
+                {isTrialing ? "Free trial active" : "Full access enabled"}
+              </ThemedText>
+            </View>
+            <Pressable onPress={handleSubscription}>
+              <ThemedText type="small" style={{ color: LaneColors.later.primary }}>
+                Manage
+              </ThemedText>
+            </Pressable>
+          </View>
+        </Animated.View>
+      )}
+
+      <Animated.View entering={FadeInUp.delay(400).duration(400)}>
         <ThemedText type="h4" style={styles.sectionTitle}>
           Quick Actions
         </ThemedText>
@@ -878,4 +932,49 @@ const styles = StyleSheet.create({
   },
   cancelButton: {},
   deleteButton: {},
+  proCard: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  proCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  proIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
+  },
+  proTextContainer: {
+    flex: 1,
+  },
+  proTitle: {
+    color: "#FFFFFF",
+  },
+  proSubtitle: {
+    color: "rgba(255,255,255,0.8)",
+  },
+  proActiveCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  proBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
+  },
+  proActiveContent: {
+    flex: 1,
+  },
 });
