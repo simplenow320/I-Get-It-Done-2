@@ -50,7 +50,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { settings, userId } = useTaskStore();
   const { logout, user } = useAuth();
-  const { isPro, isTrialing } = useSubscriptionWithFocusRefetch();
+  const { isPro, isTrialing, isPastDue, trialDaysRemaining } = useSubscriptionWithFocusRefetch();
   
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
@@ -368,18 +368,22 @@ export default function ProfileScreen() {
       ) : (
         <Animated.View entering={FadeInUp.delay(350).duration(400)}>
           <View style={[styles.proActiveCard, { backgroundColor: theme.backgroundDefault }]}>
-            <View style={[styles.proBadge, { backgroundColor: LaneColors.now.primary + "15" }]}>
-              <Feather name="check-circle" size={20} color={LaneColors.now.primary} />
+            <View style={[styles.proBadge, { backgroundColor: isPastDue ? LaneColors.now.primary + "15" : LaneColors.later.primary + "15" }]}>
+              <Feather name={isPastDue ? "alert-circle" : "check-circle"} size={20} color={isPastDue ? LaneColors.now.primary : LaneColors.later.primary} />
             </View>
             <View style={styles.proActiveContent}>
-              <ThemedText type="h4">Pro Member</ThemedText>
+              <ThemedText type="h4">{isPastDue ? "Payment Issue" : "Pro Member"}</ThemedText>
               <ThemedText type="small" secondary>
-                {isTrialing ? "Free trial active" : "Full access enabled"}
+                {isPastDue
+                  ? "Please update payment method"
+                  : isTrialing
+                  ? `${trialDaysRemaining} day${trialDaysRemaining !== 1 ? "s" : ""} left in trial`
+                  : "Full access enabled"}
               </ThemedText>
             </View>
             <Pressable onPress={handleSubscription}>
-              <ThemedText type="small" style={{ color: LaneColors.later.primary }}>
-                Manage
+              <ThemedText type="small" style={{ color: isPastDue ? LaneColors.now.primary : LaneColors.later.primary }}>
+                {isPastDue ? "Fix" : "Manage"}
               </ThemedText>
             </Pressable>
           </View>

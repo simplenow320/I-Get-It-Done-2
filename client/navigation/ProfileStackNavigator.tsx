@@ -9,6 +9,8 @@ import HowItWorksScreen from "@/screens/HowItWorksScreen";
 import ChangePasswordScreen from "@/screens/ChangePasswordScreen";
 import SupportScreen from "@/screens/SupportScreen";
 import SubscriptionScreen from "@/screens/SubscriptionScreen";
+import SubscriptionSuccessScreen from "@/screens/SubscriptionSuccessScreen";
+import SubscriptionCancelScreen from "@/screens/SubscriptionCancelScreen";
 import LandingScreen from "@/screens/LandingScreen";
 import LearnMoreScreen from "@/screens/LearnMoreScreen";
 import FAQScreen from "@/screens/FAQScreen";
@@ -23,6 +25,8 @@ export type ProfileStackParamList = {
   ChangePassword: undefined;
   Support: undefined;
   Subscription: undefined;
+  SubscriptionSuccess: undefined;
+  SubscriptionCancel: undefined;
   TourLanding: { isTour: boolean };
   TourLearnMore: { isTour: boolean };
   TourFAQ: { isTour: boolean };
@@ -89,6 +93,23 @@ export default function ProfileStackNavigator() {
         component={SubscriptionScreen}
         options={{
           title: "Pro Membership",
+        }}
+      />
+      <Stack.Screen
+        name="SubscriptionSuccess"
+        component={SubscriptionSuccessScreen}
+        options={{
+          headerShown: false,
+          presentation: "modal",
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="SubscriptionCancel"
+        component={SubscriptionCancelScreen}
+        options={{
+          headerShown: false,
+          presentation: "modal",
         }}
       />
       <Stack.Screen

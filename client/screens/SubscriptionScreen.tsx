@@ -10,6 +10,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient, getApiUrl } from "@/lib/query-client";
@@ -38,8 +39,9 @@ const FEATURES = [
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { user } = useAuth();
+  const { isPro, isTrialing, isPastDue, isCanceled, status, trialDaysRemaining, refetch } = useSubscription();
   
   const [selectedPlan, setSelectedPlan] = useState<PricingPlan>("annual");
 
@@ -60,6 +62,7 @@ export default function SubscriptionScreen() {
   const checkoutMutation = useMutation({
     mutationFn: async (priceId: string) => {
       const response = await apiRequest("POST", "/api/stripe/create-checkout-session", {
+        userId: user?.id,
         priceId,
       });
       return response.json();
@@ -77,6 +80,29 @@ export default function SubscriptionScreen() {
       } else {
         const errorMessage = data.error || "Could not start checkout.";
         Alert.alert("Error", errorMessage);
+      }
+    },
+    onError: (error: Error) => {
+      Alert.alert("Error", error.message || "Something went wrong. Please try again.");
+    },
+  });
+
+  const portalMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/stripe/create-portal-session", {
+        userId: user?.id,
+      });
+      return response.json();
+    },
+    onSuccess: async (data) => {
+      if (data.url) {
+        if (Platform.OS === "web") {
+          window.location.href = data.url;
+        } else {
+          await Linking.openURL(data.url);
+        }
+      } else {
+        Alert.alert("Error", data.error || "Could not open subscription management.");
       }
     },
     onError: (error: Error) => {
@@ -109,12 +135,152 @@ export default function SubscriptionScreen() {
     checkoutMutation.mutate(priceId);
   };
 
+  const handleManageSubscription = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    portalMutation.mutate();
+  };
+
   const monthlyPrice = monthlyPriceData ? (monthlyPriceData.unit_amount / 100).toFixed(2) : "6.99";
   const annualPrice = annualPriceData ? (annualPriceData.unit_amount / 100).toFixed(2) : "49.99";
   const annualMonthly = annualPriceData ? ((annualPriceData.unit_amount / 100) / 12).toFixed(2) : "4.17";
   const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
 
-  const isLoading = checkoutMutation.isPending;
+  const isLoading = checkoutMutation.isPending || portalMutation.isPending;
+
+  const getStatusMessage = () => {
+    if (isPastDue) {
+      return { text: "Payment failed - please update your payment method", color: LaneColors.now.primary };
+    }
+    if (isCanceled) {
+      return { text: "Your subscription has been canceled", color: theme.textSecondary };
+    }
+    if (isTrialing) {
+      return { text: `${trialDaysRemaining} day${trialDaysRemaining !== 1 ? "s" : ""} left in your free trial`, color: LaneColors.soon.primary };
+    }
+    if (isPro) {
+      return { text: "You have full Pro access", color: LaneColors.later.primary };
+    }
+    return null;
+  };
+
+  const statusMessage = getStatusMessage();
+
+  if (isPro || isTrialing) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+        <Animated.ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingTop: headerHeight + Spacing.lg,
+              paddingBottom: insets.bottom + Spacing.xl,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.header}>
+            <LinearGradient
+              colors={LaneColors.later.gradient as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.iconContainer}
+            >
+              <Feather name="check-circle" size={32} color="#FFFFFF" />
+            </LinearGradient>
+            <ThemedText type="largeTitle" style={styles.title}>
+              Pro Member
+            </ThemedText>
+            {statusMessage ? (
+              <ThemedText type="body" style={[styles.subtitle, { color: statusMessage.color }]}>
+                {statusMessage.text}
+              </ThemedText>
+            ) : null}
+          </Animated.View>
+
+          {isTrialing ? (
+            <Animated.View entering={FadeInUp.delay(150).duration(400)}>
+              <View style={[styles.trialCard, { backgroundColor: LaneColors.soon.primary + "15" }]}>
+                <Feather name="clock" size={24} color={LaneColors.soon.primary} />
+                <View style={styles.trialCardContent}>
+                  <ThemedText type="h4" style={{ color: LaneColors.soon.primary }}>
+                    Trial Period
+                  </ThemedText>
+                  <ThemedText type="small" secondary>
+                    Your trial ends in {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""}. You won't be charged until then.
+                  </ThemedText>
+                </View>
+              </View>
+            </Animated.View>
+          ) : null}
+
+          {isPastDue ? (
+            <Animated.View entering={FadeInUp.delay(150).duration(400)}>
+              <View style={[styles.trialCard, { backgroundColor: LaneColors.now.primary + "15" }]}>
+                <Feather name="alert-circle" size={24} color={LaneColors.now.primary} />
+                <View style={styles.trialCardContent}>
+                  <ThemedText type="h4" style={{ color: LaneColors.now.primary }}>
+                    Payment Issue
+                  </ThemedText>
+                  <ThemedText type="small" secondary>
+                    We couldn't process your payment. Please update your payment method to continue using Pro features.
+                  </ThemedText>
+                </View>
+              </View>
+            </Animated.View>
+          ) : null}
+
+          <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.featuresContainer}>
+            <ThemedText type="h4" style={styles.featuresTitle}>
+              Your Pro Features
+            </ThemedText>
+            <View style={[styles.featuresList, { backgroundColor: theme.backgroundDefault }]}>
+              {FEATURES.map((feature) => (
+                <View key={feature.text} style={styles.featureRow}>
+                  <View style={[styles.featureIcon, { backgroundColor: LaneColors.later.primary + "15" }]}>
+                    <Feather name={feature.icon as any} size={16} color={LaneColors.later.primary} />
+                  </View>
+                  <ThemedText type="body" style={styles.featureText}>
+                    {feature.text}
+                  </ThemedText>
+                  <Feather name="check" size={16} color={LaneColors.later.primary} />
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.ctaContainer}>
+            <Pressable
+              onPress={handleManageSubscription}
+              disabled={isLoading}
+              style={({ pressed }) => [
+                styles.manageButton,
+                { 
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: theme.border,
+                  opacity: (pressed || isLoading) ? 0.9 : 1 
+                },
+              ]}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={theme.text} />
+              ) : (
+                <>
+                  <Feather name="settings" size={20} color={theme.text} />
+                  <ThemedText type="body" style={{ fontWeight: "600" }}>
+                    Manage Subscription
+                  </ThemedText>
+                </>
+              )}
+            </Pressable>
+            <ThemedText type="caption" secondary style={styles.manageNote}>
+              Update payment method, change plan, or cancel
+            </ThemedText>
+          </Animated.View>
+        </Animated.ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -145,6 +311,20 @@ export default function SubscriptionScreen() {
             Start your 7-day free trial today
           </ThemedText>
         </Animated.View>
+
+        {isCanceled ? (
+          <Animated.View entering={FadeInUp.delay(150).duration(400)}>
+            <View style={[styles.trialCard, { backgroundColor: theme.backgroundDefault }]}>
+              <Feather name="info" size={24} color={theme.textSecondary} />
+              <View style={styles.trialCardContent}>
+                <ThemedText type="h4">Welcome Back</ThemedText>
+                <ThemedText type="small" secondary>
+                  Your previous subscription was canceled. Start a new subscription to regain Pro access.
+                </ThemedText>
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
 
         {pricesError ? (
           <View style={[styles.errorCard, { backgroundColor: theme.backgroundDefault }]}>
@@ -333,6 +513,18 @@ const styles = StyleSheet.create({
   subtitle: {
     textAlign: "center",
   },
+  trialCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  trialCardContent: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
   errorCard: {
     borderRadius: BorderRadius.lg,
     padding: Spacing.xl,
@@ -439,6 +631,21 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     color: "#FFFFFF",
+  },
+  manageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    width: "100%",
+    marginBottom: Spacing.sm,
+  },
+  manageNote: {
+    textAlign: "center",
   },
   trialNote: {
     textAlign: "center",
