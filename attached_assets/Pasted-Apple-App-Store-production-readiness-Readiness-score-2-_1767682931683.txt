@@ -1,0 +1,52 @@
+Apple App Store production readiness
+Readiness score: 2/5 – Core flows (auth, tasks, voice capture, subscriptions) exist, but current monetization via Stripe web checkout is not App Store-compliant for in-app digital content, and a few policy-facing gaps remain.
+
+Stripe compliance check
+The app sells subscription access via Stripe Checkout/Customer Portal (/api/stripe/create-checkout-session, /api/stripe/create-portal-session) and exposes prices from Stripe tables (/api/stripe/prices) without any StoreKit/iOS IAP path (server/routes.ts). Apple requires in-app purchase for digital services accessed on iOS; this implementation is highly likely to be rejected.
+
+Stripe keys are pulled from Replit connectors at runtime (server/stripeClient.ts), and webhook sync updates user subscription state (server/webhookHandlers.ts). Functionally fine, but none of this is wired to Apple’s billing.
+
+Privacy links exist server-side (/privacy) and the microphone purpose string is defined in app.config.js (NSMicrophoneUsageDescription), which is good, but App Privacy details for payments and voice data still need to be declared in App Store Connect.
+
+Voice “Record” feature review
+Client: Uses expo-audio + expo-file-system to record/transcribe with explicit consent gating and daily caps (client/components/VoiceRecorder.tsx). Consent dialog clearly states data use and links to privacy policy (client/components/ConsentDisclosure.tsx). Microphone usage description is set in app.config.js.
+
+Server: Transcription endpoint enforces auth, enforces a 10‑minute daily cap, rejects overages with 429, sends audio to Deepgram, and deletes temp files after processing (server/routes.ts). Voice usage is tracked per day (shared/schema.ts).
+
+Potential review risks:
+
+Requires network access to Deepgram; no offline fallback. If the service is unreachable, the feature hard-fails.
+
+Uses expo-audio, which is still relatively new; ensure you test on device for interruptions (incoming calls, backgrounding) because there’s no recovery flow beyond a generic error.
+
+No user-facing way to review/delete transcripts once created; clarify this in App Privacy responses.
+
+Replit-ready list to reach 100%
+Replace Stripe web checkout with StoreKit-based IAP for iOS
+
+Implement Apple IAP products and receipt validation; gate Pro features based on StoreKit purchases. Keep Stripe only for web/Android or remove it from the iOS build. (client/screens/SubscriptionScreen.tsx, server/routes.ts)
+
+App Privacy/permission disclosures
+
+Ensure App Store Connect data collection answers cover: microphone audio sent to Deepgram (not stored), subscription identifiers, email, task content, and error logs. Add in-app links to Privacy/Terms from Settings/Profile if not already surfaced. (client/components/ConsentDisclosure.tsx, server/templates/privacy.html)
+
+Voice recording robustness
+
+Add UX for failed recordings (service unavailable, background interruption) and let users discard transcripts. Consider surfacing remaining daily quota in the UI and a retry path. (client/components/VoiceRecorder.tsx)
+
+Payment error handling & receipt sync
+
+Add in-app messaging for payment failures/past_due states pulled from webhooks; ensure users can recover without leaving the app. (client/screens/SubscriptionScreen.tsx, server/webhookHandlers.ts)
+
+Pre-submission device testing matrix
+
+Run on real iOS hardware (14–17) to verify microphone prompts, haptics, and background behavior; attach crash/console logs and screenshots for review evidence.
+
+References
+Commands: ls, find .. -name AGENTS.md -print, cat package.json, rg "record", cd client && rg "record", sed -n … client/components/VoiceRecorder.tsx, sed -n … server/routes.ts, sed -n … server/stripeClient.ts, sed -n … server/webhookHandlers.ts, sed -n … app.config.js, sed -n … client/components/ConsentDisclosure.tsx, sed -n … shared/schema.ts.
+
+Files: server/routes.ts, server/stripeClient.ts, server/webhookHandlers.ts, client/screens/SubscriptionScreen.tsx, client/components/VoiceRecorder.tsx, client/components/ConsentDisclosure.tsx, app.config.js, shared/schema.ts, server/templates/privacy.html.
+
+Testing
+
+⚠️ No automated tests run (not requested).
