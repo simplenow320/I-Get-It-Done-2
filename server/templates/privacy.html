@@ -46,6 +46,12 @@
         padding-top: 0;
         margin-top: 0;
       }
+      h3 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin: 24px 0 12px 0;
+      }
       p {
         font-size: 15px;
         line-height: 1.8;
@@ -71,6 +77,36 @@
       .highlight-box p {
         margin: 0;
         color: #333;
+      }
+      .warning-box {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin: 20px 0;
+      }
+      .warning-box p {
+        margin: 0;
+        color: #856404;
+      }
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 14px;
+      }
+      .data-table th, .data-table td {
+        border: 1px solid #e0e0e0;
+        padding: 12px;
+        text-align: left;
+      }
+      .data-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+        color: #1a1a2e;
+      }
+      .data-table td {
+        color: #444;
       }
       .contact-section {
         background: #f8f9fa;
@@ -108,7 +144,7 @@
   <body>
     <div class="container">
       <h1>Privacy Policy</h1>
-      <div class="last-updated">Last Updated: December 14, 2025</div>
+      <div class="last-updated">Last Updated: January 6, 2026</div>
 
       <div class="highlight-box">
         <p><strong>Our Commitment:</strong> I GET IT DONE is built for people with ADHD. We understand the importance of trust and transparency. Your data is your data, and we're committed to protecting it.</p>
@@ -116,82 +152,232 @@
 
       <h2>1. Information We Collect</h2>
       <p>We collect information to provide and improve our task management services:</p>
+      
+      <h3>Account Information</h3>
       <ul>
-        <li><strong>Account Information:</strong> Email address and password (encrypted) when you create an account</li>
-        <li><strong>Profile Data:</strong> Display name and avatar preferences you choose to set</li>
-        <li><strong>Task Data:</strong> Tasks, subtasks, lanes, timing preferences, and completion history you create within the app</li>
-        <li><strong>Usage Data:</strong> Streak counts, points earned, achievements unlocked, and focus session statistics</li>
-        <li><strong>Team Data:</strong> If using Team mode: team member information, delegated tasks, and collaboration notes</li>
-        <li><strong>Voice Data:</strong> When using voice capture, audio is processed for transcription and immediately deleted after processing</li>
-        <li><strong>Device Information:</strong> Device type, operating system version, and app version for troubleshooting and compatibility</li>
+        <li><strong>Email address</strong> and <strong>password</strong> (encrypted with bcrypt) when you create an account</li>
+        <li><strong>Display name</strong> and avatar preferences you choose to set</li>
+        <li><strong>Device identifiers</strong> for anonymous/device-only accounts</li>
+      </ul>
+
+      <h3>Task and Productivity Data</h3>
+      <ul>
+        <li>Tasks, subtasks, lanes, timing preferences, and completion history</li>
+        <li>Streak counts, points earned, achievements unlocked, and focus session statistics</li>
+        <li>Team member information, delegated tasks, and collaboration notes (if using Team mode)</li>
+      </ul>
+
+      <h3>Voice and Audio Data</h3>
+      <div class="warning-box">
+        <p><strong>Microphone Access:</strong> When you use voice capture, we access your device microphone to record audio. This audio is immediately sent to our transcription service and is NOT stored on our servers after processing.</p>
+      </div>
+      <ul>
+        <li>Audio recordings are processed in real-time for transcription</li>
+        <li>Audio files are deleted immediately after transcription completes</li>
+        <li>Only the resulting text transcript is retained</li>
+        <li>Daily voice usage is tracked (seconds used) but recordings are not stored</li>
+      </ul>
+
+      <h3>Push Notification Data</h3>
+      <ul>
+        <li><strong>Push tokens:</strong> If you enable notifications, we store your device push token to send reminders</li>
+        <li>Notification preferences and scheduling settings</li>
+        <li>You can disable notifications at any time in your device settings</li>
+      </ul>
+
+      <h3>Payment Information</h3>
+      <ul>
+        <li><strong>Stripe Customer ID:</strong> We store a reference to your Stripe customer account</li>
+        <li><strong>Subscription status:</strong> Current plan, trial dates, and billing status</li>
+        <li><strong>We do NOT store:</strong> Credit card numbers, CVV, or full payment details (handled securely by Stripe)</li>
+      </ul>
+
+      <h3>Device and Usage Information</h3>
+      <ul>
+        <li>Device type, operating system version, and app version</li>
+        <li>App usage patterns and feature interactions (anonymized)</li>
+        <li>Crash reports and error logs (without personal data)</li>
       </ul>
 
       <h2>2. How We Use Your Information</h2>
       <p>Your information is used exclusively to:</p>
       <ul>
         <li>Provide the task management and productivity features of the app</li>
+        <li>Process voice recordings into text for quick task capture</li>
+        <li>Extract actionable tasks from your voice transcripts using AI</li>
         <li>Sync your data across devices when you sign in</li>
         <li>Send notifications you've opted into (reminders, focus mode alerts)</li>
+        <li>Process subscription payments and manage your billing</li>
         <li>Calculate and display your progress statistics (streaks, levels, achievements)</li>
         <li>Enable team collaboration features if you use Team mode</li>
         <li>Improve app performance and fix technical issues</li>
         <li>Respond to your support requests</li>
       </ul>
 
-      <h2>3. Data Storage and Security</h2>
+      <h2>3. Third-Party Services and Data Processing</h2>
+      <p>We use the following third-party services to power app features. Each service receives only the minimum data necessary:</p>
+      
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Purpose</th>
+            <th>Data Shared</th>
+            <th>Data Retention</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Deepgram</strong></td>
+            <td>Voice-to-text transcription</td>
+            <td>Audio recordings only</td>
+            <td>Processed immediately, not stored</td>
+          </tr>
+          <tr>
+            <td><strong>OpenAI</strong></td>
+            <td>AI task extraction from transcripts</td>
+            <td>Text transcripts only (no personal identifiers)</td>
+            <td>Not stored by OpenAI for training</td>
+          </tr>
+          <tr>
+            <td><strong>Stripe</strong></td>
+            <td>Payment processing</td>
+            <td>Email, payment method (encrypted)</td>
+            <td>Per Stripe's retention policy</td>
+          </tr>
+          <tr>
+            <td><strong>SendGrid</strong></td>
+            <td>Transactional emails</td>
+            <td>Email address only</td>
+            <td>Email logs retained 30 days</td>
+          </tr>
+          <tr>
+            <td><strong>Apple/Google Push Services</strong></td>
+            <td>Push notifications</td>
+            <td>Device push token, notification content</td>
+            <td>Tokens valid until revoked</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>These services have their own privacy policies:</p>
+      <ul>
+        <li><a href="https://deepgram.com/privacy" target="_blank">Deepgram Privacy Policy</a></li>
+        <li><a href="https://openai.com/privacy" target="_blank">OpenAI Privacy Policy</a></li>
+        <li><a href="https://stripe.com/privacy" target="_blank">Stripe Privacy Policy</a></li>
+        <li><a href="https://sendgrid.com/policies/privacy/" target="_blank">SendGrid Privacy Policy</a></li>
+      </ul>
+
+      <h2>4. Data Storage and Security</h2>
       <p>We take security seriously:</p>
       <ul>
         <li>All passwords are encrypted using industry-standard bcrypt hashing</li>
-        <li>Data is transmitted using HTTPS encryption</li>
+        <li>Authentication uses secure JWT tokens with 7-day expiry</li>
+        <li>All API routes require authentication and verify user identity</li>
+        <li>Rate limiting protects against brute-force attacks</li>
+        <li>Data is transmitted using HTTPS/TLS encryption</li>
         <li>Our database is hosted on secure, enterprise-grade cloud infrastructure</li>
-        <li>We conduct regular security reviews and updates</li>
+        <li>API request logs are sanitized to remove personally identifiable information</li>
         <li>Access to user data is restricted to essential personnel only</li>
       </ul>
-
-      <h2>4. Third-Party Services</h2>
-      <p>We use the following third-party services to power app features:</p>
-      <ul>
-        <li><strong>Deepgram:</strong> For voice-to-text transcription (audio is processed and not stored)</li>
-        <li><strong>OpenAI:</strong> For intelligent task extraction from voice input (text only, no personal data shared)</li>
-        <li><strong>SendGrid:</strong> For sending password reset and support emails</li>
-      </ul>
-      <p>These services have their own privacy policies and handle data according to their terms.</p>
 
       <h2>5. Data Sharing</h2>
       <p>We do not sell, rent, or share your personal information with third parties for marketing purposes. Data may only be shared:</p>
       <ul>
         <li>With team members you explicitly invite in Team mode</li>
+        <li>With the third-party service providers listed above (for app functionality only)</li>
         <li>When required by law or valid legal process</li>
         <li>To protect the safety of users or the public</li>
-        <li>With service providers who help operate the app (under strict confidentiality agreements)</li>
       </ul>
 
       <h2>6. Your Rights and Choices</h2>
       <p>You have control over your data:</p>
       <ul>
+        <li><strong>Microphone Access:</strong> You can revoke microphone permission in your device settings at any time</li>
+        <li><strong>Push Notifications:</strong> You can disable notifications in your device settings or app preferences</li>
         <li><strong>Access:</strong> Request a copy of your data at any time</li>
         <li><strong>Correction:</strong> Update your profile and task information within the app</li>
-        <li><strong>Deletion:</strong> Request complete deletion of your account and all associated data</li>
-        <li><strong>Notifications:</strong> Control all notification preferences in your profile settings</li>
+        <li><strong>Deletion:</strong> Delete your account and all associated data directly in the app (Profile > Delete Account)</li>
+        <li><strong>Subscription:</strong> Cancel your subscription at any time through the app or Stripe Customer Portal</li>
         <li><strong>Export:</strong> Request an export of your task data</li>
       </ul>
-      <p>To exercise these rights, contact us at info@simplenow.co.</p>
+      <p>To exercise these rights or for any questions, contact us at info@simplenow.co.</p>
 
-      <h2>7. Data Retention</h2>
-      <p>We retain your data for as long as your account is active. If you request account deletion:</p>
+      <h2>7. App Store Privacy Labels</h2>
+      <p>In accordance with Apple App Store and Google Play requirements, here is a summary of our data practices:</p>
+      
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Data Type</th>
+            <th>Collected</th>
+            <th>Linked to Identity</th>
+            <th>Used for Tracking</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Email Address</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Name</td>
+            <td>Optional</td>
+            <td>Yes</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Audio Data</td>
+            <td>Processed only</td>
+            <td>No</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Payment Info</td>
+            <td>Via Stripe</td>
+            <td>Yes</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Usage Data</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Device ID</td>
+            <td>Yes</td>
+            <td>No</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Push Token</td>
+            <td>If enabled</td>
+            <td>Yes</td>
+            <td>No</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>8. Data Retention</h2>
+      <p>We retain your data for as long as your account is active. If you delete your account:</p>
       <ul>
         <li>Your personal data will be deleted within 30 days</li>
+        <li>Voice recordings are never stored (deleted immediately after transcription)</li>
         <li>Anonymized, aggregated data may be retained for analytics</li>
         <li>Backup copies are purged according to our backup rotation schedule (maximum 90 days)</li>
+        <li>Stripe may retain transaction records per their legal requirements</li>
       </ul>
 
-      <h2>8. Children's Privacy</h2>
+      <h2>9. Children's Privacy</h2>
       <p>I GET IT DONE is designed for users aged 13 and older. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact us immediately.</p>
 
-      <h2>9. International Users</h2>
+      <h2>10. International Users</h2>
       <p>Our servers are located in the United States. If you access the app from outside the US, your data may be transferred to and processed in the US. By using the app, you consent to this transfer.</p>
 
-      <h2>10. Changes to This Policy</h2>
+      <h2>11. Changes to This Policy</h2>
       <p>We may update this Privacy Policy from time to time. We will notify you of significant changes through the app or via email. The "Last Updated" date at the top indicates when the policy was last revised.</p>
 
       <div class="contact-section">

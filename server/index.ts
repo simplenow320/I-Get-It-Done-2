@@ -12,6 +12,26 @@ import * as path from "path";
 const app = express();
 const log = console.log;
 
+function validateEnvironment(): void {
+  const isProduction = process.env.NODE_ENV === "production";
+  
+  const requiredVars = ["DATABASE_URL"];
+  const recommendedVars = isProduction 
+    ? ["JWT_SECRET", "DEEPGRAM_API_KEY", "OPENAI_API_KEY", "STRIPE_SECRET_KEY"]
+    : [];
+  
+  const missingRequired = requiredVars.filter(v => !process.env[v]);
+  const missingRecommended = recommendedVars.filter(v => !process.env[v]);
+  
+  if (missingRequired.length > 0) {
+    log(`ERROR: Missing required environment variables: ${missingRequired.join(", ")}`);
+  }
+  
+  if (missingRecommended.length > 0 && isProduction) {
+    log(`WARNING: Missing recommended environment variables for production: ${missingRecommended.join(", ")}`);
+  }
+}
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
@@ -284,6 +304,7 @@ async function initStripe() {
 }
 
 (async () => {
+  validateEnvironment();
   setupCors(app);
 
   app.post(
@@ -327,6 +348,15 @@ async function initStripe() {
   app.use("/api/auth/login", authLimiter);
   app.use("/api/auth/register", authLimiter);
   app.use("/api/auth/forgot-password", authLimiter);
+  
+  const errorReportLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: { error: "Too many error reports" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use("/api/errors/report", errorReportLimiter);
   
   setupRequestLogging(app);
 

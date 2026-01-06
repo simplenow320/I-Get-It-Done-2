@@ -1,3 +1,5 @@
+const isProduction = process.env.NODE_ENV === "production";
+
 module.exports = {
   expo: {
     name: "I GET IT DONE",
@@ -10,7 +12,10 @@ module.exports = {
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.igetitdone.app"
+      bundleIdentifier: "com.igetitdone.app",
+      infoPlist: {
+        NSMicrophoneUsageDescription: "I GET IT DONE uses your microphone for voice-to-task capture. Audio is processed for transcription and immediately deleted - we never store your voice recordings.",
+      },
     },
     android: {
       adaptiveIcon: {
@@ -21,7 +26,10 @@ module.exports = {
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
-      package: "com.igetitdone.app"
+      package: "com.igetitdone.app",
+      permissions: [
+        "android.permission.RECORD_AUDIO",
+      ],
     },
     web: {
       output: "single",
@@ -43,9 +51,10 @@ module.exports = {
       reactCompiler: true
     },
     extra: {
-      supabaseUrl: process.env.SUPABASE_URL || "",
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
-      apiUrl: process.env.EXPO_PUBLIC_API_URL || "https://igetitdone.co"
+      apiUrl: process.env.EXPO_PUBLIC_DOMAIN 
+        ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+        : (process.env.EXPO_PUBLIC_API_URL || "https://api.igetitdone.co"),
+      isProduction: isProduction,
     }
   }
 };

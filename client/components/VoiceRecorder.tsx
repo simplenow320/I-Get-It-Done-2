@@ -10,9 +10,14 @@ import Animated, {
   withSpring,
   cancelAnimation 
 } from "react-native-reanimated";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { getApiUrl } from "@/lib/query-client";
 import { LaneColors } from "@/constants/theme";
+import { ConsentDisclosure } from "./ConsentDisclosure";
+
+const MIC_CONSENT_KEY = "microphone_consent_shown";
+const MIC_CONSENT_DECLINED_KEY = "microphone_consent_declined";
 
 interface VoiceRecorderProps {
   onTranscriptionComplete: (text: string) => void;
@@ -34,6 +39,9 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const [loadError, setLoadError] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(DAILY_LIMIT_SECONDS);
+  const [showConsentDisclosure, setShowConsentDisclosure] = useState(false);
+  const [consentDeclined, setConsentDeclined] = useState(false);
+  const pendingRecordingRef = useRef(false);
   
   const audioRecorderRef = useRef<any>(null);
   const AudioModuleRef = useRef<any>(null);
@@ -75,6 +83,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     
     if (Platform.OS !== "web") {
       loadAudioModules();
+      checkPriorConsent();
     }
     
     return () => {
@@ -82,6 +91,17 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       cleanupRecorder();
     };
   }, []);
+  
+  const checkPriorConsent = async () => {
+    try {
+      const declined = await AsyncStorage.getItem(MIC_CONSENT_DECLINED_KEY);
+      if (declined === "true" && isMountedRef.current) {
+        setConsentDeclined(true);
+      }
+    } catch (e) {
+      console.warn("Failed to check prior consent:", e);
+    }
+  };
 
   const cleanupRecorder = async () => {
     if (audioRecorderRef.current) {
@@ -148,7 +168,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
   }, [state]);
 
-  const startRecording = async () => {
+  const checkConsentAndStart = async () => {
     if (!audioModulesLoaded || !AudioRecorderClassRef.current) {
       onError?.("Voice not available");
       return;
@@ -158,18 +178,74 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       onError?.("Daily voice limit reached");
       return;
     }
+    
+    if (consentDeclined) {
+      Alert.alert(
+        "Voice Capture Disabled",
+        "You previously declined voice capture. Would you like to enable it now?",
+        [
+          { text: "Not Now", style: "cancel" },
+          { 
+            text: "Enable", 
+            onPress: async () => {
+              await AsyncStorage.removeItem(MIC_CONSENT_DECLINED_KEY);
+              setConsentDeclined(false);
+              setShowConsentDisclosure(true);
+            }
+          }
+        ]
+      );
+      return;
+    }
 
-    try {
-      if (permissionStatus !== "granted") {
-        const status = await AudioModuleRef.current.requestRecordingPermissionsAsync();
-        if (!isMountedRef.current) return;
-        if (!status.granted) {
-          setPermissionStatus("denied");
-          onError?.("Tap to allow mic access");
-          return;
-        }
-        setPermissionStatus("granted");
+    if (permissionStatus === "granted") {
+      await actuallyStartRecording();
+      return;
+    }
+
+    if (Platform.OS !== "web") {
+      const consentShown = await AsyncStorage.getItem(MIC_CONSENT_KEY);
+      if (!consentShown) {
+        setShowConsentDisclosure(true);
+        return;
       }
+    }
+    
+    await requestPermissionAndStart();
+  };
+
+  const requestPermissionAndStart = async () => {
+    try {
+      const status = await AudioModuleRef.current.requestRecordingPermissionsAsync();
+      if (!isMountedRef.current) return;
+      if (!status.granted) {
+        setPermissionStatus("denied");
+        onError?.("Tap to allow mic access");
+        return;
+      }
+      setPermissionStatus("granted");
+      await actuallyStartRecording();
+    } catch (error) {
+      console.error("Permission request failed:", error);
+      onError?.("Couldn't request microphone permission");
+    }
+  };
+
+  const handleConsentAccept = async () => {
+    setShowConsentDisclosure(false);
+    await AsyncStorage.setItem(MIC_CONSENT_KEY, "true");
+    await requestPermissionAndStart();
+  };
+
+  const handleConsentDecline = async () => {
+    setShowConsentDisclosure(false);
+    setConsentDeclined(true);
+    await AsyncStorage.setItem(MIC_CONSENT_DECLINED_KEY, "true");
+    onError?.("Voice capture declined");
+  };
+
+  const actuallyStartRecording = async () => {
+    try {
 
       await setAudioModeAsyncRef.current({
         allowsRecording: true,
@@ -363,7 +439,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
 
     if (state === "idle") {
-      startRecording();
+      checkConsentAndStart();
     } else if (state === "recording") {
       stopRecording();
     }
@@ -439,6 +515,13 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
           )}
         </Pressable>
       </Animated.View>
+      
+      <ConsentDisclosure
+        visible={showConsentDisclosure}
+        type="microphone"
+        onAccept={handleConsentAccept}
+        onDecline={handleConsentDecline}
+      />
     </View>
   );
 }

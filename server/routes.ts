@@ -1606,6 +1606,28 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
+  app.post("/api/errors/report", optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { message, platform, appVersion, timestamp } = req.body;
+      
+      if (!message || typeof message !== "string" || message.length > 5000) {
+        return res.status(400).json({ error: "Invalid error report" });
+      }
+      
+      console.error("[Client Error]", {
+        message: message.substring(0, 500),
+        platform: String(platform || "unknown").substring(0, 20),
+        appVersion: String(appVersion || "unknown").substring(0, 20),
+        timestamp: String(timestamp || "").substring(0, 30),
+        authenticated: !!req.user,
+      });
+      
+      res.json({ received: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to log error" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
