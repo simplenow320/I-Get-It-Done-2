@@ -51,7 +51,8 @@ The PostgreSQL schema includes tables for `tasks` (with ADHD-specific fields lik
 
 ## External Dependencies
 
--   **Stripe**: Integrated for subscription monetization, including a 7-day free trial, monthly ($6.99), and annual ($49.99) plans. Uses Stripe Customer Portal and Checkout sessions.
+-   **RevenueCat**: Primary payment processor for iOS and Android in-app purchases. Wraps Apple StoreKit and Google Play Billing into a unified SDK. Requires `EXPO_PUBLIC_REVENUECAT_API_KEY_IOS` and `EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID` environment variables.
+-   **Stripe**: Used for web subscriptions only. Monthly ($6.99) and annual ($49.99) plans with 7-day free trial. Uses Stripe Customer Portal and Checkout sessions.
 -   **OpenAI Whisper API**: Used for voice-to-text transcription for quick task capture via the `/api/transcribe` endpoint.
 -   **Deepgram Nova-2**: Utilized for AI-powered voice processing.
 -   **GPT-4o-mini**: Used for AI capabilities.
@@ -81,11 +82,18 @@ The app has achieved **92/100 production readiness score** and is ready for App 
 - Stripe production dry run with test cards
 - Fresh install user journey smoke test
 
-### Dual Billing System
+### Dual Billing System (RevenueCat)
 | Platform | Payment Method | Pricing |
 |----------|---------------|---------|
 | Web | Stripe | $6.99/month, $49.99/year |
-| Android | Stripe | $6.99/month, $49.99/year |
-| iOS | Apple StoreKit | $7.99/month, $59.99/year |
+| Android | RevenueCat (Google Play) | $7.99/month, $59.99/year |
+| iOS | RevenueCat (Apple StoreKit) | $7.99/month, $59.99/year |
 
-iOS prices are higher to maintain margins after Apple's 30% commission (15% after year 1).
+Mobile prices are higher to maintain margins after Apple's 30% commission (15% after year 1) and Google's 15% commission.
+
+### RevenueCat Setup Required
+1. Create account at [app.revenuecat.com](https://app.revenuecat.com)
+2. Add iOS app with bundle ID: `com.igetitdone.app`
+3. Create products in App Store Connect matching RevenueCat
+4. Add API key as `EXPO_PUBLIC_REVENUECAT_API_KEY_IOS` environment variable
+5. Build with EAS (`eas build --platform ios`) - RevenueCat doesn't work in Expo Go

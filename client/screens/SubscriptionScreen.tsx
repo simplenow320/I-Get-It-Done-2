@@ -13,14 +13,12 @@ import { useTheme } from "@/hooks/useTheme";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRevenueCat } from "@/contexts/RevenueCatContext";
 import { queryClient, getApiUrl } from "@/lib/query-client";
 import { 
-  shouldUseStoreKit, 
-  purchaseSubscription, 
+  shouldUseRevenueCat, 
   openSubscriptionManagement,
-  restorePurchases,
-  IOS_PRICES,
-  PlanType 
+  purchaseWithStripe,
 } from "@/lib/billing";
 
 type PricingPlan = "monthly" | "annual";
@@ -47,15 +45,30 @@ const FEATURES = [
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { user } = useAuth();
-  const { isPro, isTrialing, isPastDue, isCanceled, status, trialDaysRemaining, refetch } = useSubscription();
+  const { isPro: isPro_server, isTrialing: isTrialing_server, isPastDue, isCanceled, trialDaysRemaining, refetch } = useSubscription();
+  const { 
+    isReady: rcReady, 
+    isPro: isPro_rc, 
+    isTrialing: isTrialing_rc, 
+    purchasePackage, 
+    restorePurchases,
+    monthlyPackage,
+    annualPackage,
+  } = useRevenueCat();
   
   const [selectedPlan, setSelectedPlan] = useState<PricingPlan>("annual");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const useRC = shouldUseRevenueCat();
+  const isPro = useRC ? isPro_rc : isPro_server;
+  const isTrialing = useRC ? isTrialing_rc : isTrialing_server;
 
   const { data: pricesData, isLoading: loadingPrices, isError: pricesError } = useQuery<PricesResponse>({
     queryKey: ["/api/stripe/prices"],
     staleTime: 1000 * 60 * 10,
+    enabled: !useRC,
     queryFn: async () => {
       const response = await fetch(new URL("/api/stripe/prices", getApiUrl()).toString(), {
         credentials: "include",
@@ -67,69 +80,17 @@ export default function SubscriptionScreen() {
     },
   });
 
-  const isIOS = shouldUseStoreKit();
-  
-  const checkoutMutation = useMutation({
-    mutationFn: async ({ planType, priceId }: { planType: PlanType; priceId?: string }) => {
-      if (!user?.id) throw new Error("Not signed in");
-      return purchaseSubscription(user.id, planType, priceId);
-    },
-    onSuccess: async (result) => {
-      if (result.success) {
-        if (user?.id) {
-          await queryClient.invalidateQueries({ queryKey: ["/api/subscription", user.id] });
-        }
-      } else if (result.error && !result.error.includes("not available")) {
-        Alert.alert("Error", result.error);
-      }
-    },
-    onError: (error: Error) => {
-      Alert.alert("Error", error.message || "Something went wrong. Please try again.");
-    },
-  });
-
-  const portalMutation = useMutation({
-    mutationFn: async () => {
-      if (!user?.id) throw new Error("Not signed in");
-      await openSubscriptionManagement(user.id);
-      return { success: true };
-    },
-    onError: (error: Error) => {
-      Alert.alert("Error", error.message || "Something went wrong. Please try again.");
-    },
-  });
-  
-  const restoreMutation = useMutation({
-    mutationFn: async () => {
-      if (!user?.id) throw new Error("Not signed in");
-      return restorePurchases(user.id);
-    },
-    onSuccess: async (result) => {
-      if (result.success) {
-        if (user?.id) {
-          await queryClient.invalidateQueries({ queryKey: ["/api/subscription", user.id] });
-        }
-        Alert.alert("Success", "Purchases restored successfully");
-      }
-    },
-    onError: (error: Error) => {
-      Alert.alert("Error", error.message || "Could not restore purchases");
-    },
-  });
-
   const prices = pricesData?.prices || [];
   const monthlyPriceData = prices.find((p) => p.recurring?.interval === "month");
   const annualPriceData = prices.find((p) => p.recurring?.interval === "year");
   
-  const monthlyPrice = isIOS 
-    ? IOS_PRICES.monthly.formatted.replace("$", "") 
+  const monthlyPrice = useRC && monthlyPackage 
+    ? monthlyPackage.product.priceString.replace("$", "")
     : monthlyPriceData ? (monthlyPriceData.unit_amount / 100).toFixed(2) : "6.99";
-  const annualPrice = isIOS 
-    ? IOS_PRICES.annual.formatted.replace("$", "") 
+  const annualPrice = useRC && annualPackage
+    ? annualPackage.product.priceString.replace("$", "")
     : annualPriceData ? (annualPriceData.unit_amount / 100).toFixed(2) : "49.99";
-  const annualMonthly = isIOS
-    ? (IOS_PRICES.annual.amount / 12).toFixed(2)
-    : annualPriceData ? ((annualPriceData.unit_amount / 100) / 12).toFixed(2) : "4.17";
+  const annualMonthly = (parseFloat(annualPrice) / 12).toFixed(2);
   const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
 
   const handleSelectPlan = (plan: PricingPlan) => {
@@ -137,33 +98,57 @@ export default function SubscriptionScreen() {
     setSelectedPlan(plan);
   };
 
-  const handleSubscribe = () => {
+  const handleSubscribe = async () => {
     if (!user) {
       Alert.alert("Sign In Required", "Please sign in to subscribe.");
       return;
     }
 
-    const priceId = selectedPlan === "monthly" ? monthlyPriceData?.id : annualPriceData?.id;
-    if (!isIOS && !priceId) {
-      Alert.alert("Error", "Pricing not available. Please try again later.");
-      return;
-    }
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    checkoutMutation.mutate({ planType: selectedPlan, priceId });
+    setIsLoading(true);
+
+    try {
+      if (useRC) {
+        const pkg = selectedPlan === "monthly" ? monthlyPackage : annualPackage;
+        if (!pkg) {
+          Alert.alert("Not Available", "Pricing not available yet. Please try again in a moment.");
+          return;
+        }
+        const success = await purchasePackage(pkg);
+        if (success) {
+          await refetch();
+        }
+      } else {
+        const priceId = selectedPlan === "monthly" ? monthlyPriceData?.id : annualPriceData?.id;
+        if (!priceId) {
+          Alert.alert("Error", "Pricing not available. Please try again later.");
+          return;
+        }
+        await purchaseWithStripe(user.id, priceId);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const handleRestore = () => {
+  const handleRestore = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    restoreMutation.mutate();
+    setIsLoading(true);
+    try {
+      const success = await restorePurchases();
+      if (success) {
+        await refetch();
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleManageSubscription = () => {
+  const handleManageSubscription = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    portalMutation.mutate();
+    if (!user?.id) return;
+    await openSubscriptionManagement(user.id);
   };
-
-  const isLoading = checkoutMutation.isPending || portalMutation.isPending || restoreMutation.isPending;
 
   const getStatusMessage = () => {
     if (isPastDue) {
@@ -182,6 +167,7 @@ export default function SubscriptionScreen() {
   };
 
   const statusMessage = getStatusMessage();
+  const showLoading = isLoading || (!useRC && loadingPrices) || (useRC && !rcReady);
 
   if (isPro || isTrialing) {
     return (
@@ -270,17 +256,17 @@ export default function SubscriptionScreen() {
           <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.ctaContainer}>
             <Pressable
               onPress={handleManageSubscription}
-              disabled={isLoading}
+              disabled={showLoading}
               style={({ pressed }) => [
                 styles.manageButton,
                 { 
                   backgroundColor: theme.backgroundDefault,
                   borderColor: theme.border,
-                  opacity: (pressed || isLoading) ? 0.9 : 1 
+                  opacity: (pressed || showLoading) ? 0.9 : 1 
                 },
               ]}
             >
-              {isLoading ? (
+              {showLoading ? (
                 <ActivityIndicator color={theme.text} />
               ) : (
                 <>
@@ -344,7 +330,7 @@ export default function SubscriptionScreen() {
           </Animated.View>
         ) : null}
 
-        {pricesError ? (
+        {pricesError && !useRC ? (
           <View style={[styles.errorCard, { backgroundColor: theme.backgroundDefault }]}>
             <Feather name="alert-circle" size={24} color={LaneColors.now.primary} />
             <ThemedText type="body" secondary style={styles.errorText}>
@@ -464,10 +450,10 @@ export default function SubscriptionScreen() {
             <Animated.View entering={FadeInDown.delay(400).duration(400)} style={styles.ctaContainer}>
               <Pressable
                 onPress={handleSubscribe}
-                disabled={isLoading || loadingPrices}
+                disabled={showLoading}
                 style={({ pressed }) => [
                   styles.ctaButton,
-                  { opacity: (pressed || isLoading) ? 0.9 : 1 },
+                  { opacity: (pressed || showLoading) ? 0.9 : 1 },
                 ]}
               >
                 <LinearGradient
@@ -476,7 +462,7 @@ export default function SubscriptionScreen() {
                   end={{ x: 1, y: 0 }}
                   style={styles.ctaGradient}
                 >
-                  {isLoading ? (
+                  {showLoading ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <>
@@ -494,10 +480,10 @@ export default function SubscriptionScreen() {
               <ThemedText type="caption" secondary style={styles.cancelNote}>
                 Cancel anytime. No commitment.
               </ThemedText>
-              {isIOS ? (
+              {useRC ? (
                 <Pressable 
                   onPress={handleRestore}
-                  disabled={isLoading}
+                  disabled={showLoading}
                   style={styles.restoreButton}
                 >
                   <ThemedText type="caption" style={{ color: LaneColors.later.primary }}>
@@ -645,46 +631,45 @@ const styles = StyleSheet.create({
   },
   ctaContainer: {
     alignItems: "center",
+    gap: Spacing.sm,
   },
   ctaButton: {
     width: "100%",
-    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
   },
   ctaGradient: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.lg,
   },
   ctaText: {
     color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  trialNote: {
+    textAlign: "center",
+  },
+  cancelNote: {
+    textAlign: "center",
+  },
+  restoreButton: {
+    marginTop: Spacing.sm,
+    paddingVertical: Spacing.sm,
   },
   manageButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
     width: "100%",
-    marginBottom: Spacing.sm,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
   },
   manageNote: {
     textAlign: "center",
-  },
-  trialNote: {
-    textAlign: "center",
-    marginBottom: Spacing.xs,
-  },
-  cancelNote: {
-    textAlign: "center",
-  },
-  restoreButton: {
-    marginTop: Spacing.md,
-    paddingVertical: Spacing.sm,
   },
 });

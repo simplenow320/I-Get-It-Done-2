@@ -15,20 +15,22 @@ import { AchievementUnlockModal } from "@/components/AchievementUnlockModal";
 import { TaskStoreProvider } from "@/stores/TaskStore";
 import { GamificationProvider } from "@/stores/GamificationStore";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { RevenueCatProvider } from "@/contexts/RevenueCatContext";
 import { useTheme } from "@/hooks/useTheme";
 
 function AppContent() {
   const { isDark } = useTheme();
+  const { user } = useAuth();
   
   return (
-    <>
+    <RevenueCatProvider userId={user?.id}>
       <NavigationContainer>
         <RootStackNavigator />
       </NavigationContainer>
       <AchievementUnlockModal />
       <StatusBar style={isDark ? "light" : "dark"} />
-    </>
+    </RevenueCatProvider>
   );
 }
 

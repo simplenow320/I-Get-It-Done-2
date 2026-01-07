@@ -34,9 +34,11 @@ export function RevenueCatProvider({ children, userId }: { children: React.React
   const [currentOffering, setCurrentOffering] = useState<PurchasesOffering | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const initRevenueCat = async () => {
       if (Platform.OS === "web") {
-        setIsReady(true);
+        if (isMounted) setIsReady(true);
         return;
       }
 
@@ -47,7 +49,7 @@ export function RevenueCatProvider({ children, userId }: { children: React.React
         
         if (!apiKey) {
           console.log("RevenueCat: No API key configured for", Platform.OS);
-          setIsReady(true);
+          if (isMounted) setIsReady(true);
           return;
         }
 
@@ -57,26 +59,30 @@ export function RevenueCatProvider({ children, userId }: { children: React.React
         });
 
         const info = await Purchases.getCustomerInfo();
-        setCustomerInfo(info);
+        if (isMounted) setCustomerInfo(info);
 
         const offerings = await Purchases.getOfferings();
-        if (offerings.current) {
+        if (isMounted && offerings.current) {
           setCurrentOffering(offerings.current);
         }
 
-        Purchases.addCustomerInfoUpdateListener((info) => {
-          setCustomerInfo(info);
+        Purchases.addCustomerInfoUpdateListener((updatedInfo) => {
+          if (isMounted) setCustomerInfo(updatedInfo);
         });
 
-        setIsReady(true);
+        if (isMounted) setIsReady(true);
       } catch (error) {
         console.error("RevenueCat initialization error:", error);
-        setIsReady(true);
+        if (isMounted) setIsReady(true);
       }
     };
 
     initRevenueCat();
-  }, [userId]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const loginUser = async () => {
