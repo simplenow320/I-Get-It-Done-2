@@ -45,8 +45,13 @@ export function ConsentDisclosure({ visible, type, onAccept, onDecline }: Consen
   const isDark = colorScheme === "dark";
   const content = disclosureContent[type];
 
-  const openPrivacyPolicy = () => {
-    Linking.openURL("/privacy");
+  const openPrivacyPolicy = async () => {
+    try {
+      const privacyUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN || "igetitdone.app"}/privacy`;
+      await Linking.openURL(privacyUrl);
+    } catch (error) {
+      console.error("Failed to open privacy policy:", error);
+    }
   };
 
   return (

@@ -136,10 +136,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const loadAudioModules = async () => {
     try {
-      const [audioModule, fileSystemModule] = await Promise.all([
-        import("expo-audio"),
-        import("expo-file-system/legacy"),
-      ]);
+      const audioModule = await import("expo-audio");
       
       if (!isMountedRef.current) return;
       
@@ -147,9 +144,27 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       setAudioModeAsyncRef.current = audioModule.setAudioModeAsync;
       RecordingPresetsRef.current = audioModule.RecordingPresets;
       AudioRecorderClassRef.current = audioModule.AudioRecorder;
-      FileSystemRef.current = fileSystemModule;
       
-      setAudioModulesLoaded(true);
+      try {
+        const fileSystemModule = await import("expo-file-system/legacy");
+        if (isMountedRef.current) {
+          FileSystemRef.current = fileSystemModule;
+        }
+      } catch (fsError) {
+        console.warn("Failed to load file system module:", fsError);
+        try {
+          const fileSystemFallback = await import("expo-file-system");
+          if (isMountedRef.current) {
+            FileSystemRef.current = fileSystemFallback;
+          }
+        } catch (fsFallbackError) {
+          console.warn("Failed to load file system fallback:", fsFallbackError);
+        }
+      }
+      
+      if (isMountedRef.current) {
+        setAudioModulesLoaded(true);
+      }
       
       try {
         const status = await AudioModuleRef.current.getRecordingPermissionsAsync();
@@ -263,6 +278,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const actuallyStartRecording = async () => {
     try {
+      if (!setAudioModeAsyncRef.current || !AudioRecorderClassRef.current || !RecordingPresetsRef.current) {
+        onError?.("Voice not ready. Try again.");
+        return;
+      }
 
       await setAudioModeAsyncRef.current({
         allowsRecording: true,
@@ -291,10 +310,13 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       
       setState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to start recording:", error);
       if (isMountedRef.current) {
-        onError?.("Couldn't start recording");
+        const message = error?.message?.includes("permission") 
+          ? "Microphone permission required" 
+          : "Couldn't start recording";
+        onError?.(message);
       }
     }
   };
