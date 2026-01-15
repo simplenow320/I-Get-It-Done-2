@@ -86,10 +86,10 @@ export default function SubscriptionScreen() {
   
   const monthlyPrice = useRC && monthlyPackage 
     ? monthlyPackage.product.priceString.replace("$", "")
-    : monthlyPriceData ? (monthlyPriceData.unit_amount / 100).toFixed(2) : "6.99";
+    : useRC ? "7.99" : monthlyPriceData ? (monthlyPriceData.unit_amount / 100).toFixed(2) : "6.99";
   const annualPrice = useRC && annualPackage
     ? annualPackage.product.priceString.replace("$", "")
-    : annualPriceData ? (annualPriceData.unit_amount / 100).toFixed(2) : "49.99";
+    : useRC ? "59.99" : annualPriceData ? (annualPriceData.unit_amount / 100).toFixed(2) : "49.99";
   const annualMonthly = (parseFloat(annualPrice) / 12).toFixed(2);
   const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
 
