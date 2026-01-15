@@ -47,7 +47,7 @@ export function ConsentDisclosure({ visible, type, onAccept, onDecline }: Consen
 
   const openPrivacyPolicy = async () => {
     try {
-      const privacyUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN || "igetitdone.app"}/privacy`;
+      const privacyUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN || "igetitdone.co"}/privacy`;
       await Linking.openURL(privacyUrl);
     } catch (error) {
       console.error("Failed to open privacy policy:", error);
