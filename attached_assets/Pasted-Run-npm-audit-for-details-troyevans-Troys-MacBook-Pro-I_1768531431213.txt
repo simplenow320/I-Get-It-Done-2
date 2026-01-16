@@ -1,0 +1,50 @@
+Run `npm audit` for details.
+troyevans@Troys-MacBook-Pro I-Get-It-Done 6 % npx eas login
+You are already logged in as simplenow.
+✔ Do you want to continue? … yes
+Log in to EAS with email or username (exit and run eas login --help to see other login options)
+✔ Email or username … simplenowapps@gmail.com
+✔ Password … 
+"password": String must contain at least 1 character(s).
+    Error: account:login command failed.
+troyevans@Troys-MacBook-Pro I-Get-It-Done 6 % npx eas login
+You are already logged in as simplenow.
+✔ Do you want to continue? … no
+Aborted
+    Error: account:login command failed.
+troyevans@Troys-MacBook-Pro I-Get-It-Done 6 % npx eas build --platform ios
+✔ Generated eas.json. Learn more: https://docs.expo.dev/build-reference/eas-json/
+EAS project not configured.
+✔ Existing EAS project found for @simplenow/i-get-it-done (id = 99ad023f-5394-483a-8bf9-8c7e330ddfc8). Configure this project? … yes
+
+Warning: Your project uses dynamic app configuration, and the EAS project ID can't automatically be added to it.
+https://docs.expo.dev/workflow/configuration/#dynamic-configuration-with-appconfigjs
+
+To complete the setup process, set "extra.eas.projectId" in your app.config.js:
+
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "99ad023f-5394-483a-8bf9-8c7e330ddfc8"
+      }
+    }
+  }
+}
+
+✖ Linking local project to EAS project 99ad023f-5394-483a-8bf9-8c7e330ddfc8
+Cannot automatically write to dynamic config at: app.config.js
+    Error: build command failed.
+troyevans@Troys-MacBook-Pro I-Get-It-Done 6 % npx eas build --platform ios
+Failed to read the app config from the project using "npx expo config" command: npx expo config --json exited with non-zero code: 1.
+Falling back to the version of "@expo/config" shipped with the EAS CLI.
+Error reading Expo config at /Users/troyevans/Downloads/I-Get-It-Done 6/app.config.js:
+
+Error transforming /Users/troyevans/Downloads/I-Get-It-Done 6/app.config.js: Unexpected token (64:1)
+  62 |     }
+  63 |   }
+> 64 | };
+     | ^
+  65 |     
+    Error: build command failed.
+troyevans@Troys-MacBook-Pro I-Get-It-Done 6 % 
