@@ -73,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const apiUrl = getApiUrl();
       const url = new URL("/api/auth/login", apiUrl).toString();
+      console.log("[Login] Attempting login to:", url);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
