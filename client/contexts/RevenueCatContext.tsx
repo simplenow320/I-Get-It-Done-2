@@ -89,10 +89,19 @@ export function RevenueCatProvider({ children, userId }: { children: React.React
       if (!isReady || Platform.OS === "web" || !userId) return;
       
       try {
+        const isConfigured = await Purchases.isConfigured();
+        if (!isConfigured) {
+          console.log("RevenueCat not configured, skipping login");
+          return;
+        }
         const { customerInfo: info } = await Purchases.logIn(userId);
         setCustomerInfo(info);
-      } catch (error) {
-        console.error("RevenueCat login error:", error);
+      } catch (error: any) {
+        if (error?.message?.includes("singleton") || error?.message?.includes("configure")) {
+          console.log("RevenueCat not available in this environment (Expo Go)");
+        } else {
+          console.error("RevenueCat login error:", error);
+        }
       }
     };
 
