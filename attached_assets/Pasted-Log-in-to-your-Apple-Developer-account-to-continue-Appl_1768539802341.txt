@@ -1,0 +1,52 @@
+Log in to your Apple Developer account to continue
+✔ Apple ID: … simplenowapps@gmail.com
+› Restoring session /Users/troyevans/.app-store/auth/simplenowapps@gmail.com/cookie
+› Team Troy Evans (8HS544W74B)
+› Provider Troy Evans (128370601)
+✔ Logged in Local session
+✔ Created App Store Connect API Key.
+✔ App Store Connect API Key assigned to i-get-it-done: com.igetitdone.app for EAS Submit.
+Press any key to continue...
+
+
+iOS Credentials            
+Project                    @simplenow/i-get-it-done
+Bundle Identifier          com.igetitdone.app
+Apple Team                 8HS544W74B (Troy Evans (Individual))
+                           
+Push Key                   
+Developer Portal ID        49B24GKS6F
+Apple Team                 8HS544W74B (Troy Evans (Individual))
+Updated                    1 month ago
+                           
+App Store Connect API Key  
+Developer Portal ID        GBC97ZCQL8
+Name                       [Expo] EAS Submit ImlQ_qbKR2
+Issuer ID                  65e89113-e8df-4efa-ab35-cb69ab3a7cf3
+Roles                      ADMIN
+Apple Team                 8HS544W74B (Troy Evans (Individual))
+Updated                    11 seconds ago
+                           
+                           
+App Store Configuration    
+                           
+Distribution Certificate   
+Serial Number              5ED994BAF71BD87EE1351D719697946B
+Expiration Date            Mon, 14 Dec 2026 11:50:44 EST
+Apple Team                 8HS544W74B (Troy Evans (Individual))
+Updated                    1 month ago
+                           
+Provisioning Profile       
+Developer Portal ID        9GK5344VGP
+Status                     active
+Expiration                 Mon, 14 Dec 2026 11:50:44 EST
+Apple Team                 8HS544W74B (Troy Evans (Individual))
+Updated                    1 month ago
+                           
+? What do you want to do? › - Use arrow-keys. Return to submit.
+❯   Set up your project to use an API Key for EAS Submit
+    Use an existing API Key for EAS Submit
+    Add a new API Key For EAS Submit
+    Delete an API Key
+    Go back
+
