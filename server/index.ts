@@ -53,6 +53,7 @@ function setupCors(app: express.Application) {
       process.env.REPLIT_DOMAINS.split(",").forEach((d: string) => {
         const domain = d.trim();
         origins.add(`https://${domain}`);
+        origins.add(`https://www.${domain}`); // Handle www
         // Also add with port 5000 for Expo Go native apps
         origins.add(`https://${domain}:5000`);
       });
