@@ -1,0 +1,68 @@
+Distribution Certificate is not validated for non-interactive builds.
+Skipping Provisioning Profile validation on Apple Servers because we aren't authenticated.
+
+Project Credentials Configuration
+
+Project                   @simplenow/i-get-it-done
+Bundle Identifier         com.igetitdone.app
+                          
+App Store Configuration   
+                          
+Distribution Certificate  
+Serial Number             5ED994BAF71BD87EE1351D719697946B
+Expiration Date           Mon, 14 Dec 2026 11:50:44 EST
+Apple Team                8HS544W74B (Troy Evans (Individual))
+Updated                   1 month ago
+                          
+Provisioning Profile      
+Developer Portal ID       9GK5344VGP
+Status                    active
+Expiration                Mon, 14 Dec 2026 11:50:44 EST
+Apple Team                8HS544W74B (Troy Evans (Individual))
+Updated                   1 month ago
+                          
+All credentials are ready to build @simplenow/i-get-it-done (com.igetitdone.app)
+
+
+Compressing project files and uploading to EAS Build. Learn more: https://expo.fyi/eas-build-archive
+✔ Compressed project files 3s (107 MB)
+✔ Uploaded to EAS 14s
+✔ Computed project fingerprint
+
+See logs: https://expo.dev/accounts/simplenow/projects/i-get-it-done/builds/06df9bca-ac36-4f2a-8a2c-200d14f39b6c
+
+Waiting for build to complete. You can press Ctrl+C to exit.
+⠏ Build in progress...
+troyevans@Troys-MacBook-Pro I-Get-It-Done 6 % /Users/troyevans/Downloads/I-Get-It-Done.zip 
+zsh: permission denied: /Users/troyevans/Downloads/I-Get-It-Done.zip
+troyevans@Troys-MacBook-Pro I-Get-It-Done 6 % /Users/troyevans/Downloads/I-Get-It-Done 
+zsh: permission denied: /Users/troyevans/Downloads/I-Get-It-Done
+troyevans@Troys-MacBook-Pro I-Get-It-Done 6 % npx eas-cli build --platform ios --profile production
+/usr/local/lib/node_modules/npm/lib/cli/validate-engines.js:29
+    throw err
+    ^
+
+Error: EPERM: operation not permitted, uv_cwd
+    at process.wrappedCwd (node:internal/bootstrap/switches/does_own_process_state:142:28)
+    at process.cwd (/usr/local/lib/node_modules/npm/node_modules/graceful-fs/polyfills.js:10:19)
+    at new Config (/usr/local/lib/node_modules/npm/node_modules/@npmcli/config/lib/index.js:79:19)
+    at new Npm (/usr/local/lib/node_modules/npm/lib/npm.js:67:19)
+    at module.exports (/usr/local/lib/node_modules/npm/lib/cli/entry.js:14:15)
+    at module.exports (/usr/local/lib/node_modules/npm/lib/cli/validate-engines.js:37:10)
+    at module.exports (/usr/local/lib/node_modules/npm/lib/cli.js:12:31)
+    at Object.<anonymous> (/usr/local/lib/node_modules/npm/bin/npx-cli.js:130:1)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10) {
+  errno: -1,
+  code: 'EPERM',
+  syscall: 'uv_cwd'
+}
+
+Node.js v24.12.0
+troyevans@Troys-MacBook-Pro I-Get-It-Done 6 % cd
+troyevans@Troys-MacBook-Pro ~ % /Users/troyevans/Downloads/I-Get-It-Done 
+zsh: permission denied: /Users/troyevans/Downloads/I-Get-It-Done
+troyevans@Troys-MacBook-Pro ~ % npx eas-cli build --platform ios --profile production
+Run this command inside a project directory.
+    Error: build command failed.
+troyevans@Troys-MacBook-Pro ~ % 
