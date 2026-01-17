@@ -53,7 +53,7 @@ module.exports = {
     extra: {
       apiUrl: process.env.EXPO_PUBLIC_DOMAIN 
         ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-        : (process.env.EXPO_PUBLIC_API_URL || "https://api.igetitdone.co"),
+        : (process.env.EXPO_PUBLIC_API_URL || "https://igetitdone.co"),
       isProduction: isProduction,
       eas: {
         projectId: "99ad023f-5394-483a-8bf9-8c7e330ddfc8"
