@@ -45,7 +45,13 @@ module.exports = {
           backgroundColor: "#000000"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-audio",
+        {
+          microphonePermission: "I GET IT DONE uses your microphone for voice-to-task capture."
+        }
+      ]
     ],
     experiments: {
       reactCompiler: true
