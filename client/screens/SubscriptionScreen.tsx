@@ -34,7 +34,6 @@ export default function SubscriptionScreen() {
     isReady: rcReady, 
     isPro, 
     isTrialing, 
-    trialDaysRemaining,
     purchasePackage, 
     restorePurchases,
     monthlyPackage,
@@ -98,8 +97,8 @@ export default function SubscriptionScreen() {
   };
 
   const getStatusMessage = () => {
-    if (isTrialing && trialDaysRemaining !== undefined) {
-      return { text: `${trialDaysRemaining} day${trialDaysRemaining !== 1 ? "s" : ""} left in your free trial`, color: LaneColors.soon.primary };
+    if (isTrialing) {
+      return { text: "You're on a free trial", color: LaneColors.soon.primary };
     }
     if (isPro) {
       return { text: "You have full Pro access", color: LaneColors.later.primary };
@@ -152,28 +151,13 @@ export default function SubscriptionScreen() {
                     Trial Period
                   </ThemedText>
                   <ThemedText type="small" secondary>
-                    Your trial ends in {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""}. You won't be charged until then.
+                    You're currently on a free trial. You won't be charged until your trial ends.
                   </ThemedText>
                 </View>
               </View>
             </Animated.View>
           ) : null}
 
-          {isPastDue ? (
-            <Animated.View entering={FadeInUp.delay(150).duration(400)}>
-              <View style={[styles.trialCard, { backgroundColor: LaneColors.now.primary + "15" }]}>
-                <Feather name="alert-circle" size={24} color={LaneColors.now.primary} />
-                <View style={styles.trialCardContent}>
-                  <ThemedText type="h4" style={{ color: LaneColors.now.primary }}>
-                    Payment Issue
-                  </ThemedText>
-                  <ThemedText type="small" secondary>
-                    We couldn't process your payment. Please update your payment method to continue using Pro features.
-                  </ThemedText>
-                </View>
-              </View>
-            </Animated.View>
-          ) : null}
 
           <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.featuresContainer}>
             <ThemedText type="h4" style={styles.featuresTitle}>
@@ -257,30 +241,7 @@ export default function SubscriptionScreen() {
           </ThemedText>
         </Animated.View>
 
-        {isCanceled ? (
-          <Animated.View entering={FadeInUp.delay(150).duration(400)}>
-            <View style={[styles.trialCard, { backgroundColor: theme.backgroundDefault }]}>
-              <Feather name="info" size={24} color={theme.textSecondary} />
-              <View style={styles.trialCardContent}>
-                <ThemedText type="h4">Welcome Back</ThemedText>
-                <ThemedText type="small" secondary>
-                  Your previous subscription was canceled. Start a new subscription to regain Pro access.
-                </ThemedText>
-              </View>
-            </View>
-          </Animated.View>
-        ) : null}
-
-        {pricesError && !useRC ? (
-          <View style={[styles.errorCard, { backgroundColor: theme.backgroundDefault }]}>
-            <Feather name="alert-circle" size={24} color={LaneColors.now.primary} />
-            <ThemedText type="body" secondary style={styles.errorText}>
-              Unable to load pricing. Please try again later.
-            </ThemedText>
-          </View>
-        ) : (
-          <>
-            <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.plansContainer}>
+        <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.plansContainer}>
               <Pressable
                 onPress={() => handleSelectPlan("annual")}
                 style={({ pressed }) => [
@@ -471,17 +432,15 @@ export default function SubscriptionScreen() {
               <ThemedText type="caption" secondary style={styles.cancelNote}>
                 Cancel anytime. No commitment.
               </ThemedText>
-              {useRC ? (
-                <Pressable 
-                  onPress={handleRestore}
-                  disabled={showLoading}
-                  style={styles.restoreButton}
-                >
-                  <ThemedText type="caption" style={{ color: LaneColors.later.primary }}>
-                    Restore Purchases
-                  </ThemedText>
-                </Pressable>
-              ) : null}
+              <Pressable 
+                onPress={handleRestore}
+                disabled={showLoading}
+                style={styles.restoreButton}
+              >
+                <ThemedText type="caption" style={{ color: LaneColors.later.primary }}>
+                  Restore Purchases
+                </ThemedText>
+              </Pressable>
               
               <View style={styles.legalLinks}>
                 <Pressable onPress={() => Linking.openURL("https://www.igetitdone.co/privacy")}>
@@ -493,8 +452,6 @@ export default function SubscriptionScreen() {
                 </Pressable>
               </View>
             </Animated.View>
-          </>
-        )}
       </Animated.ScrollView>
     </View>
   );
