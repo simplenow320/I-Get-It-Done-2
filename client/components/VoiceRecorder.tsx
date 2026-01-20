@@ -11,6 +11,8 @@ import Animated, {
   cancelAnimation 
 } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
+import * as FileSystem from "expo-file-system";
 
 import { getApiUrl } from "@/lib/query-client";
 import { LaneColors, Spacing } from "@/constants/theme";
@@ -136,38 +138,20 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const loadAudioModules = async () => {
     try {
-      const audioModule = await import("expo-audio");
-      
       if (!isMountedRef.current) return;
       
-      AudioModuleRef.current = audioModule.AudioModule;
-      setAudioModeAsyncRef.current = audioModule.setAudioModeAsync;
-      RecordingPresetsRef.current = audioModule.RecordingPresets;
-      AudioRecorderClassRef.current = audioModule.AudioRecorder;
-      
-      try {
-        const fileSystemModule = await import("expo-file-system/legacy");
-        if (isMountedRef.current) {
-          FileSystemRef.current = fileSystemModule;
-        }
-      } catch (fsError) {
-        console.warn("Failed to load file system module:", fsError);
-        try {
-          const fileSystemFallback = await import("expo-file-system");
-          if (isMountedRef.current) {
-            FileSystemRef.current = fileSystemFallback;
-          }
-        } catch (fsFallbackError) {
-          console.warn("Failed to load file system fallback:", fsFallbackError);
-        }
-      }
+      AudioModuleRef.current = AudioModule;
+      setAudioModeAsyncRef.current = setAudioModeAsync;
+      RecordingPresetsRef.current = RecordingPresets;
+      AudioRecorderClassRef.current = AudioModule.AudioRecorder;
+      FileSystemRef.current = FileSystem;
       
       if (isMountedRef.current) {
         setAudioModulesLoaded(true);
       }
       
       try {
-        const status = await AudioModuleRef.current.getRecordingPermissionsAsync();
+        const status = await AudioModule.getRecordingPermissionsAsync();
         if (isMountedRef.current && status.granted) {
           setPermissionStatus("granted");
         }
