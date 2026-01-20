@@ -1,11 +1,12 @@
-import React from "react";
-import { StyleSheet, View, ScrollView } from "react-native";
+import React, { useMemo } from "react";
+import { StyleSheet, View, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 
 import { LaneCard } from "@/components/LaneCard";
 import { FloatingAddButton } from "@/components/FloatingAddButton";
@@ -14,7 +15,7 @@ import StreakBadge from "@/components/StreakBadge";
 import { ThemedText } from "@/components/ThemedText";
 import { PaymentStatusBanner } from "@/components/PaymentStatusBanner";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing } from "@/constants/theme";
+import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
 import { useGamification } from "@/stores/GamificationStore";
 import { DashboardStackParamList } from "@/navigation/DashboardStackNavigator";
@@ -27,7 +28,7 @@ export default function DashboardScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { getTasksByLane, unsortedTasks } = useTaskStore();
+  const { getTasksByLane, unsortedTasks, getCompletedTasks } = useTaskStore();
   const { currentStreak } = useGamification();
 
   const handleLanePress = (lane: Lane) => {
@@ -46,6 +47,17 @@ export default function DashboardScreen() {
   const totalSoonTasks = getTasksByLane("soon").length;
   const totalLaterTasks = getTasksByLane("later").length;
   const totalParkTasks = getTasksByLane("park").length;
+
+  const completedToday = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return getCompletedTasks().filter((task) => {
+      if (!task.completedAt) return false;
+      const completedDate = new Date(task.completedAt);
+      completedDate.setHours(0, 0, 0, 0);
+      return completedDate.getTime() === today.getTime();
+    });
+  }, [getCompletedTasks]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -130,6 +142,27 @@ export default function DashboardScreen() {
             </Animated.View>
           </View>
         </View>
+
+        {completedToday.length > 0 ? (
+          <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+            <View style={styles.doneTodaySection}>
+              <View style={styles.doneTodayHeader}>
+                <Feather name="check-circle" size={16} color={LaneColors.later.primary} />
+                <ThemedText type="small" style={{ color: LaneColors.later.primary, marginLeft: Spacing.xs }}>
+                  Done Today
+                </ThemedText>
+              </View>
+              <View style={[styles.doneTodayCard, { backgroundColor: theme.backgroundSecondary }]}>
+                <ThemedText type="h2" style={{ color: LaneColors.later.primary }}>
+                  {completedToday.length}
+                </ThemedText>
+                <ThemedText type="caption" secondary style={{ marginLeft: Spacing.sm }}>
+                  task{completedToday.length !== 1 ? "s" : ""} completed
+                </ThemedText>
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
       </ScrollView>
       <FloatingAddButton onPress={handleAddTask} bottom={tabBarHeight + Spacing.lg} />
     </View>
@@ -167,5 +200,20 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     flex: 1,
+  },
+  doneTodaySection: {
+    marginTop: Spacing.lg,
+  },
+  doneTodayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  doneTodayCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg,
   },
 });
