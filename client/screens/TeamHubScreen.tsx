@@ -41,7 +41,7 @@ export default function TeamHubScreen() {
   const { 
     contacts, addContact, deleteContact, getDelegatedTasks, getDelegatedTasksByContact,
     teamMembers, teamInvites, createTeamInvite, acceptTeamInvite, declineTeamInvite,
-    removeTeamMember, refreshTeamData, delegatedToMeTasks
+    cancelSentInvite, resendInvite, removeTeamMember, refreshTeamData, delegatedToMeTasks
   } = useTaskStore();
 
   const [activeTab, setActiveTab] = useState<TabType>("team");
@@ -157,6 +157,42 @@ export default function TeamHubScreen() {
   const handleDeclineInvite = async (inviteId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await declineTeamInvite(inviteId);
+  };
+
+  const handleCancelSentInvite = (inviteId: string, email: string | undefined) => {
+    Alert.alert(
+      "Cancel Invite",
+      `Cancel the invite to ${email || "this person"}?`,
+      [
+        { text: "Keep", style: "cancel" },
+        {
+          text: "Cancel Invite",
+          style: "destructive",
+          onPress: async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            await cancelSentInvite(inviteId);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleResendInvite = async (inviteId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const newInvite = await resendInvite(inviteId);
+    if (newInvite) {
+      Alert.alert("Invite Resent", `New code: ${newInvite.inviteCode}`, [
+        { text: "Copy", onPress: () => {
+          if (Platform.OS === "web") {
+            navigator.clipboard?.writeText(newInvite.inviteCode);
+          } else {
+            Clipboard.setString(newInvite.inviteCode);
+          }
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }},
+        { text: "OK" }
+      ]);
+    }
   };
 
   const handleJoinWithCode = async () => {
@@ -321,10 +357,19 @@ export default function TeamHubScreen() {
                         </ThemedText>
                       </View>
                     </View>
-                    <View style={[styles.pendingBadge, { backgroundColor: LaneColors.soon.primary + "20" }]}>
-                      <ThemedText type="caption" style={{ color: LaneColors.soon.primary }}>
-                        Pending
-                      </ThemedText>
+                    <View style={styles.sentInviteActions}>
+                      <Pressable
+                        style={[styles.inviteActionButton, { backgroundColor: LaneColors.later.primary + "20" }]}
+                        onPress={() => handleResendInvite(invite.id)}
+                      >
+                        <Feather name="refresh-cw" size={14} color={LaneColors.later.primary} />
+                      </Pressable>
+                      <Pressable
+                        style={[styles.inviteActionButton, { backgroundColor: "#FF3B30" + "20" }]}
+                        onPress={() => handleCancelSentInvite(invite.id, invite.inviteeEmail)}
+                      >
+                        <Feather name="trash-2" size={14} color="#FF3B30" />
+                      </Pressable>
                     </View>
                   </View>
                 ))}
@@ -738,6 +783,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.full,
+  },
+  sentInviteActions: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+  },
+  inviteActionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   delegatedToMeCard: {
     flexDirection: "row",

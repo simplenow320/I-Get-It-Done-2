@@ -153,6 +153,8 @@ interface TaskStoreContext {
   createTeamInvite: (inviteeEmail?: string) => Promise<TeamInvite | null>;
   acceptTeamInvite: (inviteCode: string) => Promise<boolean>;
   declineTeamInvite: (inviteId: string) => Promise<boolean>;
+  cancelSentInvite: (inviteId: string) => Promise<boolean>;
+  resendInvite: (inviteId: string) => Promise<TeamInvite | null>;
   removeTeamMember: (teamMemberId: string) => Promise<boolean>;
   refreshTeamData: () => Promise<void>;
   refreshDelegatedToMe: () => Promise<void>;
@@ -884,6 +886,43 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const cancelSentInvite = useCallback(async (inviteId: string): Promise<boolean> => {
+    try {
+      const response = await apiRequest("DELETE", `/api/team/invite/${inviteId}`);
+      if (response.ok) {
+        setTeamInvites((prev) => ({
+          ...prev,
+          sent: prev.sent.filter((inv) => inv.id !== inviteId),
+        }));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to cancel invite:", error);
+      return false;
+    }
+  }, []);
+
+  const resendInvite = useCallback(async (inviteId: string): Promise<TeamInvite | null> => {
+    if (!userId) return null;
+    try {
+      const oldInvite = teamInvites.sent.find((inv) => inv.id === inviteId);
+      const response = await apiRequest("POST", `/api/team/invite/${inviteId}/resend`, { userId });
+      if (response.ok) {
+        const data = await response.json();
+        setTeamInvites((prev) => ({
+          ...prev,
+          sent: prev.sent.map((inv) => inv.id === inviteId ? data.invite : inv),
+        }));
+        return data.invite;
+      }
+      return oldInvite || null;
+    } catch (error) {
+      console.error("Failed to resend invite:", error);
+      return null;
+    }
+  }, [userId, teamInvites.sent]);
+
   const removeTeamMember = useCallback(async (teamMemberId: string): Promise<boolean> => {
     if (!userId) return false;
     try {
@@ -1005,6 +1044,8 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         createTeamInvite,
         acceptTeamInvite,
         declineTeamInvite,
+        cancelSentInvite,
+        resendInvite,
         removeTeamMember,
         refreshTeamData,
         refreshDelegatedToMe,

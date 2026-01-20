@@ -1264,6 +1264,48 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
     }
   });
 
+  app.delete("/api/team/invite/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      await db.delete(teamInvites).where(eq(teamInvites.id, id));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Cancel invite error:", error);
+      res.status(500).json({ error: "Failed to cancel invite" });
+    }
+  });
+
+  app.post("/api/team/invite/:id/resend", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      const invite = await db.select().from(teamInvites).where(eq(teamInvites.id, id)).limit(1);
+      if (invite.length === 0) {
+        return res.status(404).json({ error: "Invite not found" });
+      }
+      
+      const newCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const newExpiry = new Date();
+      newExpiry.setDate(newExpiry.getDate() + 7);
+      
+      const updated = await db.update(teamInvites)
+        .set({ 
+          inviteCode: newCode, 
+          expiresAt: newExpiry,
+          status: "pending"
+        })
+        .where(eq(teamInvites.id, id))
+        .returning();
+      
+      res.json({ invite: updated[0] });
+    } catch (error) {
+      console.error("Resend invite error:", error);
+      res.status(500).json({ error: "Failed to resend invite" });
+    }
+  });
+
   app.get("/api/team/members/:userId", async (req: Request, res: Response) => {
     try {
       const { userId } = req.params;
