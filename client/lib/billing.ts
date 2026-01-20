@@ -86,13 +86,15 @@ export function getPriceComparison() {
       monthly: "$7.99",
       annual: "$59.99",
       annualMonthly: "$5.00",
+      lifetime: "$149.99",
       savings: 37,
     },
     stripe: {
-      monthly: "$6.99",
-      annual: "$49.99",
-      annualMonthly: "$4.17",
-      savings: 40,
+      monthly: "$7.99",
+      annual: "$59.99",
+      annualMonthly: "$5.00",
+      lifetime: "$149.99",
+      savings: 37,
     },
   };
 }

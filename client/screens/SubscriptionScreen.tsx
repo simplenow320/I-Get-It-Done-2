@@ -21,7 +21,7 @@ import {
   purchaseWithStripe,
 } from "@/lib/billing";
 
-type PricingPlan = "monthly" | "annual";
+type PricingPlan = "monthly" | "annual" | "lifetime";
 
 interface PriceInfo {
   id: string;
@@ -83,13 +83,15 @@ export default function SubscriptionScreen() {
   const prices = pricesData?.prices || [];
   const monthlyPriceData = prices.find((p) => p.recurring?.interval === "month");
   const annualPriceData = prices.find((p) => p.recurring?.interval === "year");
+  const lifetimePriceData = prices.find((p) => !p.recurring);
   
   const monthlyPrice = useRC && monthlyPackage 
     ? monthlyPackage.product.priceString.replace("$", "")
-    : useRC ? "7.99" : monthlyPriceData ? (monthlyPriceData.unit_amount / 100).toFixed(2) : "6.99";
+    : useRC ? "7.99" : monthlyPriceData ? (monthlyPriceData.unit_amount / 100).toFixed(2) : "7.99";
   const annualPrice = useRC && annualPackage
     ? annualPackage.product.priceString.replace("$", "")
-    : useRC ? "59.99" : annualPriceData ? (annualPriceData.unit_amount / 100).toFixed(2) : "49.99";
+    : useRC ? "59.99" : annualPriceData ? (annualPriceData.unit_amount / 100).toFixed(2) : "59.99";
+  const lifetimePrice = "149.99";
   const annualMonthly = (parseFloat(annualPrice) / 12).toFixed(2);
   const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
 
@@ -108,6 +110,20 @@ export default function SubscriptionScreen() {
     setIsLoading(true);
 
     try {
+      if (selectedPlan === "lifetime") {
+        if (useRC) {
+          Alert.alert("Coming Soon", "Lifetime Pro will be available in the App Store soon.");
+          return;
+        }
+        const priceId = lifetimePriceData?.id;
+        if (!priceId) {
+          Alert.alert("Coming Soon", "Lifetime Pro is coming soon. Please check back later.");
+          return;
+        }
+        await purchaseWithStripe(user.id, priceId);
+        return;
+      }
+
       if (useRC) {
         const pkg = selectedPlan === "monthly" ? monthlyPackage : annualPackage;
         if (!pkg) {
@@ -424,6 +440,56 @@ export default function SubscriptionScreen() {
                   </ThemedText>
                   <ThemedText type="small" secondary>
                     /month
+                  </ThemedText>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleSelectPlan("lifetime")}
+                style={({ pressed }) => [
+                  styles.planCard,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    borderColor: selectedPlan === "lifetime" ? LaneColors.later.primary : theme.border,
+                    borderWidth: selectedPlan === "lifetime" ? 2 : 1,
+                    opacity: pressed ? 0.9 : 1,
+                  },
+                ]}
+              >
+                <View style={styles.planBadge}>
+                  <LinearGradient
+                    colors={LaneColors.later.gradient as [string, string]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.savingsBadge}
+                  >
+                    <ThemedText type="caption" style={styles.savingsText}>
+                      BEST DEAL
+                    </ThemedText>
+                  </LinearGradient>
+                </View>
+                <View style={styles.planHeader}>
+                  <View style={[
+                    styles.radioOuter,
+                    { borderColor: selectedPlan === "lifetime" ? LaneColors.later.primary : theme.textSecondary }
+                  ]}>
+                    {selectedPlan === "lifetime" ? (
+                      <View style={[styles.radioInner, { backgroundColor: LaneColors.later.primary }]} />
+                    ) : null}
+                  </View>
+                  <View style={styles.planInfo}>
+                    <ThemedText type="h3">Lifetime Pro</ThemedText>
+                    <ThemedText type="small" secondary>
+                      Pay once, own forever
+                    </ThemedText>
+                  </View>
+                </View>
+                <View style={styles.planPricing}>
+                  <ThemedText type="largeTitle" style={styles.priceAmount}>
+                    ${lifetimePrice}
+                  </ThemedText>
+                  <ThemedText type="small" secondary>
+                    one-time
                   </ThemedText>
                 </View>
               </Pressable>

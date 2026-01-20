@@ -82,14 +82,14 @@ The app has achieved **92/100 production readiness score** and is ready for App 
 - Stripe production dry run with test cards
 - Fresh install user journey smoke test
 
-### Dual Billing System (RevenueCat)
-| Platform | Payment Method | Pricing |
-|----------|---------------|---------|
-| Web | Stripe | $6.99/month, $49.99/year |
-| Android | RevenueCat (Google Play) | $7.99/month, $59.99/year |
-| iOS | RevenueCat (Apple StoreKit) | $7.99/month, $59.99/year |
+### Pricing Plans
+| Plan | Price |
+|------|-------|
+| Monthly | $7.99/month |
+| Annual | $59.99/year ($5.00/mo) |
+| Lifetime Pro | $149.99 one-time |
 
-Mobile prices are higher to maintain margins after Apple's 30% commission (15% after year 1) and Google's 15% commission.
+All platforms (Web/iOS/Android) use the same pricing. 7-day free trial available for monthly and annual plans.
 
 ### RevenueCat Setup Required
 1. Create account at [app.revenuecat.com](https://app.revenuecat.com)
