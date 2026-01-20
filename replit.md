@@ -49,12 +49,32 @@ The application uses a `RootStackNavigator` that branches into `Auth`, `Onboardi
 ### Backend Schema Prepared for Future Features
 The PostgreSQL schema includes tables for `tasks` (with ADHD-specific fields like subtasks, reminder type, focus time, and overdue status), `subtasks`, `user_stats` (for gamification), and `focus_sessions`.
 
+## Required API Keys & Secrets
+
+All secrets are configured in Replit Secrets. The following are required for full functionality:
+
+| Secret | Purpose | Status |
+|--------|---------|--------|
+| `JWT_SECRET` | Authentication token signing | Configured |
+| `SENDGRID_API_KEY` | Password reset emails (from: info@simplenow.co) | Configured |
+| `DEEPGRAM_API_KEY` | Voice-to-text transcription | Configured |
+| `OPENAI_API_KEY` | AI task extraction (GPT-4o-mini) | Configured |
+| `EXPO_PUBLIC_REVENUECAT_API_KEY_IOS` | iOS in-app purchases | Configured |
+| `EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID` | Android in-app purchases | Optional |
+| `STRIPE_SECRET_KEY` | Legacy (being phased out) | Configured |
+| `STRIPE_PUBLISHABLE_KEY` | Legacy (being phased out) | Configured |
+| `STRIPE_WEBHOOK_SECRET` | Legacy (being phased out) | Configured |
+
+**Email Configuration:**
+- SendGrid sender email: `info@simplenow.co`
+- Used for: Password reset codes, support notifications
+
 ## External Dependencies
 
--   **RevenueCat**: Primary payment processor for iOS and Android in-app purchases. Wraps Apple StoreKit and Google Play Billing into a unified SDK. Requires `EXPO_PUBLIC_REVENUECAT_API_KEY_IOS` and `EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID` environment variables. Monthly ($7.99) and annual ($59.99 - saves 37%) plans with 7-day free trial.
--   **OpenAI Whisper API**: Used for voice-to-text transcription for quick task capture via the `/api/transcribe` endpoint.
--   **Deepgram Nova-2**: Utilized for AI-powered voice processing.
--   **GPT-4o-mini**: Used for AI capabilities.
+-   **RevenueCat**: Primary payment processor for iOS and Android in-app purchases. Wraps Apple StoreKit and Google Play Billing into a unified SDK. Monthly ($7.99) and annual ($59.99 - saves 37%) plans with 7-day free trial.
+-   **SendGrid**: Email service for password reset codes and notifications. Sender: info@simplenow.co
+-   **Deepgram Nova-2**: Voice-to-text transcription for quick task capture via `/api/transcribe` endpoint.
+-   **OpenAI GPT-4o-mini**: AI-powered task extraction from voice transcripts.
 -   **AsyncStorage**: For persistent authentication state on the client-side.
 -   **Expo SDK 54**: The framework for React Native development.
 -   **bcrypt**: For password hashing in authentication.
