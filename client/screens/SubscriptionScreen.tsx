@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, ActivityIndicator, Alert, Platform } from "react-native";
+import { StyleSheet, View, Pressable, ActivityIndicator, Alert, Platform, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
@@ -491,6 +491,16 @@ export default function SubscriptionScreen() {
                   </ThemedText>
                 </Pressable>
               ) : null}
+              
+              <View style={styles.legalLinks}>
+                <Pressable onPress={() => Linking.openURL("https://www.igetitdone.co/privacy")}>
+                  <ThemedText type="caption" style={styles.legalLink}>Privacy Policy</ThemedText>
+                </Pressable>
+                <ThemedText type="caption" secondary style={styles.legalSeparator}>|</ThemedText>
+                <Pressable onPress={() => Linking.openURL("https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")}>
+                  <ThemedText type="caption" style={styles.legalLink}>Terms of Use</ThemedText>
+                </Pressable>
+              </View>
             </Animated.View>
           </>
         )}
@@ -671,5 +681,18 @@ const styles = StyleSheet.create({
   },
   manageNote: {
     textAlign: "center",
+  },
+  legalLinks: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  legalLink: {
+    color: LaneColors.later.primary,
+  },
+  legalSeparator: {
+    opacity: 0.5,
   },
 });
