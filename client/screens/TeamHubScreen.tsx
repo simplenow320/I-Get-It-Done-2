@@ -513,26 +513,34 @@ export default function TeamHubScreen() {
             </View>
 
             {activeTab === "team" ? (
-              <View style={styles.teamActions}>
-                <Pressable
-                  style={[styles.actionButton, { backgroundColor: LaneColors.now.primary }]}
-                  onPress={() => setShowInviteModal(true)}
-                >
-                  <Feather name="user-plus" size={18} color="#FFFFFF" />
-                  <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600", marginLeft: Spacing.xs }}>
-                    Invite
+              <>
+                <View style={[styles.privacyNote, { backgroundColor: LaneColors.later.primary + "15" }]}>
+                  <Feather name="shield" size={16} color={LaneColors.later.primary} />
+                  <ThemedText type="small" style={{ color: LaneColors.later.primary, marginLeft: Spacing.xs, flex: 1 }}>
+                    Your personal lanes stay private. Teammates only see tasks you delegate to them.
                   </ThemedText>
-                </Pressable>
-                <Pressable
-                  style={[styles.actionButton, { backgroundColor: theme.backgroundDefault }]}
-                  onPress={() => setShowJoinModal(true)}
-                >
-                  <Feather name="log-in" size={18} color={theme.text} />
-                  <ThemedText type="body" style={{ fontWeight: "600", marginLeft: Spacing.xs }}>
-                    Join Team
-                  </ThemedText>
-                </Pressable>
-              </View>
+                </View>
+                <View style={styles.teamActions}>
+                  <Pressable
+                    style={[styles.actionButton, { backgroundColor: LaneColors.now.primary }]}
+                    onPress={() => setShowInviteModal(true)}
+                  >
+                    <Feather name="user-plus" size={18} color="#FFFFFF" />
+                    <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600", marginLeft: Spacing.xs }}>
+                      Invite
+                    </ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.actionButton, { backgroundColor: theme.backgroundDefault }]}
+                    onPress={() => setShowJoinModal(true)}
+                  >
+                    <Feather name="log-in" size={18} color={theme.text} />
+                    <ThemedText type="body" style={{ fontWeight: "600", marginLeft: Spacing.xs }}>
+                      Join Team
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </>
             ) : (
               <View style={styles.teamHeader}>
                 <ThemedText type="h3">Contacts</ThemedText>
@@ -554,7 +562,7 @@ export default function TeamHubScreen() {
                 No linked team members
               </ThemedText>
               <ThemedText type="body" secondary style={styles.emptyText}>
-                Invite team members or join a team to delegate tasks with real-time updates
+                Invite team members or join a team to delegate tasks. They can update status and you will see their progress in real-time.
               </ThemedText>
             </View>
           ) : (
@@ -564,7 +572,7 @@ export default function TeamHubScreen() {
                 Add your first contact
               </ThemedText>
               <ThemedText type="body" secondary style={styles.emptyText}>
-                Add people you work with to delegate tasks
+                Contacts are for tracking who you assigned tasks to. They do not receive notifications - use Linked Team for real-time collaboration.
               </ThemedText>
               <Pressable
                 onPress={() => setShowAddModal(true)}
@@ -904,6 +912,13 @@ const styles = StyleSheet.create({
   },
   tab: {
     paddingVertical: Spacing.sm,
+  },
+  privacyNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
   },
   teamActions: {
     flexDirection: "row",
