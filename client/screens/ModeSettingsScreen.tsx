@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, TextInput, Alert } from "react-native";
+import { StyleSheet, View, Pressable, TextInput, Alert, ScrollView } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -17,7 +18,6 @@ import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore } from "@/stores/TaskStore";
-import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
 type Mode = "solo" | "team";
 
@@ -110,6 +110,13 @@ export default function ModeSettingsScreen() {
   const [selectedMode, setSelectedMode] = useState<Mode>(settings.mode);
   const [teamCode, setTeamCode] = useState(settings.teamCode || "");
   const [isValidating, setIsValidating] = useState(false);
+  
+  let tabBarHeight = 0;
+  try {
+    tabBarHeight = useBottomTabBarHeight();
+  } catch {
+    tabBarHeight = 80;
+  }
 
   const handleSave = async () => {
     if (selectedMode === "team" && teamCode.trim()) {
@@ -119,12 +126,7 @@ export default function ModeSettingsScreen() {
     } else if (selectedMode === "solo") {
       updateSettings({ mode: selectedMode, teamCode: "" });
     } else if (selectedMode === "team" && !teamCode.trim()) {
-      Alert.alert(
-        "Team Code Required",
-        "Please enter a team code to join a team, or switch to Solo mode.",
-        [{ text: "OK" }]
-      );
-      return;
+      updateSettings({ mode: selectedMode, teamCode: "" });
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     navigation.goBack();
@@ -132,14 +134,15 @@ export default function ModeSettingsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-      <KeyboardAwareScrollViewCompat
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120, flexGrow: 1 },
+          { paddingTop: headerHeight + Spacing.lg, paddingBottom: tabBarHeight + 100 },
         ]}
         showsVerticalScrollIndicator={true}
         bounces={true}
+        alwaysBounceVertical={true}
       >
         <ThemedText type="body" secondary style={styles.description}>
           Choose how you want to work
@@ -190,20 +193,15 @@ export default function ModeSettingsScreen() {
             </ThemedText>
           </View>
         ) : null}
-      </KeyboardAwareScrollViewCompat>
-
-      <View
-        style={[
-          styles.footer,
-          { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.lg },
-        ]}
-      >
-        <Button 
-          title={isValidating ? "Saving..." : "Save Changes"} 
-          onPress={handleSave}
-          disabled={isValidating}
-        />
-      </View>
+        
+        <View style={styles.saveButtonContainer}>
+          <Button 
+            title={isValidating ? "Saving..." : "Save Changes"} 
+            onPress={handleSave}
+            disabled={isValidating}
+          />
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -272,12 +270,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
+  saveButtonContainer: {
+    marginTop: Spacing.xl,
   },
 });
