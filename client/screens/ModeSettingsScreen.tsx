@@ -136,8 +136,10 @@ export default function ModeSettingsScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 },
+          { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120, flexGrow: 1 },
         ]}
+        showsVerticalScrollIndicator={true}
+        bounces={true}
       >
         <ThemedText type="body" secondary style={styles.description}>
           Choose how you want to work

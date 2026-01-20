@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { StyleSheet, View, Pressable, Dimensions } from "react-native";
+import { StyleSheet, View, Pressable, Dimensions, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -120,7 +120,11 @@ export default function FocusModeScreen() {
   return (
     <ThemedView style={styles.container}>
       <Confetti visible={showConfetti} onComplete={() => setShowConfetti(false)} count={40} />
-      <View style={[styles.content, { paddingTop: headerHeight + Spacing.lg, paddingBottom: tabBarHeight + Spacing.xl }]}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.lg, paddingBottom: tabBarHeight + Spacing.xl }]}
+        showsVerticalScrollIndicator={false}
+      >
         <Animated.View entering={FadeInUp.duration(300)} style={styles.header}>
           <ThemedText type="h3">Focus Mode</ThemedText>
           <ThemedText type="small" secondary>
@@ -214,7 +218,7 @@ export default function FocusModeScreen() {
             </ThemedText>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -223,8 +227,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     paddingHorizontal: Spacing.lg,
   },
   header: {

@@ -281,9 +281,9 @@ export default function TeamHubScreen() {
   return (
     <ThemedView style={styles.container}>
       <FlatList
-        data={activeTab === "team" ? teamMembers : contacts}
+        data={activeTab === "team" ? (teamMembers as any[]) : (contacts as any[])}
         keyExtractor={(item) => item.id}
-        renderItem={activeTab === "team" ? renderTeamMemberItem : renderContactItem}
+        renderItem={activeTab === "team" ? (renderTeamMemberItem as any) : (renderContactItem as any)}
         contentContainerStyle={[
           styles.content,
           { paddingTop: headerHeight + Spacing.md, paddingBottom: tabBarHeight + Spacing.xl },
