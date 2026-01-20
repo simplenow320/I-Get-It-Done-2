@@ -1,0 +1,134 @@
+Unknown 0:00
+Yeah, okay, so, so my app already had the EULA and the privacy policy at the bottom of the offerings page in app purchase, you know, monthly, yearly, one time, whatever. So little links at the bottom for the privacy policy and the EULA. I'm using Apples EULA, okay, so I'm just pointing to the Apple link for it. So I had those. And when, when it came back, it said specifically that I needed a link for
+
+Unknown 0:36
+for the EULA in the app,
+
+Unknown 0:40
+app metadata and so I had to go and find where to put that. You might have it already, the metadata, sure,
+
+Unknown 0:51
+yeah, yeah, yeah. I'm
+
+Unknown 1:01
+gonna stop it. I'm gonna I'm gonna go, I'm actually, again, like, you mean on Apple connect, right? Yeah, you had to go in and you have to find the metadata stuff. You have to get wording for and fill it in that, right? So where? Yeah, let me, let me make sure we're talking about the same place. So I had to go to like the version, like so the app, and then like the the version on the left side, so iOS app. And then for, make for for me, it says one, one, dot, I'll reject it, you know, because of last submission. And then inside of there, it's the description. I mean, I'm in right now. So you so you're put me in an app and then ready for review. Are you saying
+
+Unknown 1:51
+so at so are you in the iOS app version screen?
+
+Unknown 1:57
+Yeah, yep. IOS app version yep, yep. And then you got previews and screenshots, right? And then you go down to description.
+
+Unknown 2:09
+Description,
+
+Unknown 2:13
+you see that, so, previews and screenshots, descriptions,
+
+Unknown 2:17
+yeah, so in the description is, is where you have to put you have to paste, if you're using Apple's EULA, which you probably are, you, you have to paste the
+
+Unknown 2:32
+URLs. You You have to paste a cop. You have to paste the URL in there. You have to say, turn, you know, Terms of Use, colon, you know, HTTPS, colon slash, slash, www, apple.com/legal/internet,
+
+Unknown 2:47
+services, iTunes, Dev, st, D, you look I continue the URL. Do you have that the EULA in your, in your, in your app? Yep, I did that the last time. And then so it should be, yes, it should be that same URL. Okay, you have to paste it in that description field,
+
+Unknown 3:13
+which is, you have to paste it there. And you also have to have it under the, see, where is that? Is it? Appre
+
+Unknown 3:25
+For some reason, the
+
+Unknown 3:29
+App Store Connect is going real slow for me.
+
+Unknown 3:34
+There's one so you select it in the where is that? If I could get to other pages, I could
+
+Unknown 3:41
+monetization. I think it's just like, right under, oh, I think it's under App information, but my screen is just spinning around. But then there's a section down in there where it's like, licensing or something. And you you can choose whether you use Apple's End User License Agreement, or you can put your own URL in there. So you have to do it in three different places. It's got to be a link in the app. Like you said you already have. You got to make sure that it's selected, and it might be selected by default under the
+
+Unknown 4:16
+app information. Okay, here we go. Okay, so like on the left side of the screen, where you have iOS app, then you have general, then you have under general, there's app information. And if you go on that app information screen and you scroll down, where is it there?
+
+Unknown 4:38
+My screen is still,
+
+Unknown 4:42
+uh, thought it was right there. Oh, yeah. So license agreement under general information in the middle where you get your bundle ID and SKU, yeah. So license agreement, it might already be set to Apple standard license agreement, yep. Okay, okay, yeah. So I feel.
+
+Unknown 5:00
+Here. That was probably the defaulter we selected. But, yeah, so, so you're squared away in your app. You square it away with this license agreement that last place. Just make sure that you have it under that description under your iOS app. And it's crazy, man. That's insane, like,
+
+Unknown 5:20
+so, yeah, you got to put it in the description like they already know, because they
+
+Unknown 5:28
+know
+
+Unknown 5:29
+you selected under the licensing. Why do I have to copy that and put it in the description?
+
+Unknown 5:38
+Yeah, so they're trying to make it so, like, you know, they're weeding out, like, people, like, it's like a capture, one of those captures, like, like, click, all the you know things that have, you know, horses. And we're like, Hey, man, I can't even see that. But like, man, come on, come on.
+
+Unknown 5:58
+Oh,
+
+Unknown 6:00
+so what is it? Is it called the eu la? Is it
+
+Unknown 6:05
+a URL there I'm looking for, yeah. So yeah, I'll copy this and send it to you.
+
+Unknown 6:16
+Yeah, so I'll put it at the
+
+Unknown 6:19
+copy and I wanted to say
+
+Unknown 6:24
+so many problems right now with just trying to get it to do payments.
+
+Unknown 6:30
+Why payments? Man, Yeah, yours and yours is more complicated than
+
+Unknown 6:37
+mine. Maybe not. What did you
+
+Unknown 6:40
+do? Oh, so, using what revenue cap?
+
+Unknown 6:45
+Oh, my goodness, man. So, um, I don't know how far you I mean I was, I was able to simulate, you know,
+
+Unknown 6:55
+yeah, a payment for, like, monthly and yearly and lifetime. That's all I got those, okay? And so you can't, you can't actually simulate one of them right now. Yeah, I went through everything
+
+Unknown 7:10
+in my in app, it just said replica. Said they fix it. But in app, it's, it wants you to do it through it suddenly have to log in through my sandbox to test it, right, right? And so that's, well, so do you have your phone in developer mode?
+
+Unknown 7:28
+The whole phone? Yeah, the whole phone. No,
+
+Unknown 7:32
+you want to, yeah. You'll want to register your phone with you'll want to put it into developer mode, which I did that a lot when I, like, started, because I knew I was going to use, like, test flight. Okay, so, I mean, it only takes a few minutes, like, you have to submit, I mean, you have to give Apple your UID or EU ID or something like that, and then they give you. What do they do? Man, that was like, I mean, I don't remember the exact steps, because it was about two, two and a half months ago. And a half months ago, but it'll take you, like, 20 minutes.
+
+Unknown 8:08
+Put you gotta so you, you got to put your phone into developer mode, and then you can run test flight, you know, builds and stuff like that. And then, but then you but when you do, when you put your phone into developer mode and you go into your settings, you'll see developer Yeah, well, you'll see here. Here was the confusing thing to me. I thought I was supposed to, like, log out of my Apple ID, yes,
+
+Unknown 8:38
+yeah, no, that's not what you do, you'll get a developer menu in settings, and you have to open developer and then you got to scroll all the way down to the bottom, and then you'll find where you can log in with that sandbox user. That's what, because I keep up to look for, I say it's not here, and look for the sandbox. And that's because I'm not in developer mode Exactly. Yeah, you gotta, you gotta do that and, and so I don't know how you're doing your sandbox users or whatever, but I'm doing the the Gmail ones. Okay, do you know how to do that trick with Gmail? No where, where you so with Gmail, you can put a plus sign after your username, and that would become like additional users. So I get, you know, kansas@gmail.com
+
+Unknown 9:27
+is my normal email address. Well, if you if you say Kashan, if you tell Apple, oh, I got a sandbox user name, Kan Akins,
+
+Unknown 9:37
+plus sign one, then
+
+Unknown 9:41
+it looks at it like that's another user, but on the back end in Gmail, you'll get that email like that. Oh, hey, you know, confirm this. Oh, your email have a billion different boxes, right? So
+
+Unknown 9:56
+you could, you could just keep on stacking what?
