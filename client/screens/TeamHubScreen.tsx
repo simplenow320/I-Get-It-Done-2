@@ -41,7 +41,7 @@ export default function TeamHubScreen() {
   const { 
     contacts, addContact, deleteContact, getDelegatedTasks, getDelegatedTasksByContact,
     teamMembers, teamInvites, createTeamInvite, acceptTeamInvite, declineTeamInvite,
-    cancelSentInvite, resendInvite, removeTeamMember, refreshTeamData, delegatedToMeTasks
+    cancelSentInvite, resendInvite, regenerateInvite, removeTeamMember, refreshTeamData, delegatedToMeTasks
   } = useTaskStore();
 
   const [activeTab, setActiveTab] = useState<TabType>("team");
@@ -54,6 +54,7 @@ export default function TeamHubScreen() {
   const [joinCode, setJoinCode] = useState("");
   const [generatedInvite, setGeneratedInvite] = useState<TeamInvite | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [sentInvitesExpanded, setSentInvitesExpanded] = useState(false);
 
   useEffect(() => {
     refreshTeamData();
@@ -179,9 +180,28 @@ export default function TeamHubScreen() {
 
   const handleResendInvite = async (inviteId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const newInvite = await resendInvite(inviteId);
+    const invite = await resendInvite(inviteId);
+    if (invite) {
+      try {
+        await Share.share({
+          message: `Join my team on I GET IT DONE!\n\nYour invite code: ${invite.inviteCode}\n\nHow to join:\n1. Download the app: https://www.igetitdone.co\n2. Create your account\n3. Go to Team Hub and tap "Join Team"\n4. Enter the code above\n\nOnce connected, we can share tasks with each other!`,
+        });
+      } catch (error) {
+        if (Platform.OS === "web") {
+          navigator.clipboard?.writeText(invite.inviteCode);
+        } else {
+          Clipboard.setString(invite.inviteCode);
+        }
+        Alert.alert("Code Copied", `Invite code: ${invite.inviteCode}`);
+      }
+    }
+  };
+
+  const handleRegenerateInvite = async (inviteId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const newInvite = await regenerateInvite(inviteId);
     if (newInvite) {
-      Alert.alert("Invite Resent", `New code: ${newInvite.inviteCode}`, [
+      Alert.alert("New Code Generated", `New code: ${newInvite.inviteCode}`, [
         { text: "Copy", onPress: () => {
           if (Platform.OS === "web") {
             navigator.clipboard?.writeText(newInvite.inviteCode);
@@ -341,10 +361,22 @@ export default function TeamHubScreen() {
 
             {teamInvites.sent.length > 0 ? (
               <View style={styles.invitesSection}>
-                <ThemedText type="h3" style={styles.sectionTitle}>
-                  Invites Sent
-                </ThemedText>
-                {teamInvites.sent.map((invite) => (
+                <Pressable 
+                  style={styles.invitesSectionHeader}
+                  onPress={() => teamInvites.sent.length > 2 && setSentInvitesExpanded(!sentInvitesExpanded)}
+                >
+                  <ThemedText type="h3" style={styles.sectionTitle}>
+                    Invites Sent ({teamInvites.sent.length})
+                  </ThemedText>
+                  {teamInvites.sent.length > 2 && (
+                    <Feather 
+                      name={sentInvitesExpanded ? "chevron-up" : "chevron-down"} 
+                      size={20} 
+                      color={theme.textSecondary} 
+                    />
+                  )}
+                </Pressable>
+                {(teamInvites.sent.length <= 2 || sentInvitesExpanded ? teamInvites.sent : teamInvites.sent.slice(0, 2)).map((invite) => (
                   <View key={invite.id} style={[styles.sentInviteCard, { backgroundColor: theme.backgroundDefault }]}>
                     <View style={styles.sentInviteInfo}>
                       <Feather name="send" size={16} color={LaneColors.later.primary} />
@@ -362,7 +394,13 @@ export default function TeamHubScreen() {
                         style={[styles.inviteActionButton, { backgroundColor: LaneColors.later.primary + "20" }]}
                         onPress={() => handleResendInvite(invite.id)}
                       >
-                        <Feather name="refresh-cw" size={14} color={LaneColors.later.primary} />
+                        <Feather name="share" size={14} color={LaneColors.later.primary} />
+                      </Pressable>
+                      <Pressable
+                        style={[styles.inviteActionButton, { backgroundColor: LaneColors.soon.primary + "20" }]}
+                        onPress={() => handleRegenerateInvite(invite.id)}
+                      >
+                        <Feather name="refresh-cw" size={14} color={LaneColors.soon.primary} />
                       </Pressable>
                       <Pressable
                         style={[styles.inviteActionButton, { backgroundColor: "#FF3B30" + "20" }]}
@@ -373,6 +411,16 @@ export default function TeamHubScreen() {
                     </View>
                   </View>
                 ))}
+                {teamInvites.sent.length > 2 && !sentInvitesExpanded && (
+                  <Pressable 
+                    style={styles.showMoreButton}
+                    onPress={() => setSentInvitesExpanded(true)}
+                  >
+                    <ThemedText type="caption" style={{ color: LaneColors.later.primary }}>
+                      Show {teamInvites.sent.length - 2} more
+                    </ThemedText>
+                  </Pressable>
+                )}
               </View>
             ) : null}
 
@@ -741,8 +789,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     gap: Spacing.sm,
   },
+  invitesSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   sectionTitle: {
     marginBottom: Spacing.sm,
+  },
+  showMoreButton: {
+    alignItems: "center",
+    paddingVertical: Spacing.xs,
   },
   inviteCard: {
     flexDirection: "row",

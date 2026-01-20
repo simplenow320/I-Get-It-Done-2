@@ -1286,6 +1286,22 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
         return res.status(404).json({ error: "Invite not found" });
       }
       
+      res.json({ invite: invite[0] });
+    } catch (error) {
+      console.error("Resend invite error:", error);
+      res.status(500).json({ error: "Failed to resend invite" });
+    }
+  });
+
+  app.post("/api/team/invite/:id/regenerate", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      const invite = await db.select().from(teamInvites).where(eq(teamInvites.id, id)).limit(1);
+      if (invite.length === 0) {
+        return res.status(404).json({ error: "Invite not found" });
+      }
+      
       const newCode = Math.random().toString(36).substring(2, 10).toUpperCase();
       const newExpiry = new Date();
       newExpiry.setDate(newExpiry.getDate() + 7);
@@ -1301,8 +1317,8 @@ Output: {"tasks": [{"title": "Pick up dry cleaning"}, {"title": "Get milk"}, {"t
       
       res.json({ invite: updated[0] });
     } catch (error) {
-      console.error("Resend invite error:", error);
-      res.status(500).json({ error: "Failed to resend invite" });
+      console.error("Regenerate invite error:", error);
+      res.status(500).json({ error: "Failed to regenerate invite" });
     }
   });
 

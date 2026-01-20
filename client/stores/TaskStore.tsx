@@ -155,6 +155,7 @@ interface TaskStoreContext {
   declineTeamInvite: (inviteId: string) => Promise<boolean>;
   cancelSentInvite: (inviteId: string) => Promise<boolean>;
   resendInvite: (inviteId: string) => Promise<TeamInvite | null>;
+  regenerateInvite: (inviteId: string) => Promise<TeamInvite | null>;
   removeTeamMember: (teamMemberId: string) => Promise<boolean>;
   refreshTeamData: () => Promise<void>;
   refreshDelegatedToMe: () => Promise<void>;
@@ -906,8 +907,23 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const resendInvite = useCallback(async (inviteId: string): Promise<TeamInvite | null> => {
     if (!userId) return null;
     try {
-      const oldInvite = teamInvites.sent.find((inv) => inv.id === inviteId);
+      const existingInvite = teamInvites.sent.find((inv) => inv.id === inviteId);
       const response = await apiRequest("POST", `/api/team/invite/${inviteId}/resend`, { userId });
+      if (response.ok) {
+        const data = await response.json();
+        return data.invite || existingInvite || null;
+      }
+      return existingInvite || null;
+    } catch (error) {
+      console.error("Failed to resend invite:", error);
+      return null;
+    }
+  }, [userId, teamInvites.sent]);
+
+  const regenerateInvite = useCallback(async (inviteId: string): Promise<TeamInvite | null> => {
+    if (!userId) return null;
+    try {
+      const response = await apiRequest("POST", `/api/team/invite/${inviteId}/regenerate`, { userId });
       if (response.ok) {
         const data = await response.json();
         setTeamInvites((prev) => ({
@@ -916,12 +932,12 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         }));
         return data.invite;
       }
-      return oldInvite || null;
+      return null;
     } catch (error) {
-      console.error("Failed to resend invite:", error);
+      console.error("Failed to regenerate invite:", error);
       return null;
     }
-  }, [userId, teamInvites.sent]);
+  }, [userId]);
 
   const removeTeamMember = useCallback(async (teamMemberId: string): Promise<boolean> => {
     if (!userId) return false;
@@ -1046,6 +1062,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         declineTeamInvite,
         cancelSentInvite,
         resendInvite,
+        regenerateInvite,
         removeTeamMember,
         refreshTeamData,
         refreshDelegatedToMe,
