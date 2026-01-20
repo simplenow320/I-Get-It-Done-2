@@ -13,7 +13,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.igetitdone.app",
-      buildNumber: "12",
+      buildNumber: "13",
       infoPlist: {
         NSMicrophoneUsageDescription: "I GET IT DONE uses your microphone for voice-to-task capture. Audio is processed for transcription and immediately deleted - we never store your voice recordings.",
       },
