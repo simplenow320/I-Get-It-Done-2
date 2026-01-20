@@ -96,6 +96,7 @@ export interface LaneTimings {
 
 export interface UserSettings {
   mode: "solo" | "team";
+  teamCode: string;
   laneTimings: LaneTimings;
   onboardingComplete: boolean;
 }
@@ -161,6 +162,7 @@ interface TaskStoreContext {
 
 const defaultSettings: UserSettings = {
   mode: "solo",
+  teamCode: "",
   laneTimings: {
     now: "same_day",
     soon: "2_3_days",

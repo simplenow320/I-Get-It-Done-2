@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable } from "react-native";
+import { StyleSheet, View, Pressable, TextInput, Alert } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,6 +17,7 @@ import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore } from "@/stores/TaskStore";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
 type Mode = "solo" | "team";
 
@@ -107,17 +108,33 @@ export default function ModeSettingsScreen() {
   const navigation = useNavigation();
   const { settings, updateSettings } = useTaskStore();
   const [selectedMode, setSelectedMode] = useState<Mode>(settings.mode);
+  const [teamCode, setTeamCode] = useState(settings.teamCode || "");
+  const [isValidating, setIsValidating] = useState(false);
 
-  const handleSave = () => {
-    updateSettings({ mode: selectedMode });
+  const handleSave = async () => {
+    if (selectedMode === "team" && teamCode.trim()) {
+      setIsValidating(true);
+      updateSettings({ mode: selectedMode, teamCode: teamCode.trim() });
+      setIsValidating(false);
+    } else if (selectedMode === "solo") {
+      updateSettings({ mode: selectedMode, teamCode: "" });
+    } else if (selectedMode === "team" && !teamCode.trim()) {
+      Alert.alert(
+        "Team Code Required",
+        "Please enter a team code to join a team, or switch to Solo mode.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     navigation.goBack();
   };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-      <View
-        style={[
+      <KeyboardAwareScrollViewCompat
+        style={styles.scrollView}
+        contentContainerStyle={[
           styles.content,
           { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 },
         ]}
@@ -144,7 +161,34 @@ export default function ModeSettingsScreen() {
             icon="users"
           />
         </View>
-      </View>
+
+        {selectedMode === "team" ? (
+          <View style={styles.teamCodeSection}>
+            <ThemedText type="caption" style={styles.teamCodeLabel}>
+              Team Code
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.teamCodeInput,
+                {
+                  backgroundColor: theme.backgroundSecondary,
+                  color: theme.text,
+                  borderColor: theme.border,
+                },
+              ]}
+              placeholder="Enter your team code"
+              placeholderTextColor={theme.textSecondary}
+              value={teamCode}
+              onChangeText={setTeamCode}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <ThemedText type="caption" secondary style={styles.teamCodeHint}>
+              Get this code from your team leader
+            </ThemedText>
+          </View>
+        ) : null}
+      </KeyboardAwareScrollViewCompat>
 
       <View
         style={[
@@ -152,7 +196,11 @@ export default function ModeSettingsScreen() {
           { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.lg },
         ]}
       >
-        <Button title="Save Changes" onPress={handleSave} />
+        <Button 
+          title={isValidating ? "Saving..." : "Save Changes"} 
+          onPress={handleSave}
+          disabled={isValidating}
+        />
       </View>
     </View>
   );
@@ -162,13 +210,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  content: {
     paddingHorizontal: Spacing.lg,
     gap: Spacing.lg,
   },
   description: {
     textAlign: "center",
+  },
+  teamCodeSection: {
+    marginTop: Spacing.md,
+    gap: Spacing.sm,
+  },
+  teamCodeLabel: {
+    marginBottom: Spacing.xs,
+  },
+  teamCodeInput: {
+    height: 48,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    fontSize: 16,
+  },
+  teamCodeHint: {
+    marginTop: Spacing.xs,
   },
   cardsContainer: {
     gap: Spacing.md,
