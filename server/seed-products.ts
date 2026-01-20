@@ -41,7 +41,7 @@ async function createProducts() {
 
   const monthlyPrice = await stripe.prices.create({
     product: product.id,
-    unit_amount: 699,
+    unit_amount: 799,
     currency: 'usd',
     recurring: {
       interval: 'month',
@@ -51,22 +51,22 @@ async function createProducts() {
     },
   });
   
-  console.log('Created monthly price:', monthlyPrice.id, '- $6.99/month');
+  console.log('Created monthly price:', monthlyPrice.id, '- $7.99/month');
 
   const annualPrice = await stripe.prices.create({
     product: product.id,
-    unit_amount: 4999,
+    unit_amount: 5999,
     currency: 'usd',
     recurring: {
       interval: 'year',
     },
     metadata: {
       plan: 'annual',
-      savings: '40%',
+      savings: '37%',
     },
   });
   
-  console.log('Created annual price:', annualPrice.id, '- $49.99/year');
+  console.log('Created annual price:', annualPrice.id, '- $59.99/year');
 
   console.log('\n--- Product Setup Complete ---');
   console.log('Product ID:', product.id);

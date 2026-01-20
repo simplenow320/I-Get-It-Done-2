@@ -6,32 +6,15 @@ import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInUp, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useQuery, useMutation } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRevenueCat } from "@/contexts/RevenueCatContext";
-import { queryClient, getApiUrl } from "@/lib/query-client";
-import { 
-  shouldUseRevenueCat, 
-  openSubscriptionManagement,
-  purchaseWithStripe,
-} from "@/lib/billing";
+import { openSubscriptionManagement } from "@/lib/billing";
 
 type PricingPlan = "monthly" | "annual" | "lifetime";
-
-interface PriceInfo {
-  id: string;
-  unit_amount: number;
-  recurring: { interval: string };
-}
-
-interface PricesResponse {
-  prices: PriceInfo[];
-}
 
 const FEATURES = [
   { icon: "zap", text: "Unlimited tasks across all lanes" },
@@ -47,11 +30,11 @@ export default function SubscriptionScreen() {
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { isPro: isPro_server, isTrialing: isTrialing_server, isPastDue, isCanceled, trialDaysRemaining, refetch } = useSubscription();
   const { 
     isReady: rcReady, 
-    isPro: isPro_rc, 
-    isTrialing: isTrialing_rc, 
+    isPro, 
+    isTrialing, 
+    trialDaysRemaining,
     purchasePackage, 
     restorePurchases,
     monthlyPackage,
@@ -61,36 +44,8 @@ export default function SubscriptionScreen() {
   const [selectedPlan, setSelectedPlan] = useState<PricingPlan>("annual");
   const [isLoading, setIsLoading] = useState(false);
 
-  const useRC = shouldUseRevenueCat();
-  const isPro = useRC ? isPro_rc : isPro_server;
-  const isTrialing = useRC ? isTrialing_rc : isTrialing_server;
-
-  const { data: pricesData, isLoading: loadingPrices, isError: pricesError } = useQuery<PricesResponse>({
-    queryKey: ["/api/stripe/prices"],
-    staleTime: 1000 * 60 * 10,
-    enabled: !useRC,
-    queryFn: async () => {
-      const response = await fetch(new URL("/api/stripe/prices", getApiUrl()).toString(), {
-        credentials: "include",
-      });
-      if (!response.ok) {
-        throw new Error("Failed to fetch prices");
-      }
-      return response.json();
-    },
-  });
-
-  const prices = pricesData?.prices || [];
-  const monthlyPriceData = prices.find((p) => p.recurring?.interval === "month");
-  const annualPriceData = prices.find((p) => p.recurring?.interval === "year");
-  const lifetimePriceData = prices.find((p) => !p.recurring);
-  
-  const monthlyPrice = useRC && monthlyPackage 
-    ? monthlyPackage.product.priceString.replace("$", "")
-    : useRC ? "7.99" : monthlyPriceData ? (monthlyPriceData.unit_amount / 100).toFixed(2) : "7.99";
-  const annualPrice = useRC && annualPackage
-    ? annualPackage.product.priceString.replace("$", "")
-    : useRC ? "59.99" : annualPriceData ? (annualPriceData.unit_amount / 100).toFixed(2) : "59.99";
+  const monthlyPrice = monthlyPackage?.product.priceString.replace("$", "") || "7.99";
+  const annualPrice = annualPackage?.product.priceString.replace("$", "") || "59.99";
   const lifetimePrice = "149.99";
   const annualMonthly = (parseFloat(annualPrice) / 12).toFixed(2);
   const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
@@ -111,37 +66,16 @@ export default function SubscriptionScreen() {
 
     try {
       if (selectedPlan === "lifetime") {
-        if (useRC) {
-          Alert.alert("Coming Soon", "Lifetime Pro will be available in the App Store soon.");
-          return;
-        }
-        const priceId = lifetimePriceData?.id;
-        if (!priceId) {
-          Alert.alert("Coming Soon", "Lifetime Pro is coming soon. Please check back later.");
-          return;
-        }
-        await purchaseWithStripe(user.id, priceId);
+        Alert.alert("Coming Soon", "Lifetime Pro will be available in the App Store soon.");
         return;
       }
 
-      if (useRC) {
-        const pkg = selectedPlan === "monthly" ? monthlyPackage : annualPackage;
-        if (!pkg) {
-          Alert.alert("Not Available", "Pricing not available yet. Please try again in a moment.");
-          return;
-        }
-        const success = await purchasePackage(pkg);
-        if (success) {
-          await refetch();
-        }
-      } else {
-        const priceId = selectedPlan === "monthly" ? monthlyPriceData?.id : annualPriceData?.id;
-        if (!priceId) {
-          Alert.alert("Error", "Pricing not available. Please try again later.");
-          return;
-        }
-        await purchaseWithStripe(user.id, priceId);
+      const pkg = selectedPlan === "monthly" ? monthlyPackage : annualPackage;
+      if (!pkg) {
+        Alert.alert("Not Available", "Pricing not available yet. Please try again in a moment.");
+        return;
       }
+      await purchasePackage(pkg);
     } finally {
       setIsLoading(false);
     }
@@ -151,10 +85,7 @@ export default function SubscriptionScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsLoading(true);
     try {
-      const success = await restorePurchases();
-      if (success) {
-        await refetch();
-      }
+      await restorePurchases();
     } finally {
       setIsLoading(false);
     }
@@ -167,13 +98,7 @@ export default function SubscriptionScreen() {
   };
 
   const getStatusMessage = () => {
-    if (isPastDue) {
-      return { text: "Payment failed - please update your payment method", color: LaneColors.now.primary };
-    }
-    if (isCanceled) {
-      return { text: "Your subscription has been canceled", color: theme.textSecondary };
-    }
-    if (isTrialing) {
+    if (isTrialing && trialDaysRemaining !== undefined) {
       return { text: `${trialDaysRemaining} day${trialDaysRemaining !== 1 ? "s" : ""} left in your free trial`, color: LaneColors.soon.primary };
     }
     if (isPro) {
@@ -183,7 +108,7 @@ export default function SubscriptionScreen() {
   };
 
   const statusMessage = getStatusMessage();
-  const showLoading = isLoading || (!useRC && loadingPrices) || (useRC && !rcReady);
+  const showLoading = isLoading || !rcReady;
 
   if (isPro || isTrialing) {
     return (

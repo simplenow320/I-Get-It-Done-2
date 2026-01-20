@@ -51,8 +51,7 @@ The PostgreSQL schema includes tables for `tasks` (with ADHD-specific fields lik
 
 ## External Dependencies
 
--   **RevenueCat**: Primary payment processor for iOS and Android in-app purchases. Wraps Apple StoreKit and Google Play Billing into a unified SDK. Requires `EXPO_PUBLIC_REVENUECAT_API_KEY_IOS` and `EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID` environment variables.
--   **Stripe**: Used for web subscriptions only. Monthly ($6.99) and annual ($49.99) plans with 7-day free trial. Uses Stripe Customer Portal and Checkout sessions.
+-   **RevenueCat**: Primary payment processor for iOS and Android in-app purchases. Wraps Apple StoreKit and Google Play Billing into a unified SDK. Requires `EXPO_PUBLIC_REVENUECAT_API_KEY_IOS` and `EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID` environment variables. Monthly ($7.99) and annual ($59.99 - saves 37%) plans with 7-day free trial.
 -   **OpenAI Whisper API**: Used for voice-to-text transcription for quick task capture via the `/api/transcribe` endpoint.
 -   **Deepgram Nova-2**: Utilized for AI-powered voice processing.
 -   **GPT-4o-mini**: Used for AI capabilities.
@@ -72,14 +71,13 @@ The app has achieved **92/100 production readiness score** and is ready for App 
 - App Store Privacy Disclosure guide at `/app-store-privacy`
 - Support page at `/support`
 - Demo account for Apple review: `demo@igetitdone.co` / `AppleReview2024!`
-- Stripe integration with products configured ($6.99/month, $49.99/year with 7-day trial)
-- StoreKit placeholder for iOS (ready for App Store submission)
+- RevenueCat integration for iOS/Android subscriptions ($7.99/month, $59.99/year with 7-day trial)
+- StoreKit configuration for iOS (ready for App Store submission)
 
 **Remaining Manual Verification:**
 - Push notification testing on physical devices
 - Voice capture verification on iOS/Android
 - Team delegation end-to-end QA
-- Stripe production dry run with test cards
 - Fresh install user journey smoke test
 
 ### Pricing Plans
