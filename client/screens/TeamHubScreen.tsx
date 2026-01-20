@@ -293,11 +293,39 @@ export default function TeamHubScreen() {
             {teamInvites.received.length > 0 ? (
               <View style={styles.invitesSection}>
                 <ThemedText type="h3" style={styles.sectionTitle}>
-                  Pending Invites
+                  Invites Received
                 </ThemedText>
                 {teamInvites.received.map((invite) => (
                   <View key={invite.id}>
                     {renderReceivedInvite({ item: invite })}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {teamInvites.sent.length > 0 ? (
+              <View style={styles.invitesSection}>
+                <ThemedText type="h3" style={styles.sectionTitle}>
+                  Invites Sent
+                </ThemedText>
+                {teamInvites.sent.map((invite) => (
+                  <View key={invite.id} style={[styles.sentInviteCard, { backgroundColor: theme.backgroundDefault }]}>
+                    <View style={styles.sentInviteInfo}>
+                      <Feather name="send" size={16} color={LaneColors.later.primary} />
+                      <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                        <ThemedText type="body" style={{ fontWeight: "500" }}>
+                          {invite.inviteeEmail || "Anyone with code"}
+                        </ThemedText>
+                        <ThemedText type="caption" secondary>
+                          Code: {invite.inviteCode}
+                        </ThemedText>
+                      </View>
+                    </View>
+                    <View style={[styles.pendingBadge, { backgroundColor: LaneColors.soon.primary + "20" }]}>
+                      <ThemedText type="caption" style={{ color: LaneColors.soon.primary }}>
+                        Pending
+                      </ThemedText>
+                    </View>
                   </View>
                 ))}
               </View>
@@ -693,6 +721,23 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+  },
+  sentInviteCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  sentInviteInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  pendingBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
   },
   delegatedToMeCard: {
     flexDirection: "row",
