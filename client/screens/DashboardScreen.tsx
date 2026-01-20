@@ -143,26 +143,24 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {completedToday.length > 0 ? (
-          <Animated.View entering={FadeInUp.delay(300).duration(400)}>
-            <View style={styles.doneTodaySection}>
-              <View style={styles.doneTodayHeader}>
-                <Feather name="check-circle" size={16} color={LaneColors.later.primary} />
-                <ThemedText type="small" style={{ color: LaneColors.later.primary, marginLeft: Spacing.xs }}>
-                  Done Today
-                </ThemedText>
-              </View>
-              <View style={[styles.doneTodayCard, { backgroundColor: theme.backgroundSecondary }]}>
-                <ThemedText type="h2" style={{ color: LaneColors.later.primary }}>
-                  {completedToday.length}
-                </ThemedText>
-                <ThemedText type="caption" secondary style={{ marginLeft: Spacing.sm }}>
-                  task{completedToday.length !== 1 ? "s" : ""} completed
-                </ThemedText>
-              </View>
+        <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+          <View style={styles.doneTodaySection}>
+            <View style={styles.doneTodayHeader}>
+              <Feather name="check-circle" size={16} color={LaneColors.later.primary} />
+              <ThemedText type="small" style={{ color: LaneColors.later.primary, marginLeft: Spacing.xs }}>
+                Done Today
+              </ThemedText>
             </View>
-          </Animated.View>
-        ) : null}
+            <View style={[styles.doneTodayCard, { backgroundColor: theme.backgroundSecondary }]}>
+              <ThemedText type="h2" style={{ color: LaneColors.later.primary }}>
+                {completedToday.length}
+              </ThemedText>
+              <ThemedText type="caption" secondary style={{ marginLeft: Spacing.sm }}>
+                task{completedToday.length !== 1 ? "s" : ""} completed
+              </ThemedText>
+            </View>
+          </View>
+        </Animated.View>
       </ScrollView>
       <FloatingAddButton onPress={handleAddTask} bottom={tabBarHeight + Spacing.lg} />
     </View>
