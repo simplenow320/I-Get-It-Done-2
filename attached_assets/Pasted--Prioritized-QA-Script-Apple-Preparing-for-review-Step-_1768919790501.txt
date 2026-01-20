@@ -1,0 +1,206 @@
+## Prioritized QA Script (Apple “Preparing for review”) — Step-by-step with Pass/Fail + Evidence
+
+Scope: This script is derived from Apple’s **Preparing for review** page and its **Avoiding common issues** section. [Source](https://developer.apple.com/distribute/app-review/)
+
+---
+
+### P0 (Blockers) — Run these first (highest rejection risk)
+
+#### Step 1 — **App is complete and ready (no known crashes/bugs)**
+**Action:** Run the app end-to-end and confirm it’s complete and ready to publish; test on devices running the latest software; fix all bugs before submitting.  
+**Pass criteria:** No crashes; no known bugs remaining; core flows work on latest OS.  
+**Fail criteria:** Any crash, reproducible bug, or incomplete feature found.  
+**Evidence to capture:**  
+- Screen recording of a full “happy path” session on a device running latest OS  
+- Bug list showing “0 open critical/high issues” and/or crash logs if any occur  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 2 — **No placeholder content**
+**Action:** Inspect every screen and any downloadable/embedded content for placeholder images/text or “in progress” areas.  
+**Pass criteria:** All images and text are finalized; nothing looks like a template or stub.  
+**Fail criteria:** Any placeholder text (e.g., “lorem ipsum”, “coming soon”), temporary images, unfinished screens/flows.  
+**Evidence to capture:**  
+- Screenshot set covering all main screens and key flows  
+- A short screen recording scrolling through the UI to prove no placeholders  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 3 — **All in-app links work + required links present**
+**Action:** Tap every link in the app; verify required links exist: **user support contact** and **privacy policy**.  
+**Pass criteria:** Every link opens and is functional; support link includes up-to-date contact info; privacy policy link is present (required for all apps).  
+**Fail criteria:** Any broken link, missing support link, missing privacy policy link, or outdated support contact info.  
+**Evidence to capture:**  
+- Screen recording: “Link audit” run where you tap each link and show it loads  
+- URLs list (support + privacy policy)  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 4 — **App Review Information in App Store Connect is complete**
+**Action:** In App Store Connect, verify App Review Information includes everything needed if the app requires settings/accounts/special instructions.  
+**Pass criteria:**  
+- If login is required: valid demo username/password provided  
+- If special configuration is needed: exact steps provided  
+- If hard-to-replicate environment or hardware is required: you are prepared to provide a demo video or the hardware  
+- Contact info is complete and up to date  
+**Fail criteria:** Missing demo credentials, missing setup steps, missing review notes for special environments/hardware, or incomplete contact info.  
+**Evidence to capture:**  
+- Screenshot(s) of the **App Review Information** section showing entered details  
+- If applicable: demo video link or attached artifact reference  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+---
+
+### P0 (Privacy/Data) — Common rejection triggers
+
+#### Step 5 — **Privacy policy content check (must include required items)**
+**Action:** Review your privacy policy text and confirm it includes all items Apple calls out.  
+**Pass criteria:** Privacy policy:  
+1) Identifies the data the app collects, how it collects it, and all uses of that data  
+2) Confirms any third party receiving user data provides the same or equal protection as stated  
+3) Explains data retention and deletion policies, including how users revoke consent and/or request deletion  
+**Fail criteria:** Any of the above missing or unclear.  
+**Evidence to capture:**  
+- URL to privacy policy and a PDF export/screenshot of the relevant sections (highlighted)  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 6 — **Permission prompts are clear about data use**
+**Action:** Trigger every permission request (user or usage data access) and evaluate the user-facing explanation.  
+**Pass criteria:** Permission request clearly and completely describes how the app will use the data (Apple notes an example can help users understand).  
+**Fail criteria:** Vague purpose (e.g., “needed for app functionality”) or unclear benefit/usage.  
+**Evidence to capture:**  
+- Screenshots of each permission prompt and the surrounding UI context explaining why it’s requested  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 7 — **Info.plist purpose strings exist for sensitive data APIs**
+**Action:** Check the app’s Info.plist includes required purpose strings for APIs that access sensitive user data (Apple references the required user-facing purpose string key as `$!{infoPlistKey}`).  
+**Pass criteria:** All required purpose strings exist and clearly explain why the app needs the data.  
+**Fail criteria:** Missing purpose string(s) or unclear text.  
+**Evidence to capture:**  
+- Screenshot or text excerpt of Info.plist entries showing purpose strings  
+- Mapping table: “Sensitive API → purpose string present (Y/N)”  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+---
+
+### P1 (Metadata + UX quality) — High impact, often checked
+
+#### Step 8 — **Screenshots are accurate and device-matched**
+**Action:** Review App Store screenshots for accuracy and device alignment.  
+**Pass criteria:**  
+- Screenshots accurately communicate value and functionality  
+- Overlay text/images highlight UX, not obscure it  
+- UI/product images match the corresponding device type in App Store Connect  
+**Fail criteria:** Misleading screenshots, obscured UI, wrong device framing/type mismatch.  
+**Evidence to capture:**  
+- Screenshot set as uploaded + App Store Connect device mapping proof (screenshots of the upload slots per device)  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 9 — **UI quality: clean, refined, user-friendly**
+**Action:** Heuristic review of UI for cleanliness/refinement/usability (Apple emphasizes this).  
+**Pass criteria:** UI appears clean, refined, user-friendly across main flows.  
+**Fail criteria:** Cluttered, confusing navigation, inconsistent layouts that reduce usability.  
+**Evidence to capture:**  
+- Screen recording walking through main flows  
+- Screenshot montage of primary screens  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 10 — **Not just a web wrapper / link collection**
+**Action:** Determine whether the app is essentially web content in an iOS shell, unformatted web content, or mostly limited web interactions.  
+**Pass criteria:** App is engaging/useful and “makes the most of features unique to iOS.”  
+**Fail criteria:** App is primarily websites served in an iOS app, web content not formatted for iOS, or a collection of links/limited web interactions.  
+**Evidence to capture:**  
+- Short screen recording demonstrating native-feeling interactions and iOS-specific usage (as applicable)  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 11 — **Claims match reality (not misleading users)**
+**Action:** Compare what the app appears to promise (in-app and in listing) to what it actually does.  
+**Pass criteria:** App performs as advertised; promised features are present and working.  
+**Fail criteria:** Any promised functionality missing, incomplete, or misleading.  
+**Evidence to capture:**  
+- “Promise vs. Proof” evidence: screenshots of claims + screen recordings showing the feature works  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+---
+
+### P2 (Portfolio / “value” considerations)
+
+#### Step 12 — **Not a copycat**
+**Action:** Evaluate whether the app is actively trying to copy another app.  
+**Pass criteria:** App is an interesting, unique experience (not a copy).  
+**Fail criteria:** Strong imitation of another app’s concept/branding/presentation.  
+**Evidence to capture:**  
+- Short written rationale describing what makes the app unique + screenshots of distinctive flows  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 13 — **Not a set of essentially identical apps**
+**Action:** If you have multiple apps, evaluate whether they are essentially the same.  
+**Pass criteria:** Apps are meaningfully different, or thoughtfully combined into one where appropriate.  
+**Fail criteria:** Several apps that are essentially the same.  
+**Evidence to capture:**  
+- App lineup list + 1–2 sentence differentiation per app (or consolidation plan)  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 14 — **Enough lasting value**
+**Action:** Assess whether functionality/content is substantial and not only useful to a tiny niche without enough depth.  
+**Pass criteria:** App offers meaningful functionality/content and a strong user experience.  
+**Fail criteria:** Minimal functionality/content or extremely limited usefulness that may lead to non-approval.  
+**Evidence to capture:**  
+- Feature list + screen recording of multiple distinct value moments  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+---
+
+### Conditional (Only if your app matches these scenarios) — Documentation requirements
+
+#### Step 15A — **Kids category + third-party ads**
+**Action:** If the app is for kids and contains third-party ads, provide the ad service’s publicly documented practices/policies for Kids apps, including human review of ad creatives for age appropriateness.  
+**Pass criteria:** Link is provided and explicitly covers those Kids requirements.  
+**Fail criteria:** Missing link or missing “human review of creatives” policy.  
+**Evidence to capture:**  
+- URL to ad service policies + screenshot of the relevant policy section  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 15B — **Medical hardware**
+**Action:** If the app works with medical hardware, provide regulatory clearance for the locations where available.  
+**Pass criteria:** Regulatory clearance documentation is available for each relevant location.  
+**Fail criteria:** Missing clearance documentation.  
+**Evidence to capture:**  
+- Copy of regulatory clearance + list of covered regions/locations  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 15C — **Third-party content/trademarks/copyright or streaming/downloading**
+**Action:** If you use third-party trademarks/copyrighted content or allow streaming/downloading of third-party content, provide authorization.  
+**Pass criteria:** Authorization is available and ready to provide.  
+**Fail criteria:** No authorization.  
+**Evidence to capture:**  
+- Authorization documents + where they’re attached/provided for review  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+#### Step 15D — **Services requiring licensing (gambling/lotteries/raffles/VPN licensing, etc.)**
+**Action:** If the app facilitates services requiring licensing, provide authorization (and account for regional licensing differences).  
+**Pass criteria:** Authorization exists for relevant regions.  
+**Fail criteria:** Missing authorization.  
+**Evidence to capture:**  
+- Licensing/authorization docs + region coverage matrix  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+---
+
+### Submission ops checks (helpful to avoid delays)
+
+#### Step 16 — **Know where to manage submissions / messages**
+**Action:** Confirm you can manage submissions and communicate with App Review on the App Review page within Apps in App Store Connect.  
+**Pass criteria:** Team knows where to view messages/history and respond.  
+**Fail criteria:** No process to monitor/respond to App Review.  
+**Evidence to capture:**  
+- Screenshot showing the App Review page access point in App Store Connect  
+[Source](https://developer.apple.com/distribute/app-review/)
+
+---
+
+## Output format your AI should produce (per step)
+For each step, have the AI return:
+- **Status:** PASS / FAIL  
+- **Notes:** 1–3 sentences (what was checked, what was found)  
+- **Evidence:** Links to recordings/screenshots/docs + where they live (folder/path)  
+- **If FAIL:** Exact reproduction steps (for crashes/bugs/links/permissions)
+
+If you tell me your app type (login required? what permissions? kids category? uses third-party content? webview-heavy?), I can mark which “Conditional” steps to enable and which to skip—without adding any requirements beyond Apple’s page.

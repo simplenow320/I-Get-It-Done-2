@@ -1,0 +1,70 @@
+AI review checklist (from Apple’s App Review prep page)
+1) App Review Information (App Store Connect)
+Check whether the app requires specific settings, user account info, or special instructions; if yes, ensure those details are included in the App Review Information section in App Store Connect. Source
+If features require signing in, confirm a valid demo account username and password are provided. Source
+If special configurations are required, confirm the specific configuration steps are provided. Source
+If features are hard to replicate or require specific hardware, confirm you’re prepared to provide a demo video or the hardware. Source
+Confirm contact information is complete and up to date. Source
+Confirm the app is tested and submitted only when complete and ready to be published (Apple notes many issues fall under guideline 2.1 App Completeness). Source
+2) Crashes and bugs
+Check that the app is thoroughly tested on devices running the latest software. Source
+Check that you have fixed all bugs before submission. Source
+3) Broken links (required links)
+Check that all links in the app are functional. Source
+Check that there is a link to user support with up-to-date contact information. Source
+Check that there is a link to your privacy policy (required for all apps). Source
+4) Placeholder content
+Check that all images and text are finalized (no placeholders). Source
+Check the app does not contain “still in progress” placeholder content that indicates it’s not ready. Source
+5) Privacy policy issues (what it must cover)
+Check the privacy policy for all of the following:
+
+It identifies the data the app collects, how it collects that data, and all uses of that data. Source
+It confirms that any third party the app shares user data with provides the same or equal protection of user data as stated in your policy. Source
+It explains data retention and deletion policies, and describes how a user can revoke consent and/or request deletion of their data. Source
+6) Unclear data access requests (permissions + purpose strings)
+Check that permission prompts clearly and completely describe how the app will use the data; Apple notes that including an example can help. Source
+If your code references APIs that access sensitive user data, check that the app’s Info.plist contains the required purpose string key (shown on the page as $!{infoPlistKey}) with a user-facing explanation of why the data is needed. Source
+Check that all required purpose strings are present for apps submitted to App Store Connect that access user data. Source
+7) Inaccurate screenshots (App Store listing assets)
+Check that screenshots accurately communicate value and functionality. Source
+Check overlays/text are used to highlight the experience, not obscure it. Source
+Check UI/product images match the corresponding device type in App Store Connect. Source
+8) Substandard user interface
+Check the UI is clean, refined, and user-friendly (Apple emphasizes planning design carefully and following their design guides). Source
+9) Web clippings / content aggregators / collection of links
+Check the app is engaging and useful and “makes the most of the features unique to iOS.” Source
+Check it’s not just: websites served in an iOS app, web content not formatted for iOS, or limited web interactions (Apple says these don’t make a quality app). Source
+10) Repeated submission of similar apps
+Check you are not submitting several apps that are essentially the same; Apple recommends thoughtfully combining similar apps into one. Source
+11) Copycats
+Check the app is not trying to copy other apps; Apple advises focusing on unique experiences. Source
+12) Misleading users
+Check the app performs as advertised and does not give the impression it’s something it is not. Source
+Check that if the app appears to promise features/functionality, it actually delivers them. Source
+13) Not enough lasting value
+Check the app offers enough functionality/content (Apple notes low functionality or very small niche applicability may lead to non-approval). Source
+Check you’ve reviewed other apps in your category and considered how to provide a better user experience. Source
+14) Submitted by incorrect entity
+Check whether the app type requires submission by the legal entity that provides the services (Apple lists examples: banking/financial services, cryptocurrency, healthcare, gambling, air travel). Source
+If partnership documentation/authorization is needed, check it’s attached in App Store Connect (Attachment section) and any descriptions/links are in Review Notes. Source
+15) “Specific documentation required” scenarios (examples Apple lists)
+Check whether your app matches any of these and ensure the noted documentation is ready/provided:
+
+Kids category + third‑party ads: provide a link to the ad service’s publicly documented practices and policies for Kids apps, including human review of ad creatives for age appropriateness. Source
+Medical hardware: provide a copy of regulatory clearance for the locations where the app is available. Source
+Third-party trademarks/copyrighted content, or streaming/downloading third-party content: provide authorization to do so (Apple gives examples like video streaming and marketing imagery of celebrities/sports/movies/music). Source
+Services requiring licensing (real money gaming/gambling, lotteries, raffles, VPN licensing): provide authorization (and note licensing varies by region). Source
+16) Submission workflow / review status awareness (process checks)
+Check you know you can manage submissions and communicate with App Review on the App Review page within Apps in App Store Connect. Source
+Check whether your submission is for the App Store or Notarization only (EU-related flow referenced on the page). Source
+Check review status in App Store Connect (or App Store Connect app); Apple notes if a submission is incomplete, review times may be delayed or it may not pass. Source
+17) If rejected: what to do (from the page)
+Check that you can view details (including specific guideline references) in App Store Connect and correspond with App Review to resolve issues before resubmitting. Source
+If appealing: ensure you provide specific reasons you comply, submit only one appeal per submission, and respond to requests for info before submitting an appeal. Source
+If requesting expedited review: ensure the request matches Apple’s listed extenuating circumstances and includes the required details (critical bug reproduction steps; or event/date/association). Source
+The “guidelines to consult” links Apple lists on this page (for your AI to cross-check against)
+App Review Guidelines Source
+Human Interface Design Guidelines Source
+Guidelines for Using Apple Trademarks and Copyrights Source
+Apple Developer Program License Agreement entry point: https://developer.apple.com/support/terms/ Source
