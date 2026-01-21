@@ -15,6 +15,7 @@ import { AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
 import * as FileSystem from "expo-file-system";
 
 import { getApiUrl } from "@/lib/query-client";
+import { getStoredAuthToken } from "@/contexts/AuthContext";
 import { LaneColors, Spacing } from "@/constants/theme";
 import { ConsentDisclosure } from "./ConsentDisclosure";
 import { ThemedText } from "./ThemedText";
@@ -377,11 +378,20 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       const uploadUrl = `${apiUrl}/api/transcribe`;
       console.log("Uploading to:", uploadUrl);
       
+      const authToken = await getStoredAuthToken();
+      console.log("Auth token present:", !!authToken);
+      
+      const headers: Record<string, string> = {};
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+      
       const response = await FileSystemRef.current.uploadAsync(uploadUrl, uri, {
         fieldName: "audio",
         httpMethod: "POST",
         uploadType: FileSystemRef.current.FileSystemUploadType.MULTIPART,
         mimeType: "audio/m4a",
+        headers,
         parameters: {
           userId: userId || "",
           durationSeconds: String(durationSeconds),
