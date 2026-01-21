@@ -16,7 +16,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTaskStore, Lane, UnsortedTask } from "@/stores/TaskStore";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
 
 type Phase = "capture" | "sort";
 
@@ -54,16 +54,7 @@ export default function QuickDumpScreen() {
     setIsExtracting(true);
     
     try {
-      const response = await fetch(new URL("/api/tasks/extract", getApiUrl()).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: text }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to extract tasks");
-      }
-
+      const response = await apiRequest("POST", "/api/tasks/extract", { transcript: text });
       const data = await response.json();
       const tasks = data.tasks || [];
 
@@ -75,17 +66,6 @@ export default function QuickDumpScreen() {
       }
     } catch (error) {
       console.error("Task extraction error:", error);
-      const lines = text.split(/[.,!?]\s+/).filter(line => line.trim().length > 0);
-      if (lines.length > 1) {
-        lines.forEach(line => {
-          if (line.trim()) {
-            addUnsortedTask(line.trim());
-          }
-        });
-      } else {
-        addUnsortedTask(text.trim());
-      }
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } finally {
       setIsExtracting(false);
     }
