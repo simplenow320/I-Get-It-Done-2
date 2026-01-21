@@ -73,14 +73,22 @@ export default function QuickDumpScreen() {
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        // AI found no actionable tasks - this is intentional, don't add raw text
+        addUnsortedTask(text.trim());
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (error) {
       console.error("Task extraction error:", error);
-      // Show error to user instead of adding unfiltered text
-      setVoiceError("Couldn't process that. Try again or type it instead.");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const lines = text.split(/[.,!?]\s+/).filter(line => line.trim().length > 0);
+      if (lines.length > 1) {
+        lines.forEach(line => {
+          if (line.trim()) {
+            addUnsortedTask(line.trim());
+          }
+        });
+      } else {
+        addUnsortedTask(text.trim());
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } finally {
       setIsExtracting(false);
     }
