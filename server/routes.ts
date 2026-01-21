@@ -18,6 +18,16 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  app.get("/api/debug/voice-check", async (req: Request, res: Response) => {
+    const hasDeepgram = !!process.env.DEEPGRAM_API_KEY;
+    const hasOpenAI = !!process.env.OPENAI_API_KEY;
+    res.json({ 
+      deepgram: hasDeepgram ? "configured" : "MISSING", 
+      openai: hasOpenAI ? "configured" : "MISSING",
+      timestamp: new Date().toISOString()
+    });
+  });
+  
   app.get("/api/voice-usage/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
