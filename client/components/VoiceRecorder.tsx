@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import { StyleSheet, View, Pressable, Platform, Alert, useColorScheme, Text } from "react-native";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { StyleSheet, View, Pressable, Platform, Alert, useColorScheme } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Animated, { 
@@ -11,8 +11,8 @@ import Animated, {
   cancelAnimation 
 } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
-import * as FileSystem from "expo-file-system";
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
+import { uploadAsync, getInfoAsync, FileSystemUploadType } from "expo-file-system/legacy";
 
 import { getApiUrl } from "@/lib/query-client";
 import { getStoredAuthToken } from "@/contexts/AuthContext";
@@ -40,8 +40,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const isDark = colorScheme === "dark";
   const [state, setState] = useState<RecordingState>("idle");
   const [permissionStatus, setPermissionStatus] = useState<"unknown" | "granted" | "denied">("unknown");
-  const [audioModulesLoaded, setAudioModulesLoaded] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(DAILY_LIMIT_SECONDS);
   const [showConsentDisclosure, setShowConsentDisclosure] = useState(false);
@@ -49,18 +48,12 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const [lastError, setLastError] = useState<string | null>(null);
   const [canRetry, setCanRetry] = useState(false);
   const [quotaLoaded, setQuotaLoaded] = useState(false);
-  const pendingRecordingRef = useRef(false);
   const lastRecordingUriRef = useRef<string | null>(null);
   const lastRecordingDurationRef = useRef<number>(0);
-  
-  const audioRecorderRef = useRef<any>(null);
-  const AudioModuleRef = useRef<any>(null);
-  const setAudioModeAsyncRef = useRef<any>(null);
-  const FileSystemRef = useRef<any>(null);
-  const RecordingPresetsRef = useRef<any>(null);
-  const AudioRecorderClassRef = useRef<any>(null);
   const isMountedRef = useRef(true);
   const recordingStartTimeRef = useRef<number>(0);
+  
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   
   const pulseScale = useSharedValue(1);
   const buttonScale = useSharedValue(1);
@@ -75,7 +68,13 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     if (!userId) return;
     try {
       const apiUrl = getApiUrl();
+      const authToken = await getStoredAuthToken();
+      const headers: Record<string, string> = {};
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
       const response = await fetch(`${apiUrl}/api/voice-usage/${userId}`, {
+        headers,
         credentials: "include",
       });
       if (response.ok) {
@@ -97,16 +96,32 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     isMountedRef.current = true;
     
     if (Platform.OS !== "web") {
-      loadAudioModules();
+      initializeAudio();
       checkPriorConsent();
     }
     
     return () => {
       isMountedRef.current = false;
-      cleanupRecorder();
     };
   }, []);
   
+  const initializeAudio = async () => {
+    try {
+      const status = await AudioModule.getRecordingPermissionsAsync();
+      if (isMountedRef.current) {
+        if (status.granted) {
+          setPermissionStatus("granted");
+        }
+        setAudioReady(true);
+      }
+    } catch (error) {
+      console.error("Failed to initialize audio:", error);
+      if (isMountedRef.current) {
+        setAudioReady(true);
+      }
+    }
+  };
+
   const checkPriorConsent = async () => {
     try {
       const declined = await AsyncStorage.getItem(MIC_CONSENT_DECLINED_KEY);
@@ -115,55 +130,6 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       }
     } catch (e) {
       console.warn("Failed to check prior consent:", e);
-    }
-  };
-
-  const cleanupRecorder = async () => {
-    if (audioRecorderRef.current) {
-      try {
-        await audioRecorderRef.current.stop();
-      } catch (e) {
-      }
-      audioRecorderRef.current = null;
-    }
-    if (setAudioModeAsyncRef.current) {
-      try {
-        await setAudioModeAsyncRef.current({
-          allowsRecording: false,
-          playsInSilentMode: false,
-        });
-      } catch (e) {
-      }
-    }
-  };
-
-  const loadAudioModules = async () => {
-    try {
-      if (!isMountedRef.current) return;
-      
-      AudioModuleRef.current = AudioModule;
-      setAudioModeAsyncRef.current = setAudioModeAsync;
-      RecordingPresetsRef.current = RecordingPresets;
-      AudioRecorderClassRef.current = AudioModule.AudioRecorder;
-      FileSystemRef.current = FileSystem;
-      
-      if (isMountedRef.current) {
-        setAudioModulesLoaded(true);
-      }
-      
-      try {
-        const status = await AudioModule.getRecordingPermissionsAsync();
-        if (isMountedRef.current && status.granted) {
-          setPermissionStatus("granted");
-        }
-      } catch (permError) {
-        console.warn("Permission check error:", permError);
-      }
-    } catch (error) {
-      console.error("Failed to load audio modules:", error);
-      if (isMountedRef.current) {
-        setLoadError(true);
-      }
     }
   };
 
@@ -181,13 +147,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   }, [state]);
 
   const checkConsentAndStart = async () => {
-    if (!audioModulesLoaded) {
+    if (!audioReady) {
       onError?.("Loading voice... try again");
-      return;
-    }
-    
-    if (!AudioRecorderClassRef.current) {
-      onError?.("Voice not available on this device");
       return;
     }
 
@@ -233,7 +194,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const requestPermissionAndStart = async () => {
     try {
-      const status = await AudioModuleRef.current.requestRecordingPermissionsAsync();
+      const status = await AudioModule.requestRecordingPermissionsAsync();
       if (!isMountedRef.current) return;
       if (!status.granted) {
         setPermissionStatus("denied");
@@ -263,33 +224,17 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const actuallyStartRecording = async () => {
     try {
-      if (!setAudioModeAsyncRef.current || !AudioRecorderClassRef.current || !RecordingPresetsRef.current) {
-        onError?.("Voice not ready. Try again.");
-        return;
-      }
-
-      await setAudioModeAsyncRef.current({
+      await setAudioModeAsync({
         allowsRecording: true,
         playsInSilentMode: true,
       });
 
-      if (audioRecorderRef.current) {
-        try {
-          await audioRecorderRef.current.stop();
-        } catch (e) {}
-        audioRecorderRef.current = null;
-      }
-      
-      const recorder = new AudioRecorderClassRef.current();
-      audioRecorderRef.current = recorder;
-      
-      await recorder.prepareToRecordAsync(RecordingPresetsRef.current.HIGH_QUALITY);
+      await audioRecorder.prepareToRecordAsync();
       recordingStartTimeRef.current = Date.now();
-      recorder.record();
+      audioRecorder.record();
       
       if (!isMountedRef.current) {
-        try { await recorder.stop(); } catch (e) {}
-        audioRecorderRef.current = null;
+        try { await audioRecorder.stop(); } catch (e) {}
         return;
       }
       
@@ -315,22 +260,15 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     const durationSeconds = Math.ceil((Date.now() - recordingStartTimeRef.current) / 1000);
 
     try {
-      const recorder = audioRecorderRef.current;
-      if (!recorder) {
-        throw new Error("No active recording");
-      }
+      await audioRecorder.stop();
       
-      await recorder.stop();
-      
-      await setAudioModeAsyncRef.current({
+      await setAudioModeAsync({
         allowsRecording: false,
         playsInSilentMode: false,
       });
       
-      const uri = recorder.uri;
+      const uri = audioRecorder.uri;
       console.log("Recording URI:", uri, "Duration:", durationSeconds, "seconds");
-
-      audioRecorderRef.current = null;
 
       if (!uri) {
         console.error("No recording URI available");
@@ -352,18 +290,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   };
 
   const transcribeAudio = async (uri: string, durationSeconds: number) => {
-    if (!FileSystemRef.current) {
-      if (isMountedRef.current) {
-        onError?.("Upload not available");
-        setState("idle");
-      }
-      return;
-    }
-
     try {
       console.log("Starting transcription for:", uri, "duration:", durationSeconds);
       
-      const fileInfo = await FileSystemRef.current.getInfoAsync(uri);
+      const fileInfo = await getInfoAsync(uri);
       console.log("File info:", JSON.stringify(fileInfo));
       
       if (!fileInfo.exists) {
@@ -386,10 +316,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         headers["Authorization"] = `Bearer ${authToken}`;
       }
       
-      const response = await FileSystemRef.current.uploadAsync(uploadUrl, uri, {
+      const response = await uploadAsync(uploadUrl, uri, {
         fieldName: "audio",
         httpMethod: "POST",
-        uploadType: FileSystemRef.current.FileSystemUploadType.MULTIPART,
+        uploadType: FileSystemUploadType.MULTIPART,
         mimeType: "audio/m4a",
         headers,
         parameters: {
@@ -403,7 +333,6 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       if (!isMountedRef.current) return;
 
       if (response.status === 429) {
-        const errorData = JSON.parse(response.body || "{}");
         setLimitReached(true);
         setSecondsRemaining(0);
         onError?.("Daily voice limit reached");
@@ -450,7 +379,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     const uri = lastRecordingUriRef.current;
     const duration = lastRecordingDurationRef.current;
     
-    if (!uri || !FileSystemRef.current) {
+    if (!uri) {
       setLastError(null);
       setCanRetry(false);
       checkConsentAndStart();
@@ -458,7 +387,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     }
     
     try {
-      const fileInfo = await FileSystemRef.current.getInfoAsync(uri);
+      const fileInfo = await getInfoAsync(uri);
       if (!fileInfo.exists) {
         setLastError(null);
         setCanRetry(false);
@@ -490,12 +419,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       return;
     }
 
-    if (loadError) {
-      onError?.("Voice not available on this device");
-      return;
-    }
-
-    if (!audioModulesLoaded) {
+    if (!audioReady) {
       onError?.("Loading voice...");
       return;
     }
@@ -542,11 +466,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   };
 
   const getButtonColor = () => {
-    if (loadError) return isDark ? "#555555" : "#999999";
     if (limitReached) return isDark ? "#555555" : "#999999";
     if (state === "recording") return LaneColors.now.primary;
     if (state === "processing") return isDark ? "#888888" : "#666666";
-    if (!audioModulesLoaded) return isDark ? "#666666" : "#888888";
+    if (!audioReady) return isDark ? "#666666" : "#888888";
     return LaneColors.soon.primary;
   };
 
