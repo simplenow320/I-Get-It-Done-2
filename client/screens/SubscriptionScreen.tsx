@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRevenueCat } from "@/contexts/RevenueCatContext";
 import { openSubscriptionManagement } from "@/lib/billing";
 
-type PricingPlan = "monthly" | "annual" | "lifetime";
+type PricingPlan = "monthly" | "annual";
 
 const FEATURES = [
   { icon: "zap", text: "Unlimited tasks across all lanes" },
@@ -43,9 +43,8 @@ export default function SubscriptionScreen() {
   const [selectedPlan, setSelectedPlan] = useState<PricingPlan>("annual");
   const [isLoading, setIsLoading] = useState(false);
 
-  const monthlyPrice = monthlyPackage?.product.priceString.replace("$", "") || "7.99";
-  const annualPrice = annualPackage?.product.priceString.replace("$", "") || "59.99";
-  const lifetimePrice = "99.99";
+  const monthlyPrice = monthlyPackage?.product.priceString.replace("$", "") || "6.99";
+  const annualPrice = annualPackage?.product.priceString.replace("$", "") || "49.99";
   const annualMonthly = (parseFloat(annualPrice) / 12).toFixed(2);
   const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
 
@@ -64,11 +63,6 @@ export default function SubscriptionScreen() {
     setIsLoading(true);
 
     try {
-      if (selectedPlan === "lifetime") {
-        Alert.alert("Coming Soon", "Lifetime Pro will be available in the App Store soon.");
-        return;
-      }
-
       const pkg = selectedPlan === "monthly" ? monthlyPackage : annualPackage;
       if (!pkg) {
         Alert.alert("Not Available", "Pricing not available yet. Please try again in a moment.");
@@ -330,55 +324,6 @@ export default function SubscriptionScreen() {
                 </View>
               </Pressable>
 
-              <Pressable
-                onPress={() => handleSelectPlan("lifetime")}
-                style={({ pressed }) => [
-                  styles.planCard,
-                  {
-                    backgroundColor: theme.backgroundDefault,
-                    borderColor: selectedPlan === "lifetime" ? LaneColors.later.primary : theme.border,
-                    borderWidth: selectedPlan === "lifetime" ? 2 : 1,
-                    opacity: pressed ? 0.9 : 1,
-                  },
-                ]}
-              >
-                <View style={styles.planBadge}>
-                  <LinearGradient
-                    colors={LaneColors.later.gradient as [string, string]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.savingsBadge}
-                  >
-                    <ThemedText type="caption" style={styles.savingsText}>
-                      BEST DEAL
-                    </ThemedText>
-                  </LinearGradient>
-                </View>
-                <View style={styles.planHeader}>
-                  <View style={[
-                    styles.radioOuter,
-                    { borderColor: selectedPlan === "lifetime" ? LaneColors.later.primary : theme.textSecondary }
-                  ]}>
-                    {selectedPlan === "lifetime" ? (
-                      <View style={[styles.radioInner, { backgroundColor: LaneColors.later.primary }]} />
-                    ) : null}
-                  </View>
-                  <View style={styles.planInfo}>
-                    <ThemedText type="h3">Lifetime Pro</ThemedText>
-                    <ThemedText type="small" secondary>
-                      Pay once, own forever
-                    </ThemedText>
-                  </View>
-                </View>
-                <View style={styles.planPricing}>
-                  <ThemedText type="largeTitle" style={styles.priceAmount}>
-                    ${lifetimePrice}
-                  </ThemedText>
-                  <ThemedText type="small" secondary>
-                    one-time
-                  </ThemedText>
-                </View>
-              </Pressable>
             </Animated.View>
 
             <Animated.View entering={FadeInUp.delay(300).duration(400)} style={styles.featuresContainer}>
