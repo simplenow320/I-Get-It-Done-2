@@ -121,6 +121,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
+      const confidence = result.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
+      const audioDuration = result.metadata?.duration || 0;
+      
+      console.log("Transcript:", transcript, "Confidence:", confidence, "Duration:", audioDuration, "FileSize:", audioBuffer.length);
       
       if (durationSeconds > 0) {
         const today = new Date().toISOString().split('T')[0];
@@ -145,7 +149,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      res.json({ text: transcript });
+      res.json({ 
+        text: transcript,
+        debug: !transcript ? { audioDuration, fileSize: audioBuffer.length, confidence } : undefined
+      });
     } catch (error: any) {
       console.error("Transcription error:", error);
       

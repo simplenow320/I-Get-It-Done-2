@@ -354,9 +354,17 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         checkVoiceUsage();
       } else {
-        const errorMsg = durationSeconds < 2 
-          ? "Hold longer to record" 
-          : "Didn't catch that - try speaking louder";
+        console.log("Empty transcript debug:", data.debug);
+        let errorMsg = "Didn't catch that";
+        if (data.debug) {
+          if (data.debug.fileSize < 1000) {
+            errorMsg = "Recording too short";
+          } else if (data.debug.audioDuration < 0.5) {
+            errorMsg = "Audio too brief - speak longer";
+          } else {
+            errorMsg = "Couldn't hear you - try again";
+          }
+        }
         onError?.(errorMsg);
       }
     } catch (error: any) {
