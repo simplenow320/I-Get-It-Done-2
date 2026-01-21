@@ -73,8 +73,8 @@ export default function QuickDumpScreen() {
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        addUnsortedTask(text.trim());
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setVoiceError("No tasks found - try saying an action like 'Call mom'");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       }
     } catch (error) {
       console.error("Task extraction error:", error);
