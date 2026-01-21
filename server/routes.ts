@@ -203,6 +203,10 @@ Rules:
 4. If someone mentions timing (tomorrow, next week, etc.), don't include it in the title - just extract the core task
 5. Split compound tasks into separate items (e.g., "call mom and dad" becomes two tasks)
 6. If no clear tasks are found, return an empty array
+7. IMPORTANT: Ignore testing phrases, mic checks, and counting - these are NOT tasks:
+   - "test", "testing", "test 1 2 3", "one two three", "check check"
+   - Random numbers or counting sequences
+   - "hello", "is this working", "can you hear me"
 
 Return JSON in this exact format:
 {"tasks": [{"title": "Task title here"}]}
@@ -212,6 +216,12 @@ Input: "I need to call my mom tomorrow and also I was thinking maybe I should cl
 Output: {"tasks": [{"title": "Call mom"}, {"title": "Clean garage"}]}
 
 Input: "So yeah, it's been a long day, not sure what to do"
+Output: {"tasks": []}
+
+Input: "test one 2 1 2"
+Output: {"tasks": []}
+
+Input: "testing testing hello"
 Output: {"tasks": []}
 
 Input: "Pick up the dry cleaning, oh and get milk, and I should probably email Sarah about the meeting"
