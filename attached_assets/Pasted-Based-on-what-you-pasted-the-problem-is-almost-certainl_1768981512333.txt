@@ -1,0 +1,97 @@
+Based on what you pasted, the “problem” is almost certainly not the OpenAI prompt. It’s the client fallback behavior + build delivery.
+
+What I think is happening
+
+1. The root cause is exactly what you labeled as the bug
+
+In the old build, whenever the extractor returns zero tasks, the app still does:
+
+addUnsortedTask(text.trim())
+
+So any transcript that produces an empty task list will dump raw speech into the task list.
+
+That matches your screenshots examples perfectly: “Okay”, “and”, “Oh”, “Let’s try this again”, etc.
+
+2. Why the extractor might be returning “no tasks” a lot
+
+Even with a good prompt, GPT will often return no tasks when the transcript is mostly filler, or when it’s describing what the user is doing “right now.” So the fallback gets triggered frequently.
+
+Also, even when there are tasks, extraction can still end up “empty” if:
+	•	The server response isn’t valid JSON (common if the model wraps JSON in code fences)
+	•	The server returns {} or { tasks: "..." } instead of { tasks: [] }
+	•	data.tasks exists but is not an array (so your tasks.length check fails or throws)
+	•	You’re parsing fails and you default to []
+
+So the fallback line was basically a “raw speech injector.”
+
+3. TestFlight still showing the old behavior is expected
+
+If the fix is only in QuickDumpScreen.tsx, TestFlight will never get it until you:
+	•	Rebuild
+	•	Upload to App Store Connect
+	•	Push to TestFlight
+	•	Install/update that build
+
+Unless you have expo-updates (EAS Update) configured and published, TestFlight is stuck on whatever JS bundle was built at build time.
+
+So your explanation here is correct.
+
+One more thing to double check (important in native builds)
+
+In a native build (TestFlight), this line:
+
+fetch("/api/tasks/extract", ...)
+
+only works if you have a base URL / networking layer that resolves that path to your hosted server.
+
+If you don’t, then on-device it may hit the wrong place (or fail), which can lead to “empty tasks” scenarios. But if you’re still seeing raw speech added, that strongly points back to the old fallback code being present.
+
+Still, after you rebuild, make sure the request is actually going to your real API host (not “localhost” behavior).
+
+What I’d do to prove it in 10 minutes
+
+A. Add logging on the client (temporarily)
+
+Log the extractor response before adding tasks:
+	•	console.log("extract response", data)
+	•	console.log("tasks type", Array.isArray(data.tasks), data.tasks)
+
+Then run in Expo Go and confirm:
+	•	When raw speech happens today, data.tasks is empty and the old code is adding transcript.
+	•	After fix, nothing is added when tasks is empty.
+
+B. Add logging on the server route
+
+In /api/tasks/extract, log:
+	•	incoming transcript (first 120 chars)
+	•	the raw model response text
+	•	the parsed JSON you return
+
+This will reveal quickly if you’re returning valid JSON every time.
+
+Two upgrades I strongly recommend (so this never comes back)
+
+1. Force strict structured output
+
+If you’re using OpenAI’s newer responses with structured outputs, use a JSON schema (or strict JSON mode) so you always get:
+
+{"tasks":[{"title":"..."}]}
+
+No code fences, no extra commentary.
+
+This reduces “tasks is undefined” problems to near zero.
+
+2. Add a safety filter before inserting tasks
+
+Even if AI returns junk, protect the task list:
+	•	Reject titles shorter than 3–4 characters
+	•	Reject common filler words (“okay”, “and”, “um”, “alright”)
+	•	Reject titles that are only stopwords
+
+This is a cheap guardrail and makes the feature feel smarter.
+
+My bottom-line diagnosis
+	•	Primary issue: the old TestFlight build still includes the fallback that adds raw transcript when extraction returns no tasks.
+	•	Secondary risk: even after rebuild, you should harden the extractor response parsing and add lightweight validation so your UI never shows nonsense again.
+
+If you want, paste the exact server handler code for /api/tasks/extract (the part where you call OpenAI and parse the response). I can tell you if you’re currently vulnerable to “non-JSON response” failures that would silently produce tasks = [].

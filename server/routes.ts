@@ -178,6 +178,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Filler words and phrases to reject as tasks (safety filter)
+  const FILLER_WORDS = new Set([
+    "okay", "ok", "and", "um", "uh", "oh", "ah", "hmm", "well", "so",
+    "alright", "right", "yeah", "yes", "no", "maybe", "like", "just",
+    "actually", "basically", "literally", "anyway", "anyways", "whatever",
+    "let's see", "let me see", "one moment", "hold on", "wait",
+    "what else", "and then", "so then", "i think", "i guess"
+  ]);
+
+  const isValidTask = (title: string): boolean => {
+    if (!title || typeof title !== "string") return false;
+    const cleaned = title.trim().toLowerCase();
+    if (cleaned.length < 4) return false; // Too short
+    if (FILLER_WORDS.has(cleaned)) return false;
+    // Reject if it's mostly filler patterns
+    if (/^(okay|ok|and|um|uh|oh|ah|so|well|right|yeah|yes|no)\b/.test(cleaned) && cleaned.length < 15) return false;
+    return true;
+  };
+
   app.post("/api/tasks/extract", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       if (!req.user) {
@@ -193,6 +212,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (transcript.trim().length === 0) {
         return res.json({ tasks: [] });
       }
+
+      console.log("[Extract] Transcript:", transcript.substring(0, 120));
 
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
@@ -228,6 +249,7 @@ IGNORE (not tasks):
 - Random speech: "since Dawn is up", "I can still talk"
 - Observations: "it's cold", "that's interesting"
 - Uncertainty: "maybe", "not sure", "I might"
+- Single words: "okay", "and", "oh", "um"
 
 Key test: Would this go on a paper to-do list? If no, ignore it.
 
@@ -237,7 +259,9 @@ Examples:
 "So since Dawn is still up I can still talk and I'm going to test the microphone" → {"tasks": []}
 "I need to pick up Chinese food and call my mom" → {"tasks": [{"title": "Pick up Chinese food"}, {"title": "Call mom"}]}
 "Ok I'm gonna say a few random things then try to add a new user" → {"tasks": []}
-"Remind me to buy milk and schedule car service" → {"tasks": [{"title": "Buy milk"}, {"title": "Schedule car service"}]}`
+"Remind me to buy milk and schedule car service" → {"tasks": [{"title": "Buy milk"}, {"title": "Schedule car service"}]}
+"Okay let's try this again" → {"tasks": []}
+"And what else did I say oh yeah" → {"tasks": []}`
             },
             {
               role: "user",
@@ -252,27 +276,38 @@ Examples:
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("OpenAI error:", response.status, errorText);
+        console.error("[Extract] OpenAI error:", response.status, errorText);
         throw new Error(`OpenAI API error: ${response.status}`);
       }
 
       const result = await response.json();
       const content = result.choices?.[0]?.message?.content;
 
+      console.log("[Extract] OpenAI response:", content);
+
       if (!content) {
+        console.log("[Extract] No content in response");
         return res.json({ tasks: [] });
       }
 
       try {
         const parsed = JSON.parse(content);
-        const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
-        res.json({ tasks: tasks.filter((t: any) => t.title && typeof t.title === "string") });
+        const rawTasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+        
+        // Apply safety filter to reject filler words
+        const validTasks = rawTasks
+          .filter((t: any) => t.title && typeof t.title === "string")
+          .filter((t: any) => isValidTask(t.title));
+        
+        console.log("[Extract] Raw tasks:", rawTasks.length, "Valid tasks:", validTasks.length);
+        
+        res.json({ tasks: validTasks });
       } catch (parseError) {
-        console.error("Failed to parse OpenAI response:", content);
+        console.error("[Extract] Failed to parse OpenAI response:", content);
         res.json({ tasks: [] });
       }
     } catch (error: any) {
-      console.error("Task extraction error:", error);
+      console.error("[Extract] Task extraction error:", error);
       res.status(500).json({ error: "Failed to extract tasks" });
     }
   });
