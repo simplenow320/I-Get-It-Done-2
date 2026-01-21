@@ -45,7 +45,7 @@ export default function SubscriptionScreen() {
 
   const monthlyPrice = monthlyPackage?.product.priceString.replace("$", "") || "7.99";
   const annualPrice = annualPackage?.product.priceString.replace("$", "") || "59.99";
-  const lifetimePrice = "149.99";
+  const lifetimePrice = "99.99";
   const annualMonthly = (parseFloat(annualPrice) / 12).toFixed(2);
   const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
 
