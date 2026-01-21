@@ -73,13 +73,22 @@ export default function QuickDumpScreen() {
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        setVoiceError("No tasks found - try saying an action like 'Call mom'");
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        addUnsortedTask(text.trim());
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (error) {
       console.error("Task extraction error:", error);
-      setVoiceError("Failed to process - please try again");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const lines = text.split(/[.,!?]\s+/).filter(line => line.trim().length > 0);
+      if (lines.length > 1) {
+        lines.forEach(line => {
+          if (line.trim()) {
+            addUnsortedTask(line.trim());
+          }
+        });
+      } else {
+        addUnsortedTask(text.trim());
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } finally {
       setIsExtracting(false);
     }

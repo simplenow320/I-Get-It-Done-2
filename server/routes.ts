@@ -211,34 +211,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           messages: [
             {
               role: "system",
-              content: `You are a strict task extraction assistant. Extract ONLY genuine to-do items.
+              content: `Extract FUTURE to-do tasks only. Ignore everything else.
 
-A REAL TASK must have BOTH:
-1. An action verb: call, buy, email, clean, schedule, fix, send, pick up, book, pay, submit, etc.
-2. A specific target: a person, place, or thing to act on
+A TO-DO TASK is something the user NEEDS TO DO LATER - NOT what they're doing right now.
 
-IGNORE these completely (return empty array):
-- Recording commentary: "let's record this", "ok here we go", "that should do it"
-- Uncertainty: "maybe", "not sure", "I might", "perhaps", "or maybe not"
-- Thinking aloud: "what was I saying", "let me think", "hmm"
-- Observations: "it's hot", "I'm tired", "that's interesting"
-- Questions: "what should I do?", "is this working?"
-- Testing: "test", "hello", counting, random words
+EXTRACT (future actions):
+- "I need to call mom" → Call mom
+- "Pick up groceries" → Pick up groceries  
+- "Email the landlord about the lease" → Email landlord about lease
+- "Schedule a dentist appointment" → Schedule dentist appointment
 
-Rules:
-1. BE STRICT - only extract clear, actionable tasks
-2. Convert to short imperative: "Pick up groceries" not "I need to pick up groceries"
-3. Exclude timing words from the title
-4. When in doubt, DON'T extract
+IGNORE (not tasks):
+- Narration about recording: "I'm going to test", "let me try", "I'm recording"
+- What they're doing now: "I'm going to say some things", "I'll talk about"
+- Meta-commentary: "ok so", "anyway", "let's see", "alright"
+- Random speech: "since Dawn is up", "I can still talk"
+- Observations: "it's cold", "that's interesting"
+- Uncertainty: "maybe", "not sure", "I might"
 
-Return JSON: {"tasks": [{"title": "Task"}]}
+Key test: Would this go on a paper to-do list? If no, ignore it.
+
+Return JSON only: {"tasks": [{"title": "Task"}]}
 
 Examples:
-"Let's record this and be done with it, but I do need to pick up Chinese food" → {"tasks": [{"title": "Pick up Chinese food"}]}
-"Maybe or maybe not, I'm not sure" → {"tasks": []}
-"I need to call mom and also email the landlord" → {"tasks": [{"title": "Call mom"}, {"title": "Email landlord"}]}
-"Ok testing, one two three" → {"tasks": []}
-"Hmm what else, oh right schedule dentist appointment" → {"tasks": [{"title": "Schedule dentist appointment"}]}`
+"So since Dawn is still up I can still talk and I'm going to test the microphone" → {"tasks": []}
+"I need to pick up Chinese food and call my mom" → {"tasks": [{"title": "Pick up Chinese food"}, {"title": "Call mom"}]}
+"Ok I'm gonna say a few random things then try to add a new user" → {"tasks": []}
+"Remind me to buy milk and schedule car service" → {"tasks": [{"title": "Buy milk"}, {"title": "Schedule car service"}]}`
             },
             {
               role: "user",
