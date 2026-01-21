@@ -72,9 +72,6 @@ export default function QuickDumpScreen() {
           addUnsortedTask(task.title);
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        addUnsortedTask(text.trim());
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (error) {
       console.error("Task extraction error:", error);
