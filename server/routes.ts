@@ -108,11 +108,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Sending audio to Deepgram, size:", audioBuffer.length, "bytes");
 
-      const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true", {
+      const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&detect_language=true", {
         method: "POST",
         headers: {
           "Authorization": `Token ${apiKey}`,
-          "Content-Type": "audio/m4a",
+          "Content-Type": "audio/mp4",
         },
         body: audioBuffer,
       });
