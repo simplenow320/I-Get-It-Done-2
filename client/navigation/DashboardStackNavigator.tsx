@@ -84,10 +84,19 @@ export default function DashboardStackNavigator() {
       <Stack.Screen
         name="QuickDump"
         component={QuickDumpScreen}
-        options={{
+        options={({ navigation }) => ({
           headerTitle: "Quick Dump",
           presentation: "modal",
-        }}
+          headerLeft: () => (
+            <Pressable
+              onPress={() => navigation.goBack()}
+              hitSlop={12}
+              style={{ marginLeft: 4, padding: 8 }}
+            >
+              <Feather name="x" size={24} color={theme.text} />
+            </Pressable>
+          ),
+        })}
       />
       <Stack.Screen
         name="TourLanding"
