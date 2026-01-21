@@ -354,7 +354,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         checkVoiceUsage();
       } else {
-        onError?.("Didn't catch that");
+        const errorMsg = durationSeconds < 2 
+          ? "Hold longer to record" 
+          : "Didn't catch that - try speaking louder";
+        onError?.(errorMsg);
       }
     } catch (error: any) {
       console.error("Transcription error:", error);
