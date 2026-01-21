@@ -1,0 +1,64 @@
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+The field "cli.appVersionSource" is not set, but it will be required in the future. Learn more: https://docs.expo.dev/build-reference/app-versions/
+Resolved "production" environment for the build. Learn more: https://docs.expo.dev/eas/environment-variables/#setting-the-environment-for-your-builds
+No environment variables with visibility "Plain text" and "Sensitive" found for the "production" environment on EAS.
+
+✔ iOS app only uses standard/exempt encryption? Learn more: https://developer.apple.com/documentation/Security/complying-with-encryption-export-regulations … yes
+
+Cannot automatically write to dynamic config at: app.config.js
+Add the following to app.config.js:
+
+{
+  "ios": {
+    "infoPlist": {
+      "ITSAppUsesNonExemptEncryption": false
+    }
+  }
+}
+
+
+
+The field "cli.appVersionSource" is not set, but it will be required in the future. Learn more: https://docs.expo.dev/build-reference/app-versions/
+✔ Using remote iOS credentials (Expo server)
+
+If you provide your Apple account credentials we will be able to generate all necessary build credentials and fully validate them.
+This is optional, but without Apple account access you will need to provide all the missing values manually and we can only run minimal validation on them.
+✔ Do you want to log in to your Apple account? … no
+No problem! 👌 If any of the next steps will require Apple account access we will ask you again about it.
+Skipping Distribution Certificate validation on Apple Servers because we aren't authenticated.
+Skipping Provisioning Profile validation on Apple Servers because we aren't authenticated.
+
+Project Credentials Configuration
+
+Project                   @simplenow/i-get-it-done
+Bundle Identifier         com.igetitdone.app
+                          
+App Store Configuration   
+                          
+Distribution Certificate  
+Serial Number             5ED994BAF71BD87EE1351D719697946B
+Expiration Date           Mon, 14 Dec 2026 11:50:44 EST
+Apple Team                8HS544W74B (Troy Evans (Individual))
+Updated                   1 month ago
+                          
+Provisioning Profile      
+Developer Portal ID       9GK5344VGP
+Status                    active
+Expiration                Mon, 14 Dec 2026 11:50:44 EST
+Apple Team                8HS544W74B (Troy Evans (Individual))
+Updated                   1 month ago
+                          
+All credentials are ready to build @simplenow/i-get-it-done (com.igetitdone.app)
+
+✔ Push Notifications are set up
+
+Compressing project files and uploading to EAS Build. Learn more: https://expo.fyi/eas-build-archive
+✔ Compressed project files 6s (204 MB)
+Your project archive is 204 MB. You can reduce its size and the time it takes to upload by excluding files that are unnecessary for the build process in .easignore file. Learn more: https://expo.fyi/eas-build-archive
+✔

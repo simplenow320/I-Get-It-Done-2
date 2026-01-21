@@ -16,6 +16,7 @@ module.exports = {
       buildNumber: "15",
       infoPlist: {
         NSMicrophoneUsageDescription: "I GET IT DONE uses your microphone for voice-to-task capture. Audio is processed for transcription and immediately deleted - we never store your voice recordings.",
+        ITSAppUsesNonExemptEncryption: false,
       },
     },
     android: {
