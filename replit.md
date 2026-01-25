@@ -3,7 +3,7 @@
 ## Overview
 "I GET IT DONE" is a premium, ADHD-optimized mobile task management application designed to help users with ADHD overcome common challenges like task initiation, overwhelm, and focus maintenance. It integrates research-backed insights to provide a fast, intuitive, and rewarding experience. The app aims to keep users focused, facilitate task completion, and prevent mental overload through features like quick capture, task chunking, and gamification.
 
-The project has reached its Full MVP stage, including essential features like Quick Dump, Break It Down, Focus Mode, Focus Timer, Gamification, an Enhanced Weekly Reset, and Delegation capabilities. It also incorporates robust JWT-based authentication with security hardening and Stripe integration for subscription monetization, offering a 7-day free trial, monthly, and annual plans.
+The project has reached its Full MVP stage, including essential features like Quick Dump, Break It Down, Focus Mode, Focus Timer, Gamification, an Enhanced Weekly Reset, and Delegation capabilities. It also incorporates robust JWT-based authentication with security hardening and RevenueCat integration for subscription monetization via Apple's App Store, offering a 7-day free trial, monthly ($6.99), and annual ($49.99) plans.
 
 ## User Preferences
 - Premium, modern aesthetic (Apple meets ESPN)
@@ -61,9 +61,6 @@ All secrets are configured in Replit Secrets. The following are required for ful
 | `OPENAI_API_KEY` | AI task extraction (GPT-4o-mini) | Configured |
 | `EXPO_PUBLIC_REVENUECAT_API_KEY_IOS` | iOS in-app purchases | Configured |
 | `EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID` | Android in-app purchases | Optional |
-| `STRIPE_SECRET_KEY` | Legacy (being phased out) | Configured |
-| `STRIPE_PUBLISHABLE_KEY` | Legacy (being phased out) | Configured |
-| `STRIPE_WEBHOOK_SECRET` | Legacy (being phased out) | Configured |
 
 **Email Configuration:**
 - SendGrid sender email: `info@simplenow.co`
@@ -71,7 +68,7 @@ All secrets are configured in Replit Secrets. The following are required for ful
 
 ## External Dependencies
 
--   **RevenueCat**: Primary payment processor for iOS and Android in-app purchases. Wraps Apple StoreKit and Google Play Billing into a unified SDK. Monthly ($7.99) and annual ($59.99 - saves 37%) plans with 7-day free trial.
+-   **RevenueCat**: Primary payment processor for iOS and Android in-app purchases. Wraps Apple StoreKit and Google Play Billing into a unified SDK. Monthly ($6.99) and annual ($49.99 - saves 40%) plans with 7-day free trial.
 -   **SendGrid**: Email service for password reset codes and notifications. Sender: info@simplenow.co
 -   **Deepgram Nova-2**: Voice-to-text transcription for quick task capture via `/api/transcribe` endpoint.
 -   **OpenAI GPT-4o-mini**: AI-powered task extraction from voice transcripts.
@@ -91,7 +88,7 @@ The app has achieved **92/100 production readiness score** and is ready for App 
 - App Store Privacy Disclosure guide at `/app-store-privacy`
 - Support page at `/support`
 - Demo account for Apple review: `demo@igetitdone.co` / `AppleReview2024!`
-- RevenueCat integration for iOS/Android subscriptions ($7.99/month, $59.99/year with 7-day trial)
+- RevenueCat integration for iOS/Android subscriptions ($6.99/month, $49.99/year with 7-day trial)
 - StoreKit configuration for iOS (ready for App Store submission)
 
 **Remaining Manual Verification:**
