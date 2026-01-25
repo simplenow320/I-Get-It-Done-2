@@ -131,7 +131,8 @@ Compliant with Guideline 5.1.1(v)
 **Third-party services disclosed:**
 - Deepgram (transcription) - PASS
 - OpenAI (AI task extraction) - PASS
-- Stripe (payments) - PASS
+- RevenueCat (subscription management) - PASS
+- Apple/Google (in-app purchases) - PASS
 - Apple/Google Push Services - PASS
 
 ---
