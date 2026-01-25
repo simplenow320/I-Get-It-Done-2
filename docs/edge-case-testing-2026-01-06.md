@@ -120,7 +120,7 @@ The following features require testing on a physical device via Expo Go:
 | **Delegation** | Revoke delegation mid-task | Test status updates |
 | **Gamification** | Streak at 99 days | Test display overflow |
 | **Gamification** | Level up during focus session | Test animation timing |
-| **Subscription** | Payment decline handling | Test Stripe error states |
+| **Subscription** | Payment decline handling | Test App Store error states |
 | **Subscription** | Cancel subscription mid-trial | Test access revocation |
 
 ### Lower Priority (Edge of Edge Cases)
