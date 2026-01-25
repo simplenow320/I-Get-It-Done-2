@@ -6,7 +6,6 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface SubscriptionStatus {
   status: "none" | "trialing" | "active" | "past_due" | "canceled";
-  stripeSubscriptionId: string | null;
   trialEndsAt: string | null;
   isActive: boolean;
   isTrialing: boolean;

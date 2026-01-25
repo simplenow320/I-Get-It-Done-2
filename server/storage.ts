@@ -37,8 +37,6 @@ export class MemStorage implements IStorage {
       notificationsEnabled: insertUser.notificationsEnabled ?? null,
       resetToken: insertUser.resetToken ?? null,
       resetTokenExpiry: insertUser.resetTokenExpiry ?? null,
-      stripeCustomerId: insertUser.stripeCustomerId ?? null,
-      stripeSubscriptionId: insertUser.stripeSubscriptionId ?? null,
       subscriptionStatus: insertUser.subscriptionStatus ?? null,
       trialEndsAt: insertUser.trialEndsAt ?? null,
       createdAt: now,
