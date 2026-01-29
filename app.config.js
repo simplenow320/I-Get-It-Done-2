@@ -11,9 +11,9 @@ module.exports = {
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {
-      supportsTablet: true,
+      supportsTablet: false,
       bundleIdentifier: "com.igetitdone.app",
-      buildNumber: "26",
+      buildNumber: "27",
       infoPlist: {
         NSMicrophoneUsageDescription: "I GET IT DONE uses your microphone for voice-to-task capture. Audio is processed for transcription and immediately deleted - we never store your voice recordings.",
         ITSAppUsesNonExemptEncryption: false,
