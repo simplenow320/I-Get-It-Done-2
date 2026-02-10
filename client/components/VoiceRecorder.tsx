@@ -12,7 +12,8 @@ import Animated, {
 } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
-import { uploadAsync, getInfoAsync, FileSystemUploadType } from "expo-file-system/legacy";
+import { getInfoAsync } from "expo-file-system/legacy";
+import { File } from "expo-file-system/next";
 
 import { getApiUrl } from "@/lib/query-client";
 import { getStoredAuthToken } from "@/contexts/AuthContext";
@@ -311,21 +312,25 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       const authToken = await getStoredAuthToken();
       console.log("Auth token present:", !!authToken);
       
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = {
+        "Accept": "application/json",
+      };
       if (authToken) {
         headers["Authorization"] = `Bearer ${authToken}`;
       }
       
-      const response = await uploadAsync(uploadUrl, uri, {
-        fieldName: "audio",
-        httpMethod: "POST",
-        uploadType: FileSystemUploadType.MULTIPART,
-        mimeType: "audio/m4a",
+      const formData = new FormData();
+      const audioFile = new File(uri);
+      formData.append("audio", audioFile);
+      formData.append("userId", userId || "");
+      formData.append("durationSeconds", String(durationSeconds));
+      
+      console.log("Uploading audio file, size:", fileInfo.size, "bytes");
+      
+      const response = await fetch(uploadUrl, {
+        method: "POST",
         headers,
-        parameters: {
-          userId: userId || "",
-          durationSeconds: String(durationSeconds),
-        },
+        body: formData,
       });
       
       console.log("Response status:", response.status);
@@ -340,13 +345,16 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         return;
       }
 
-      if (response.status !== 200) {
-        const errorData = JSON.parse(response.body || "{}");
-        console.error("Transcription API error:", errorData);
-        throw new Error(errorData.error || "Transcription failed");
+      const responseText = await response.text();
+      
+      if (!response.ok) {
+        let errorData: any = {};
+        try { errorData = JSON.parse(responseText); } catch (e) {}
+        console.error("Transcription API error:", response.status, errorData);
+        throw new Error(errorData.error || `Server error ${response.status}`);
       }
 
-      const data = JSON.parse(response.body);
+      const data = JSON.parse(responseText);
       console.log("Transcription result:", data);
       
       if (data.text && data.text.trim()) {
