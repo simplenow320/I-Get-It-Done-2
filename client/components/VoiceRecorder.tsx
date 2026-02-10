@@ -368,11 +368,17 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         onError?.(errorMsg);
       }
     } catch (error: any) {
-      console.error("Transcription error:", error);
+      console.error("Transcription error:", error?.message || error);
       if (isMountedRef.current) {
-        const errorMessage = error.message?.includes("network") || error.message?.includes("fetch")
-          ? "Connection failed. Check your internet."
-          : "Couldn't understand audio";
+        let errorMessage = "Couldn't understand audio";
+        const msg = error?.message?.toLowerCase() || "";
+        if (msg.includes("network") || msg.includes("fetch") || msg.includes("timeout") || msg.includes("abort")) {
+          errorMessage = "Connection failed. Check your internet.";
+        } else if (msg.includes("not found") || msg.includes("empty")) {
+          errorMessage = "Recording failed - try again";
+        } else if (msg.includes("api error") || msg.includes("transcrib")) {
+          errorMessage = "Voice service error - try again";
+        }
         setLastError(errorMessage);
         setCanRetry(true);
         lastRecordingUriRef.current = uri;
