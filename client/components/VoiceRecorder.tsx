@@ -293,30 +293,41 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     try {
       console.log("Starting transcription for:", uri, "duration:", durationSeconds);
       
-      const fileInfo = await getInfoAsync(uri);
-      console.log("File info:", JSON.stringify(fileInfo));
-      
-      if (!fileInfo.exists) {
-        throw new Error("Recording file not found");
-      }
-      
-      if (fileInfo.size === 0) {
-        throw new Error("Recording file is empty");
+      let fileSize = 0;
+      try {
+        const fileInfo = await getInfoAsync(uri);
+        console.log("File info:", JSON.stringify(fileInfo));
+        if (!fileInfo.exists) {
+          throw new Error("FILE_NOT_FOUND: Recording file does not exist at " + uri);
+        }
+        if (fileInfo.size === 0) {
+          throw new Error("FILE_EMPTY: Recording file is 0 bytes");
+        }
+        fileSize = fileInfo.size;
+      } catch (fileErr: any) {
+        if (fileErr?.message?.startsWith("FILE_")) throw fileErr;
+        throw new Error("FILE_CHECK_FAILED: " + (fileErr?.message || String(fileErr)));
       }
 
       const apiUrl = getApiUrl();
       const uploadUrl = `${apiUrl}/api/transcribe`;
-      console.log("Uploading to:", uploadUrl);
+      console.log("Upload target:", uploadUrl, "file size:", fileSize);
       
-      const authToken = await getStoredAuthToken();
-      console.log("Auth token present:", !!authToken);
+      let authToken: string | null = null;
+      try {
+        authToken = await getStoredAuthToken();
+      } catch (authErr: any) {
+        throw new Error("AUTH_FAILED: " + (authErr?.message || String(authErr)));
+      }
+      
+      if (!authToken) {
+        throw new Error("NO_AUTH_TOKEN: Not logged in");
+      }
       
       const headers: Record<string, string> = {
         "Accept": "application/json",
+        "Authorization": `Bearer ${authToken}`,
       };
-      if (authToken) {
-        headers["Authorization"] = `Bearer ${authToken}`;
-      }
       
       const formData = new FormData();
       formData.append("audio", {
@@ -327,13 +338,18 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       formData.append("userId", userId || "");
       formData.append("durationSeconds", String(durationSeconds));
       
-      console.log("Uploading audio file, size:", fileInfo.size, "bytes, uri:", uri);
+      console.log("Uploading audio:", fileSize, "bytes to", uploadUrl);
       
-      const response = await fetch(uploadUrl, {
-        method: "POST",
-        headers,
-        body: formData,
-      });
+      let response: Response;
+      try {
+        response = await fetch(uploadUrl, {
+          method: "POST",
+          headers,
+          body: formData,
+        });
+      } catch (fetchErr: any) {
+        throw new Error("FETCH_FAILED: " + (fetchErr?.message || String(fetchErr)));
+      }
       
       console.log("Response status:", response.status);
 
@@ -347,16 +363,25 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         return;
       }
 
-      const responseText = await response.text();
+      let responseText = "";
+      try {
+        responseText = await response.text();
+      } catch (readErr: any) {
+        throw new Error("RESPONSE_READ_FAILED: " + (readErr?.message || String(readErr)));
+      }
       
       if (!response.ok) {
         let errorData: any = {};
         try { errorData = JSON.parse(responseText); } catch (e) {}
-        console.error("Transcription API error:", response.status, errorData);
-        throw new Error(errorData.error || `Server error ${response.status}`);
+        throw new Error("SERVER_" + response.status + ": " + (errorData.error || responseText.substring(0, 100)));
       }
 
-      const data = JSON.parse(responseText);
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr: any) {
+        throw new Error("JSON_PARSE_FAILED: " + responseText.substring(0, 100));
+      }
       console.log("Transcription result:", data);
       
       if (data.text && data.text.trim()) {
@@ -380,17 +405,10 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         onError?.(errorMsg);
       }
     } catch (error: any) {
-      console.error("Transcription error:", error?.message || error);
+      const rawMsg = error?.message || String(error);
+      console.error("Transcription error:", rawMsg);
       if (isMountedRef.current) {
-        let errorMessage = "Couldn't understand audio";
-        const msg = error?.message?.toLowerCase() || "";
-        if (msg.includes("network") || msg.includes("fetch") || msg.includes("timeout") || msg.includes("abort")) {
-          errorMessage = "Connection failed. Check your internet.";
-        } else if (msg.includes("not found") || msg.includes("empty")) {
-          errorMessage = "Recording failed - try again";
-        } else if (msg.includes("api error") || msg.includes("transcrib")) {
-          errorMessage = "Voice service error - try again";
-        }
+        let errorMessage = `Voice error: ${rawMsg.substring(0, 120)}`;
         setLastError(errorMessage);
         setCanRetry(true);
         lastRecordingUriRef.current = uri;
