@@ -58,7 +58,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/transcribe", requireAuth, upload.single("audio"), async (req: AuthenticatedRequest, res: Response) => {
     try {
+      console.log("[VOICE] === New transcription request ===");
+      console.log("[VOICE] File received:", req.file ? { 
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        path: req.file.path
+      } : "NO FILE");
+      console.log("[VOICE] Body params:", { userId: req.body.userId, durationSeconds: req.body.durationSeconds });
+      
       if (!req.file) {
+        console.error("[VOICE] ERROR: No audio file in request");
         return res.status(400).json({ error: "No audio file provided" });
       }
 
@@ -105,7 +116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const audioFilePath = req.file.path;
       const audioBuffer = fs.readFileSync(audioFilePath);
       
-      console.log("Sending audio to Deepgram, size:", audioBuffer.length, "bytes");
+      console.log("[VOICE] Sending audio to Deepgram, size:", audioBuffer.length, "bytes, mimetype:", req.file.mimetype);
 
       const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&detect_language=true", {
         method: "POST",
@@ -133,7 +144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const confidence = result.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
       const audioDuration = result.metadata?.duration || 0;
       
-      console.log("Transcript:", transcript, "Confidence:", confidence, "Duration:", audioDuration, "FileSize:", audioBuffer.length);
+      console.log("[VOICE] Result - Transcript:", JSON.stringify(transcript), "Confidence:", confidence, "Duration:", audioDuration, "FileSize:", audioBuffer.length);
       
       if (durationSeconds > 0) {
         const today = new Date().toISOString().split('T')[0];
@@ -163,17 +174,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         debug: { audioDuration, fileSize: audioBuffer.length, confidence }
       });
     } catch (error: any) {
-      console.error("Transcription error:", error);
+      console.error("[VOICE] ERROR:", error?.message || error);
       
       if (req.file?.path) {
         fs.unlink(req.file.path, () => {});
       }
 
-      if (error.status === 401) {
+      if (error.message?.includes("401")) {
         return res.status(401).json({ error: "Invalid API key" });
       }
       
-      res.status(500).json({ error: "Failed to transcribe audio" });
+      res.status(500).json({ error: "Transcription failed: " + (error?.message || "Unknown error") });
     }
   });
 
