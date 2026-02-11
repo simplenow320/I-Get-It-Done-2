@@ -160,7 +160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ 
         text: transcript,
-        debug: !transcript ? { audioDuration, fileSize: audioBuffer.length, confidence } : undefined
+        debug: { audioDuration, fileSize: audioBuffer.length, confidence }
       });
     } catch (error: any) {
       console.error("Transcription error:", error);

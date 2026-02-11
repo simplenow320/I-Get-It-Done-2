@@ -370,7 +370,9 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
           } else if (data.debug.audioDuration < 0.5) {
             errorMsg = "Audio too brief - speak longer";
           } else {
-            errorMsg = "Couldn't hear you - try again";
+            const confidencePercent = Math.round((data.debug.confidence || 0) * 100);
+            errorMsg = `Couldn't hear you - try again (${confidencePercent}% confidence)`;
+            console.log("Deepgram low confidence:", data.debug.confidence);
           }
         }
         onError?.(errorMsg);

@@ -1,0 +1,20 @@
+      if (data.text && data.text.trim()) {
+        onTranscriptionComplete(data.text.trim());
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        checkVoiceUsage();
+      } else {
+        console.log("Empty transcript debug:", data.debug);
+        let errorMsg = "Didn't catch that";
+        if (data.debug) {
+          if (data.debug.fileSize < 1000) {
+            errorMsg = "Recording too short";
+          } else if (data.debug.audioDuration < 0.5) {
+            errorMsg = "Audio too brief - speak longer";
+          } else {
+            // Include confidence in debug
+            console.log("Deepgram confidence:", data.debug.confidence);
+            errorMsg = `Couldn't hear you - try again (Confidence: ${Math.round(data.debug.confidence * 100)}%)`;
+          }
+        }
+        onError?.(errorMsg);
+      }
