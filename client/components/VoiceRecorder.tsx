@@ -13,7 +13,6 @@ import Animated, {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
 import { getInfoAsync } from "expo-file-system/legacy";
-import { File } from "expo-file-system/next";
 
 import { getApiUrl } from "@/lib/query-client";
 import { getStoredAuthToken } from "@/contexts/AuthContext";
@@ -320,12 +319,15 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       }
       
       const formData = new FormData();
-      const audioFile = new File(uri);
-      formData.append("audio", audioFile);
+      formData.append("audio", {
+        uri: uri,
+        type: "audio/mp4",
+        name: "recording.m4a",
+      } as any);
       formData.append("userId", userId || "");
       formData.append("durationSeconds", String(durationSeconds));
       
-      console.log("Uploading audio file, size:", fileInfo.size, "bytes");
+      console.log("Uploading audio file, size:", fileInfo.size, "bytes, uri:", uri);
       
       const response = await fetch(uploadUrl, {
         method: "POST",
