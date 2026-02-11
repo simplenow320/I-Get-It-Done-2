@@ -23,6 +23,7 @@ const AUTH_STORAGE_KEY = "@auth_user";
 const AUTH_TOKEN_KEY = "@auth_token";
 
 let cachedToken: string | null = null;
+let forceLogoutCallback: (() => Promise<void>) | null = null;
 
 export async function getStoredAuthToken(): Promise<string | null> {
   if (cachedToken) return cachedToken;
@@ -35,12 +36,28 @@ export async function getStoredAuthToken(): Promise<string | null> {
   }
 }
 
+export async function handleExpiredSession(): Promise<void> {
+  cachedToken = null;
+  try {
+    await AsyncStorage.multiRemove([AUTH_STORAGE_KEY, AUTH_TOKEN_KEY]);
+  } catch {}
+  if (forceLogoutCallback) {
+    await forceLogoutCallback();
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadStoredAuth();
+    forceLogoutCallback = async () => {
+      setUser(null);
+    };
+    return () => {
+      forceLogoutCallback = null;
+    };
   }, []);
 
   const loadStoredAuth = async () => {

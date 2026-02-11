@@ -15,7 +15,7 @@ import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } fr
 import { getInfoAsync } from "expo-file-system/legacy";
 
 import { getApiUrl } from "@/lib/query-client";
-import { getStoredAuthToken } from "@/contexts/AuthContext";
+import { getStoredAuthToken, handleExpiredSession } from "@/contexts/AuthContext";
 import { LaneColors, Spacing } from "@/constants/theme";
 import { ConsentDisclosure } from "./ConsentDisclosure";
 import { ThemedText } from "./ThemedText";
@@ -355,6 +355,13 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
       if (!isMountedRef.current) return;
 
+      if (response.status === 401) {
+        onError?.("Session expired - please log in again");
+        setState("idle");
+        await handleExpiredSession();
+        return;
+      }
+
       if (response.status === 429) {
         setLimitReached(true);
         setSecondsRemaining(0);
@@ -408,7 +415,18 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       const rawMsg = error?.message || String(error);
       console.error("Transcription error:", rawMsg);
       if (isMountedRef.current) {
-        let errorMessage = `Voice error: ${rawMsg.substring(0, 120)}`;
+        let errorMessage = "Couldn't understand audio";
+        const msg = rawMsg.toLowerCase();
+        if (msg.includes("fetch_failed") || msg.includes("network") || msg.includes("timeout")) {
+          errorMessage = "Connection failed - check your internet";
+        } else if (msg.includes("file_not_found") || msg.includes("file_empty")) {
+          errorMessage = "Recording failed - try again";
+        } else if (msg.includes("server_")) {
+          errorMessage = "Voice service error - try again";
+        } else if (msg.includes("no_auth_token")) {
+          errorMessage = "Please log in to use voice";
+          handleExpiredSession();
+        }
         setLastError(errorMessage);
         setCanRetry(true);
         lastRecordingUriRef.current = uri;
