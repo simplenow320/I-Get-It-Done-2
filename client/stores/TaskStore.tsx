@@ -205,6 +205,13 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isAuthenticated && userId) {
       loadState();
+    } else if (!isAuthenticated) {
+      setTasks([]);
+      setUnsortedTasks([]);
+      setContacts([]);
+      setDelegatedToMeTasks([]);
+      setSettings(defaultSettings);
+      setIsLoaded(false);
     }
   }, [isAuthenticated, userId]);
 
