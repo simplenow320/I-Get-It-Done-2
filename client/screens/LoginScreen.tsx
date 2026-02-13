@@ -44,7 +44,7 @@ export default function LoginScreen() {
     setIsLoading(true);
     setError("");
 
-    const result = await login(email.trim(), password, rememberMe);
+    const result = await login(email.trim(), password);
 
     setIsLoading(false);
 

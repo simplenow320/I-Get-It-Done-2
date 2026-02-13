@@ -11,7 +11,7 @@ interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, rememberMe: boolean) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   getAuthToken: () => Promise<string | null>;
@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return getStoredAuthToken();
   };
 
-  const login = async (email: string, password: string, rememberMe: boolean): Promise<{ success: boolean; error?: string }> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const apiUrl = getApiUrl();
       const url = new URL("/api/auth/login", apiUrl).toString();
@@ -120,14 +120,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(authUser);
         cachedToken = data.token;
 
-        if (rememberMe) {
-          await AsyncStorage.multiSet([
-            [AUTH_STORAGE_KEY, JSON.stringify(authUser)],
-            [AUTH_TOKEN_KEY, data.token],
-          ]);
-        } else {
-          cachedToken = data.token;
-        }
+        await AsyncStorage.multiSet([
+          [AUTH_STORAGE_KEY, JSON.stringify(authUser)],
+          [AUTH_TOKEN_KEY, data.token],
+        ]);
 
         return { success: true };
       } catch (fetchError: any) {
