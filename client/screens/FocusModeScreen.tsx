@@ -16,7 +16,9 @@ import ProgressRing from "@/components/ProgressRing";
 import Button from "@/components/Button";
 import EmptyState from "@/components/EmptyState";
 import Confetti from "@/components/Confetti";
+import { ProFeatureGate } from "@/components/ProFeatureGate";
 import { useTheme } from "@/hooks/useTheme";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useTaskStore, Task } from "@/stores/TaskStore";
 import { useGamification } from "@/stores/GamificationStore";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
@@ -33,6 +35,7 @@ export default function FocusModeScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
+  const { isPro } = useSubscription();
   
   const { getTasksByLane, completeTask, moveTask, getTaskProgress } = useTaskStore();
   const { recordTaskComplete, recordNowCleared } = useGamification();
@@ -40,6 +43,14 @@ export default function FocusModeScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
   const translateX = useSharedValue(0);
+
+  if (!isPro) {
+    return (
+      <ThemedView style={{ flex: 1, justifyContent: "center", paddingTop: headerHeight, paddingBottom: tabBarHeight }}>
+        <ProFeatureGate feature="Focus Mode" />
+      </ThemedView>
+    );
+  }
 
   const nowTasks = getTasksByLane("now");
   const safeIndex = Math.min(currentIndex, Math.max(0, nowTasks.length - 1));

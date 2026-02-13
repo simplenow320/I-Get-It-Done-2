@@ -10,7 +10,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 
 interface ProFeatureGateProps {
-  children: ReactNode;
+  children?: ReactNode;
   feature?: string;
   showUpgradePrompt?: boolean;
 }

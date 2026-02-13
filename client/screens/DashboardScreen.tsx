@@ -15,6 +15,7 @@ import StreakBadge from "@/components/StreakBadge";
 import { ThemedText } from "@/components/ThemedText";
 import { PaymentStatusBanner } from "@/components/PaymentStatusBanner";
 import { useTheme } from "@/hooks/useTheme";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
 import { useGamification } from "@/stores/GamificationStore";
@@ -30,6 +31,7 @@ export default function DashboardScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { getTasksByLane, unsortedTasks, getCompletedTasks } = useTaskStore();
   const { currentStreak } = useGamification();
+  const { isPro } = useSubscription();
 
   const handleLanePress = (lane: Lane) => {
     navigation.navigate("LaneDetail", { lane });
@@ -47,6 +49,8 @@ export default function DashboardScreen() {
   const totalSoonTasks = getTasksByLane("soon").length;
   const totalLaterTasks = getTasksByLane("later").length;
   const totalParkTasks = getTasksByLane("park").length;
+  const FREE_TASK_LIMIT = 5;
+  const totalActiveTasks = totalNowTasks + totalSoonTasks + totalLaterTasks + totalParkTasks;
 
   const completedToday = useMemo(() => {
     const today = new Date();
@@ -75,9 +79,24 @@ export default function DashboardScreen() {
       >
         <PaymentStatusBanner />
         
-        {currentStreak > 0 ? (
+        {isPro && currentStreak > 0 ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)} style={styles.streakContainer}>
             <StreakBadge streak={currentStreak} compact />
+          </Animated.View>
+        ) : null}
+
+        {!isPro && totalActiveTasks >= FREE_TASK_LIMIT ? (
+          <Animated.View entering={FadeInUp.delay(0).duration(400)}>
+            <Pressable
+              onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
+              style={[styles.limitBanner, { backgroundColor: LaneColors.now.primary + "15", borderColor: LaneColors.now.primary + "30" }]}
+            >
+              <Feather name="alert-circle" size={16} color={LaneColors.now.primary} />
+              <ThemedText type="small" style={{ color: LaneColors.now.primary, marginLeft: Spacing.xs, flex: 1 }}>
+                {totalActiveTasks}/{FREE_TASK_LIMIT} free tasks used. Upgrade for unlimited.
+              </ThemedText>
+              <Feather name="chevron-right" size={16} color={LaneColors.now.primary} />
+            </Pressable>
           </Animated.View>
         ) : null}
 
@@ -213,5 +232,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.lg,
+  },
+  limitBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
   },
 });

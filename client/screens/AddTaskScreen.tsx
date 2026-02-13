@@ -11,6 +11,7 @@ import { LaneSelector } from "@/components/LaneSelector";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
 
@@ -24,7 +25,10 @@ export default function AddTaskScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, "AddTask">>();
-  const { addTask } = useTaskStore();
+  const { isPro } = useSubscription();
+  const { addTask, getTasksByLane } = useTaskStore();
+  const FREE_TASK_LIMIT = 5;
+  const totalActiveTasks = getTasksByLane("now").length + getTasksByLane("soon").length + getTasksByLane("later").length + getTasksByLane("park").length;
 
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -61,6 +65,11 @@ export default function AddTaskScreen() {
     if (!selectedLane) {
       setVoiceError("Choose when to handle this task");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+    if (!isPro && totalActiveTasks >= FREE_TASK_LIMIT) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setVoiceError(`Free plan limited to ${FREE_TASK_LIMIT} tasks. Upgrade to Pro for unlimited.`);
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -111,12 +120,31 @@ export default function AddTaskScreen() {
             maxLength={200}
           />
           <View style={styles.voiceContainer}>
-            <VoiceRecorder
-              onTranscriptionComplete={handleVoiceTranscription}
-              onError={handleVoiceError}
-              compact
-              userId={user?.id}
-            />
+            {isPro ? (
+              <VoiceRecorder
+                onTranscriptionComplete={handleVoiceTranscription}
+                onError={handleVoiceError}
+                compact
+                userId={user?.id}
+              />
+            ) : (
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  (navigation as any).navigate("ProfileTab", { screen: "Subscription" });
+                }}
+                style={({ pressed }) => [
+                  {
+                    width: 44, height: 44, borderRadius: 22,
+                    backgroundColor: theme.backgroundSecondary,
+                    alignItems: "center" as const, justifyContent: "center" as const,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Feather name="lock" size={18} color={theme.textSecondary} />
+              </Pressable>
+            )}
           </View>
         </View>
         {voiceError ? (

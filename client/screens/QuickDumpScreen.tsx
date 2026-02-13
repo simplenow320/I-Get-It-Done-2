@@ -14,6 +14,7 @@ import VoiceRecorder from "@/components/VoiceRecorder";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useTaskStore, Lane, UnsortedTask } from "@/stores/TaskStore";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
@@ -35,7 +36,10 @@ export default function QuickDumpScreen() {
   const navigation = useNavigation();
   const inputRef = useRef<TextInput>(null);
   
-  const { unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask } = useTaskStore();
+  const { isPro } = useSubscription();
+  const { unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask, getTasksByLane } = useTaskStore();
+  const FREE_TASK_LIMIT = 5;
+  const totalActiveTasks = getTasksByLane("now").length + getTasksByLane("soon").length + getTasksByLane("later").length + getTasksByLane("park").length;
   
   const [phase, setPhase] = useState<Phase>("capture");
   const [inputValue, setInputValue] = useState("");
@@ -95,12 +99,17 @@ export default function QuickDumpScreen() {
   }, [unsortedTasks.length]);
 
   const handleSortTask = useCallback((lane: Lane) => {
+    if (!isPro && totalActiveTasks >= FREE_TASK_LIMIT) {
+      setVoiceError(`Free plan limited to ${FREE_TASK_LIMIT} tasks. Upgrade to Pro for unlimited.`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
     const taskToSort = unsortedTasks[0];
     if (taskToSort) {
       sortUnsortedTask(taskToSort.id, lane);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-  }, [unsortedTasks, sortUnsortedTask]);
+  }, [unsortedTasks, sortUnsortedTask, isPro, totalActiveTasks]);
 
   React.useEffect(() => {
     if (phase === "sort" && unsortedTasks.length === 0) {
@@ -211,12 +220,31 @@ export default function QuickDumpScreen() {
             onSubmitEditing={handleAddTask}
             blurOnSubmit={false}
           />
-          <VoiceRecorder
-            onTranscriptionComplete={handleVoiceTranscription}
-            onError={handleVoiceError}
-            compact
-            userId={user?.id}
-          />
+          {isPro ? (
+            <VoiceRecorder
+              onTranscriptionComplete={handleVoiceTranscription}
+              onError={handleVoiceError}
+              compact
+              userId={user?.id}
+            />
+          ) : (
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                (navigation as any).navigate("ProfileTab", { screen: "Subscription" });
+              }}
+              style={({ pressed }) => [
+                {
+                  width: 44, height: 44, borderRadius: 22,
+                  backgroundColor: theme.backgroundSecondary,
+                  alignItems: "center" as const, justifyContent: "center" as const,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Feather name="lock" size={18} color={theme.textSecondary} />
+            </Pressable>
+          )}
           <Pressable
             onPress={handleAddTask}
             style={({ pressed }) => [

@@ -10,7 +10,9 @@ import { useNavigation } from "@react-navigation/native";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
+import { ProFeatureGate } from "@/components/ProFeatureGate";
 import { useTheme } from "@/hooks/useTheme";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Contact, DelegationStatus, TeamMember, TeamInvite } from "@/stores/TaskStore";
 
@@ -37,6 +39,7 @@ export default function TeamHubScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { isPro } = useSubscription();
   const navigation = useNavigation<any>();
   const { 
     contacts, addContact, deleteContact, getDelegatedTasks, getDelegatedTasksByContact,
@@ -59,6 +62,14 @@ export default function TeamHubScreen() {
   useEffect(() => {
     refreshTeamData();
   }, [refreshTeamData]);
+
+  if (!isPro) {
+    return (
+      <ThemedView style={{ flex: 1, justifyContent: "center", paddingTop: headerHeight, paddingBottom: tabBarHeight }}>
+        <ProFeatureGate feature="Team Delegation" />
+      </ThemedView>
+    );
+  }
 
   const delegatedTasks = getDelegatedTasks();
 

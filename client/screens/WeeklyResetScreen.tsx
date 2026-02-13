@@ -8,7 +8,9 @@ import Animated, { FadeInUp, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
+import { ProFeatureGate } from "@/components/ProFeatureGate";
 import { useTheme } from "@/hooks/useTheme";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane, Task } from "@/stores/TaskStore";
 import { useGamification, Level } from "@/stores/GamificationStore";
@@ -28,9 +30,18 @@ export default function WeeklyResetScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
+  const { isPro } = useSubscription();
   const navigation = useNavigation();
   const { getCompletedTasks, getTasksByLane, moveTask } = useTaskStore();
   const gamification = useGamification();
+
+  if (!isPro) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", backgroundColor: theme.backgroundRoot, paddingTop: headerHeight }}>
+        <ProFeatureGate feature="Weekly Reset Insights" />
+      </View>
+    );
+  }
 
   const completedTasks = getCompletedTasks();
   
