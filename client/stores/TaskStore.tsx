@@ -340,8 +340,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveTaskToApi = async (task: Task, isNew: boolean = false) => {
+  const saveTaskToApi = async (task: Task, isNew: boolean = false, retryCount: number = 0) => {
     if (!userId) return;
+    const MAX_RETRIES = 3;
     try {
       if (isNew) {
         await apiRequest("POST", "/api/tasks", {
@@ -370,20 +371,37 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           lastDelegationUpdate: task.lastDelegationUpdate?.toISOString(),
         });
       }
-    } catch (error) {
-      console.error("Failed to save task:", error);
+    } catch (error: any) {
+      const is401 = error?.message?.startsWith("401");
+      console.error(`Failed to save task (attempt ${retryCount + 1}):`, error);
+      if (!is401 && retryCount < MAX_RETRIES) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 8000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return saveTaskToApi(task, isNew, retryCount + 1);
+      }
+      if (retryCount >= MAX_RETRIES) {
+        console.error("Task save failed after all retries:", task.id, task.title);
+      }
     }
   };
 
-  const deleteTaskFromApi = async (taskId: string) => {
+  const deleteTaskFromApi = async (taskId: string, retryCount: number = 0) => {
+    const MAX_RETRIES = 3;
     try {
       await apiRequest("DELETE", `/api/tasks/${taskId}`);
-    } catch (error) {
-      console.error("Failed to delete task:", error);
+    } catch (error: any) {
+      const is401 = error?.message?.startsWith("401");
+      console.error(`Failed to delete task (attempt ${retryCount + 1}):`, error);
+      if (!is401 && retryCount < MAX_RETRIES) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 8000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return deleteTaskFromApi(taskId, retryCount + 1);
+      }
     }
   };
 
-  const saveSubtaskToApi = async (taskId: string, subtask: Subtask, isNew: boolean = false) => {
+  const saveSubtaskToApi = async (taskId: string, subtask: Subtask, isNew: boolean = false, retryCount: number = 0) => {
+    const MAX_RETRIES = 3;
     try {
       if (isNew) {
         await apiRequest("POST", "/api/subtasks", {
@@ -397,8 +415,14 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           title: subtask.title,
         });
       }
-    } catch (error) {
-      console.error("Failed to save subtask:", error);
+    } catch (error: any) {
+      const is401 = error?.message?.startsWith("401");
+      console.error(`Failed to save subtask (attempt ${retryCount + 1}):`, error);
+      if (!is401 && retryCount < MAX_RETRIES) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 8000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return saveSubtaskToApi(taskId, subtask, isNew, retryCount + 1);
+      }
     }
   };
 
