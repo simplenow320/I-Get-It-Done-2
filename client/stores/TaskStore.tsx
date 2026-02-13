@@ -292,6 +292,8 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         }));
 
         setTasks(loadedTasks);
+      } else {
+        setTasks([]);
       }
 
       const contactsResponse = await apiRequest("GET", `/api/contacts/${userId}`);
@@ -306,6 +308,8 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           createdAt: parseDate(c.createdAt),
         }));
         setContacts(loadedContacts);
+      } else {
+        setContacts([]);
       }
     } catch (error) {
       console.error("Failed to load from database:", error);
