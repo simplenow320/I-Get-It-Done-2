@@ -177,6 +177,8 @@ const defaultSettings: UserSettings = {
 
 const STORAGE_KEY_PREFIX = "@task_store_";
 const SETTINGS_STORAGE_KEY_PREFIX = "@user_settings_";
+const TASKS_CACHE_KEY_PREFIX = "@tasks_cache_";
+const CONTACTS_CACHE_KEY_PREFIX = "@contacts_cache_";
 
 const TaskStoreContext = createContext<TaskStoreContext | null>(null);
 
@@ -190,6 +192,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const [delegatedToMeTasks, setDelegatedToMeTasks] = useState<DelegatedToMeTask[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [isLoaded, setIsLoaded] = useState(false);
+  const loadingRef = React.useRef(false);
   const userId = user?.id || null;
 
   const generateId = () => {
@@ -201,11 +204,14 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const getStorageKey = () => `${STORAGE_KEY_PREFIX}${userId}`;
   const getSettingsStorageKey = () => `${SETTINGS_STORAGE_KEY_PREFIX}${userId}`;
+  const getTasksCacheKey = () => `${TASKS_CACHE_KEY_PREFIX}${userId}`;
+  const getContactsCacheKey = () => `${CONTACTS_CACHE_KEY_PREFIX}${userId}`;
 
   useEffect(() => {
     if (isAuthenticated && userId) {
       loadState();
     } else if (!isAuthenticated) {
+      loadingRef.current = false;
       setTasks([]);
       setUnsortedTasks([]);
       setContacts([]);
@@ -234,7 +240,103 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     return undefined;
   };
 
+  const parseTasksFromApi = (apiTasks: any[]): Task[] => {
+    return apiTasks.map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      notes: t.notes || undefined,
+      lane: t.lane as Lane,
+      createdAt: parseDate(t.createdAt),
+      dueDate: parseDateOptional(t.dueDate),
+      completedAt: parseDateOptional(t.completedAt),
+      subtasks: (t.subtasks || []).map((st: any) => ({
+        id: st.id,
+        title: st.title,
+        completed: st.completed,
+      })),
+      reminderType: (t.reminderType || "soft") as ReminderType,
+      focusTimeMinutes: t.focusTimeMinutes || 0,
+      isOverdue: t.isOverdue || false,
+      assignedTo: t.assignedTo || undefined,
+      delegationStatus: t.delegationStatus || undefined,
+      delegatedAt: parseDateOptional(t.delegatedAt),
+      lastDelegationUpdate: parseDateOptional(t.lastDelegationUpdate),
+      delegationNotes: (t.delegationNotes || []).map((n: any) => ({
+        id: n.id,
+        type: n.type,
+        text: n.text,
+        createdAt: parseDate(n.createdAt),
+        author: "owner" as const,
+      })),
+    }));
+  };
+
+  const parseContactsFromApi = (apiContacts: any[]): Contact[] => {
+    return apiContacts.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      role: c.role || undefined,
+      color: c.color,
+      createdAt: parseDate(c.createdAt),
+    }));
+  };
+
+  const cacheTasksLocally = async (taskList: Task[], contactList: Contact[]) => {
+    try {
+      const tasksCacheKey = getTasksCacheKey();
+      const contactsCacheKey = getContactsCacheKey();
+      const serializableTasks = taskList.map(t => ({
+        ...t,
+        createdAt: serializeDate(t.createdAt),
+        dueDate: serializeDate(t.dueDate),
+        completedAt: serializeDate(t.completedAt),
+        delegatedAt: serializeDate(t.delegatedAt),
+        lastDelegationUpdate: serializeDate(t.lastDelegationUpdate),
+        delegationNotes: (t.delegationNotes || []).map(n => ({
+          ...n,
+          createdAt: serializeDate(n.createdAt),
+        })),
+      }));
+      const serializableContacts = contactList.map(c => ({
+        ...c,
+        createdAt: serializeDate(c.createdAt),
+      }));
+      await AsyncStorage.setItem(tasksCacheKey, JSON.stringify(serializableTasks));
+      await AsyncStorage.setItem(contactsCacheKey, JSON.stringify(serializableContacts));
+    } catch (error) {
+      console.error("Failed to cache tasks locally:", error);
+    }
+  };
+
+  const loadCachedTasks = async (): Promise<{ tasks: Task[]; contacts: Contact[] }> => {
+    try {
+      const tasksCacheKey = getTasksCacheKey();
+      const contactsCacheKey = getContactsCacheKey();
+      const [cachedTasks, cachedContacts] = await Promise.all([
+        AsyncStorage.getItem(tasksCacheKey),
+        AsyncStorage.getItem(contactsCacheKey),
+      ]);
+      let taskList: Task[] = [];
+      let contactList: Contact[] = [];
+      if (cachedTasks) {
+        const parsed = JSON.parse(cachedTasks);
+        taskList = parseTasksFromApi(parsed);
+      }
+      if (cachedContacts) {
+        const parsed = JSON.parse(cachedContacts);
+        contactList = parseContactsFromApi(parsed);
+      }
+      return { tasks: taskList, contacts: contactList };
+    } catch (error) {
+      console.error("Failed to load cached tasks:", error);
+      return { tasks: [], contacts: [] };
+    }
+  };
+
   const loadState = async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+
     try {
       const settingsKey = getSettingsStorageKey();
       const storageKey = getStorageKey();
@@ -253,73 +355,54 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         if (parsed.unsortedTasks) setUnsortedTasks(parsed.unsortedTasks);
       }
 
+      const cached = await loadCachedTasks();
+      if (cached.tasks.length > 0) {
+        setTasks(cached.tasks);
+        setContacts(cached.contacts);
+      }
+
       await loadFromDatabase();
       setIsLoaded(true);
     } catch (error) {
       console.error("Failed to load task store:", error);
       setIsLoaded(true);
+    } finally {
+      loadingRef.current = false;
     }
   };
 
-  const loadFromDatabase = async () => {
+  const loadFromDatabase = async (retryCount: number = 0) => {
+    const MAX_RETRIES = 3;
     try {
       if (!userId) return;
 
       const tasksResponse = await apiRequest("GET", `/api/tasks/${userId}`);
       const tasksData = await tasksResponse.json();
 
-      if (tasksData.tasks && tasksData.tasks.length > 0) {
-        const loadedTasks: Task[] = tasksData.tasks.map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          notes: t.notes || undefined,
-          lane: t.lane as Lane,
-          createdAt: parseDate(t.createdAt),
-          dueDate: parseDateOptional(t.dueDate),
-          completedAt: parseDateOptional(t.completedAt),
-          subtasks: (t.subtasks || []).map((st: any) => ({
-            id: st.id,
-            title: st.title,
-            completed: st.completed,
-          })),
-          reminderType: (t.reminderType || "soft") as ReminderType,
-          focusTimeMinutes: t.focusTimeMinutes || 0,
-          isOverdue: t.isOverdue || false,
-          assignedTo: t.assignedTo || undefined,
-          delegationStatus: t.delegationStatus || undefined,
-          delegatedAt: parseDateOptional(t.delegatedAt),
-          lastDelegationUpdate: parseDateOptional(t.lastDelegationUpdate),
-          delegationNotes: (t.delegationNotes || []).map((n: any) => ({
-            id: n.id,
-            type: n.type,
-            text: n.text,
-            createdAt: parseDate(n.createdAt),
-            author: "owner" as const,
-          })),
-        }));
+      const loadedTasks = (tasksData.tasks && tasksData.tasks.length > 0)
+        ? parseTasksFromApi(tasksData.tasks)
+        : [];
 
-        setTasks(loadedTasks);
-      } else {
-        setTasks([]);
-      }
+      setTasks(loadedTasks);
 
       const contactsResponse = await apiRequest("GET", `/api/contacts/${userId}`);
       const contactsData = await contactsResponse.json();
 
-      if (contactsData.contacts && contactsData.contacts.length > 0) {
-        const loadedContacts: Contact[] = contactsData.contacts.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          role: c.role || undefined,
-          color: c.color,
-          createdAt: parseDate(c.createdAt),
-        }));
-        setContacts(loadedContacts);
-      } else {
-        setContacts([]);
+      const loadedContacts = (contactsData.contacts && contactsData.contacts.length > 0)
+        ? parseContactsFromApi(contactsData.contacts)
+        : [];
+
+      setContacts(loadedContacts);
+
+      await cacheTasksLocally(loadedTasks, loadedContacts);
+    } catch (error: any) {
+      const is401 = error?.message?.startsWith("401");
+      console.error(`Failed to load from database (attempt ${retryCount + 1}):`, error);
+      if (!is401 && retryCount < MAX_RETRIES) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 8000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return loadFromDatabase(retryCount + 1);
       }
-    } catch (error) {
-      console.error("Failed to load from database:", error);
     }
   };
 
@@ -335,6 +418,10 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       
       await AsyncStorage.setItem(storageKey, JSON.stringify({ unsortedTasks }));
       await AsyncStorage.setItem(settingsKey, JSON.stringify(settings));
+
+      if (tasks.length > 0 || contacts.length > 0) {
+        await cacheTasksLocally(tasks, contacts);
+      }
     } catch (error) {
       console.error("Failed to save local state:", error);
     }
