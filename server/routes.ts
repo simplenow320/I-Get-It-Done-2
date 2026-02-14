@@ -730,7 +730,9 @@ Examples:
 
       const userRecord = await db.select().from(users).where(eq(users.id, userId)).limit(1);
       const subscriptionStatus = userRecord[0]?.subscriptionStatus || "none";
-      const isPro = subscriptionStatus === "active" || subscriptionStatus === "pro";
+      const trialEndsAt = userRecord[0]?.trialEndsAt;
+      const isTrialing = subscriptionStatus === "trialing" && trialEndsAt && new Date(trialEndsAt) > new Date();
+      const isPro = subscriptionStatus === "active" || subscriptionStatus === "pro" || isTrialing;
 
       if (!isPro) {
         const existingTasks = await db.select({ id: tasks.id }).from(tasks)
