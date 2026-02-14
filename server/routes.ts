@@ -1598,9 +1598,11 @@ Examples:
     try {
       const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
       if (webhookSecret) {
-        const authHeader = req.headers["authorization"];
-        if (authHeader !== webhookSecret) {
-          console.error("[RevenueCat Webhook] Invalid authorization header");
+        const authHeader = req.headers["authorization"] || "";
+        const normalizedHeader = authHeader.trim();
+        const normalizedSecret = webhookSecret.trim();
+        if (normalizedHeader !== normalizedSecret) {
+          console.error("[RevenueCat Webhook] Auth mismatch. Received header length:", normalizedHeader.length, "Expected length:", normalizedSecret.length);
           return res.status(401).json({ error: "Unauthorized" });
         }
       }
