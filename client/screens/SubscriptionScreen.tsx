@@ -231,7 +231,7 @@ export default function SubscriptionScreen() {
             Unlock Pro
           </ThemedText>
           <ThemedText type="body" secondary style={styles.subtitle}>
-            Start your 7-day free trial today
+            Your busy brain deserves better tools
           </ThemedText>
         </Animated.View>
 
@@ -364,7 +364,7 @@ export default function SubscriptionScreen() {
                   ) : (
                     <>
                       <ThemedText type="h4" style={styles.ctaText}>
-                        Start Free Trial
+                        Subscribe Now
                       </ThemedText>
                       <Feather name="arrow-right" size={20} color="#FFFFFF" />
                     </>
@@ -372,7 +372,7 @@ export default function SubscriptionScreen() {
                 </LinearGradient>
               </Pressable>
               <ThemedText type="caption" secondary style={styles.trialNote}>
-                7 days free, then {selectedPlan === "annual" ? `$${annualPrice}/year` : `$${monthlyPrice}/month`}
+                {selectedPlan === "annual" ? `$${annualPrice}/year ($${annualMonthly}/mo)` : `$${monthlyPrice}/month`}
               </ThemedText>
               <ThemedText type="caption" secondary style={styles.cancelNote}>
                 Cancel anytime. No commitment.
