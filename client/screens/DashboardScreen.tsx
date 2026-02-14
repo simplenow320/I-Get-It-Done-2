@@ -29,7 +29,7 @@ export default function DashboardScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { getTasksByLane, unsortedTasks, getCompletedTasks } = useTaskStore();
+  const { tasks, getTasksByLane, unsortedTasks, getCompletedTasks } = useTaskStore();
   const { currentStreak } = useGamification();
   const { isPro } = useSubscription();
 
@@ -51,6 +51,7 @@ export default function DashboardScreen() {
   const totalParkTasks = getTasksByLane("park").length;
   const FREE_TASK_LIMIT = 10;
   const totalActiveTasks = totalNowTasks + totalSoonTasks + totalLaterTasks + totalParkTasks;
+  const totalAllTasks = tasks.length;
 
   const completedToday = useMemo(() => {
     const today = new Date();
@@ -85,7 +86,7 @@ export default function DashboardScreen() {
           </Animated.View>
         ) : null}
 
-        {!isPro && totalActiveTasks >= FREE_TASK_LIMIT ? (
+        {!isPro && totalAllTasks >= FREE_TASK_LIMIT ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)}>
             <Pressable
               onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
@@ -93,7 +94,7 @@ export default function DashboardScreen() {
             >
               <Feather name="alert-circle" size={16} color={LaneColors.now.primary} />
               <ThemedText type="small" style={{ color: LaneColors.now.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                {totalActiveTasks}/{FREE_TASK_LIMIT} tasks used. Upgrade for unlimited.
+                {totalAllTasks}/{FREE_TASK_LIMIT} tasks used. Upgrade for unlimited.
               </ThemedText>
               <Feather name="chevron-right" size={16} color={LaneColors.now.primary} />
             </Pressable>

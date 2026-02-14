@@ -26,9 +26,9 @@ export default function AddTaskScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, "AddTask">>();
   const { isPro } = useSubscription();
-  const { addTask, getTasksByLane } = useTaskStore();
+  const { tasks, addTask, getTasksByLane } = useTaskStore();
   const FREE_TASK_LIMIT = 10;
-  const totalActiveTasks = getTasksByLane("now").length + getTasksByLane("soon").length + getTasksByLane("later").length + getTasksByLane("park").length;
+  const totalAllTasks = tasks.length;
 
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -67,7 +67,7 @@ export default function AddTaskScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
-    if (!isPro && totalActiveTasks >= FREE_TASK_LIMIT) {
+    if (!isPro && totalAllTasks >= FREE_TASK_LIMIT) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       setVoiceError(`Free plan limited to ${FREE_TASK_LIMIT} tasks. Upgrade to Pro for unlimited.`);
       return;

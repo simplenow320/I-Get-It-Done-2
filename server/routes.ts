@@ -736,7 +736,7 @@ Examples:
 
       if (!isPro) {
         const existingTasks = await db.select({ id: tasks.id }).from(tasks)
-          .where(and(eq(tasks.userId, userId), sql`${tasks.completedAt} IS NULL`));
+          .where(eq(tasks.userId, userId));
         if (existingTasks.length >= FREE_TASK_LIMIT) {
           return res.status(403).json({ error: `Free plan limited to ${FREE_TASK_LIMIT} tasks. Upgrade to Pro for unlimited.` });
         }

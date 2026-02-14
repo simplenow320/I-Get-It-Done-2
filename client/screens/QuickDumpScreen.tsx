@@ -37,9 +37,9 @@ export default function QuickDumpScreen() {
   const inputRef = useRef<TextInput>(null);
   
   const { isPro } = useSubscription();
-  const { unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask, getTasksByLane } = useTaskStore();
+  const { tasks, unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask, getTasksByLane } = useTaskStore();
   const FREE_TASK_LIMIT = 10;
-  const totalActiveTasks = getTasksByLane("now").length + getTasksByLane("soon").length + getTasksByLane("later").length + getTasksByLane("park").length;
+  const totalAllTasks = tasks.length;
   
   const [phase, setPhase] = useState<Phase>("capture");
   const [inputValue, setInputValue] = useState("");
@@ -99,7 +99,7 @@ export default function QuickDumpScreen() {
   }, [unsortedTasks.length]);
 
   const handleSortTask = useCallback((lane: Lane) => {
-    if (!isPro && totalActiveTasks >= FREE_TASK_LIMIT) {
+    if (!isPro && totalAllTasks >= FREE_TASK_LIMIT) {
       setVoiceError(`Free plan limited to ${FREE_TASK_LIMIT} tasks. Upgrade to Pro for unlimited.`);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
@@ -109,7 +109,7 @@ export default function QuickDumpScreen() {
       sortUnsortedTask(taskToSort.id, lane);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-  }, [unsortedTasks, sortUnsortedTask, isPro, totalActiveTasks]);
+  }, [unsortedTasks, sortUnsortedTask, isPro, totalAllTasks]);
 
   React.useEffect(() => {
     if (phase === "sort" && unsortedTasks.length === 0) {
