@@ -4,7 +4,7 @@ module.exports = {
   expo: {
     name: "I GET IT DONE",
     slug: "i-get-it-done",
-    version: "1.0.2",
+    version: "1.0.3",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "igetitdone",
