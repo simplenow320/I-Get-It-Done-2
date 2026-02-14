@@ -8,6 +8,7 @@ import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvit
 import { generateToken, requireAuth, optionalAuth, validateUserAccess, type AuthenticatedRequest } from "./authMiddleware";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
+const FREE_TASK_LIMIT = 10;
 import { eq, and, inArray, or, sql } from "drizzle-orm";
 
 const upload = multer({ 
@@ -725,6 +726,18 @@ Examples:
       
       if (!req.user || req.user.userId !== userId) {
         return res.status(403).json({ error: "Access denied" });
+      }
+
+      const userRecord = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      const subscriptionStatus = userRecord[0]?.subscriptionStatus || "none";
+      const isPro = subscriptionStatus === "active" || subscriptionStatus === "pro";
+
+      if (!isPro) {
+        const existingTasks = await db.select({ id: tasks.id }).from(tasks)
+          .where(and(eq(tasks.userId, userId), sql`${tasks.completedAt} IS NULL`));
+        if (existingTasks.length >= FREE_TASK_LIMIT) {
+          return res.status(403).json({ error: `Free plan limited to ${FREE_TASK_LIMIT} tasks. Upgrade to Pro for unlimited.` });
+        }
       }
       
       const taskValues: any = {
