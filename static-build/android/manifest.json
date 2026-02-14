@@ -60,10 +60,7 @@
       "experiments": {
         "reactCompiler": true
       },
-      "extra": {
-        "supabaseUrl": "https://vvsgpuvtrymdernsriux.supabase.co/",
-        "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2c2dwdXZ0cnltZGVybnNyaXV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxNzkwNzksImV4cCI6MjA4MDc1NTA3OX0.SvLGZtIId4wKsa8PK7rY7X07SMTwdSL37KfoIpJ7Eyo"
-      },
+      "extra": {},
       "_internal": {
         "isDebug": false,
         "projectRoot": "/home/runner/workspace",
