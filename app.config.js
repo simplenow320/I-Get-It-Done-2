@@ -4,7 +4,7 @@ module.exports = {
   expo: {
     name: "I GET IT DONE",
     slug: "i-get-it-done",
-    version: "1.0.3",
+    version: "1.0.4",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "igetitdone",
@@ -13,7 +13,7 @@ module.exports = {
     ios: {
       supportsTablet: false,
       bundleIdentifier: "com.igetitdone.app",
-      buildNumber: "6",
+      buildNumber: "7",
       infoPlist: {
         NSMicrophoneUsageDescription: "I GET IT DONE uses your microphone for voice-to-task capture. Audio is processed for transcription and immediately deleted - we never store your voice recordings.",
         ITSAppUsesNonExemptEncryption: false,
