@@ -79,7 +79,7 @@ export default function DashboardScreen() {
       >
         <PaymentStatusBanner />
         
-        {currentStreak > 0 ? (
+        {isPro && currentStreak > 0 ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)} style={styles.streakContainer}>
             <StreakBadge streak={currentStreak} compact />
           </Animated.View>

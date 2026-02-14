@@ -63,6 +63,14 @@ export default function TeamHubScreen() {
     refreshTeamData();
   }, [refreshTeamData]);
 
+  if (!isPro) {
+    return (
+      <ThemedView style={{ flex: 1, justifyContent: "center", paddingTop: headerHeight, paddingBottom: tabBarHeight }}>
+        <ProFeatureGate feature="Team Delegation" />
+      </ThemedView>
+    );
+  }
+
   const delegatedTasks = getDelegatedTasks();
 
   const handleAddContact = () => {

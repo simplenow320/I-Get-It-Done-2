@@ -120,12 +120,31 @@ export default function AddTaskScreen() {
             maxLength={200}
           />
           <View style={styles.voiceContainer}>
-            <VoiceRecorder
-              onTranscriptionComplete={handleVoiceTranscription}
-              onError={handleVoiceError}
-              compact
-              userId={user?.id}
-            />
+            {isPro ? (
+              <VoiceRecorder
+                onTranscriptionComplete={handleVoiceTranscription}
+                onError={handleVoiceError}
+                compact
+                userId={user?.id}
+              />
+            ) : (
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  (navigation as any).navigate("ProfileTab", { screen: "Subscription" });
+                }}
+                style={({ pressed }) => [
+                  {
+                    width: 44, height: 44, borderRadius: 22,
+                    backgroundColor: theme.backgroundSecondary,
+                    alignItems: "center" as const, justifyContent: "center" as const,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Feather name="lock" size={18} color={theme.textSecondary} />
+              </Pressable>
+            )}
           </View>
         </View>
         {voiceError ? (

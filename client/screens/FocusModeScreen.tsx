@@ -44,6 +44,14 @@ export default function FocusModeScreen() {
   const [showConfetti, setShowConfetti] = useState(false);
   const translateX = useSharedValue(0);
 
+  if (!isPro) {
+    return (
+      <ThemedView style={{ flex: 1, justifyContent: "center", paddingTop: headerHeight, paddingBottom: tabBarHeight }}>
+        <ProFeatureGate feature="Focus Mode" />
+      </ThemedView>
+    );
+  }
+
   const nowTasks = getTasksByLane("now");
   const safeIndex = Math.min(currentIndex, Math.max(0, nowTasks.length - 1));
   const currentTask = nowTasks[safeIndex];
