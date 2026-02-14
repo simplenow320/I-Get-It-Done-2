@@ -50,6 +50,7 @@ export default function DashboardScreen() {
   const totalLaterTasks = getTasksByLane("later").length;
   const totalParkTasks = getTasksByLane("park").length;
   const FREE_TASK_LIMIT = 10;
+  const SOFT_NUDGE_THRESHOLD = 6;
   const totalActiveTasks = totalNowTasks + totalSoonTasks + totalLaterTasks + totalParkTasks;
   const totalAllTasks = tasks.length;
 
@@ -97,6 +98,19 @@ export default function DashboardScreen() {
                 {totalAllTasks}/{FREE_TASK_LIMIT} tasks used. Upgrade for unlimited.
               </ThemedText>
               <Feather name="chevron-right" size={16} color={LaneColors.now.primary} />
+            </Pressable>
+          </Animated.View>
+        ) : !isPro && totalAllTasks >= SOFT_NUDGE_THRESHOLD ? (
+          <Animated.View entering={FadeInUp.delay(0).duration(400)}>
+            <Pressable
+              onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
+              style={[styles.limitBanner, { backgroundColor: LaneColors.soon.primary + "10", borderColor: LaneColors.soon.primary + "25" }]}
+            >
+              <Feather name="zap" size={16} color={LaneColors.soon.primary} />
+              <ThemedText type="small" style={{ color: LaneColors.soon.primary, marginLeft: Spacing.xs, flex: 1 }}>
+                {FREE_TASK_LIMIT - totalAllTasks} free tasks left. Go Pro for unlimited.
+              </ThemedText>
+              <Feather name="chevron-right" size={16} color={LaneColors.soon.primary} />
             </Pressable>
           </Animated.View>
         ) : null}

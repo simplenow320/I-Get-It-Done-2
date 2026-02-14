@@ -39,6 +39,7 @@ export default function QuickDumpScreen() {
   const { isPro } = useSubscription();
   const { tasks, unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask, getTasksByLane } = useTaskStore();
   const FREE_TASK_LIMIT = 10;
+  const SOFT_NUDGE_THRESHOLD = 6;
   const totalAllTasks = tasks.length;
   
   const [phase, setPhase] = useState<Phase>("capture");
@@ -140,6 +141,18 @@ export default function QuickDumpScreen() {
               {unsortedTasks.length} remaining
             </ThemedText>
           </Animated.View>
+
+          {!isPro && totalAllTasks >= SOFT_NUDGE_THRESHOLD && totalAllTasks < FREE_TASK_LIMIT ? (
+            <Pressable
+              onPress={() => { navigation.goBack(); (navigation as any).navigate("ProfileTab", { screen: "Subscription" }); }}
+              style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.md, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, backgroundColor: LaneColors.soon.primary + "10", borderRadius: BorderRadius.md, borderWidth: 1, borderColor: LaneColors.soon.primary + "25" }}
+            >
+              <Feather name="zap" size={14} color={LaneColors.soon.primary} />
+              <ThemedText type="small" style={{ color: LaneColors.soon.primary, marginLeft: Spacing.xs, flex: 1 }}>
+                {FREE_TASK_LIMIT - totalAllTasks} free tasks left. Go Pro for unlimited.
+              </ThemedText>
+            </Pressable>
+          ) : null}
 
           <Animated.View
             key={currentTask.id}
