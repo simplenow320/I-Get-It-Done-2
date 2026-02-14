@@ -1601,9 +1601,18 @@ Examples:
         const authHeader = req.headers["authorization"] || "";
         const normalizedHeader = authHeader.trim();
         const normalizedSecret = webhookSecret.trim();
+        console.log("[RevenueCat Webhook] Auth check - header present:", !!authHeader, "header length:", normalizedHeader.length, "secret length:", normalizedSecret.length, "header first 4 chars:", JSON.stringify(normalizedHeader.substring(0, 4)), "secret first 4 chars:", JSON.stringify(normalizedSecret.substring(0, 4)));
         if (normalizedHeader !== normalizedSecret) {
-          console.error("[RevenueCat Webhook] Auth mismatch. Received header length:", normalizedHeader.length, "Expected length:", normalizedSecret.length);
-          return res.status(401).json({ error: "Unauthorized" });
+          const headerHasBearer = normalizedHeader.startsWith("Bearer ");
+          const secretHasBearer = normalizedSecret.startsWith("Bearer ");
+          if (headerHasBearer && !secretHasBearer && normalizedHeader === `Bearer ${normalizedSecret}`) {
+            console.log("[RevenueCat Webhook] Auth matched after stripping Bearer prefix from header");
+          } else if (!headerHasBearer && secretHasBearer && `Bearer ${normalizedHeader}` === normalizedSecret) {
+            console.log("[RevenueCat Webhook] Auth matched after adding Bearer prefix to header");
+          } else {
+            console.error("[RevenueCat Webhook] Auth mismatch");
+            return res.status(401).json({ error: "Unauthorized" });
+          }
         }
       }
 
