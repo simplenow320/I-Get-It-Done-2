@@ -89,13 +89,14 @@ export function LaneCard({ lane, count, onPress }: LaneCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    aspectRatio: 1.1,
+    aspectRatio: 0.95,
   },
   gradient: {
     flex: 1,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     justifyContent: "space-between",
+    overflow: "visible",
   },
   header: {
     flexDirection: "row",
