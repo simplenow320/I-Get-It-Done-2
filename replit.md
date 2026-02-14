@@ -61,6 +61,7 @@ All secrets are configured in Replit Secrets. The following are required for ful
 | `OPENAI_API_KEY` | AI task extraction (GPT-4o-mini) | Configured |
 | `EXPO_PUBLIC_REVENUECAT_API_KEY_IOS` | iOS in-app purchases | Configured |
 | `EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID` | Android in-app purchases | Optional |
+| `REVENUECAT_WEBHOOK_SECRET` | Webhook auth header verification | Required for production |
 
 **Email Configuration:**
 - SendGrid sender email: `info@simplenow.co`
@@ -68,7 +69,7 @@ All secrets are configured in Replit Secrets. The following are required for ful
 
 ## External Dependencies
 
--   **RevenueCat**: Primary payment processor for iOS and Android in-app purchases. Wraps Apple StoreKit and Google Play Billing into a unified SDK. Monthly ($6.99) and annual ($49.99 - saves 40%) plans with 7-day free trial.
+-   **RevenueCat**: Primary payment processor for iOS and Android in-app purchases. Wraps Apple StoreKit and Google Play Billing into a unified SDK. Monthly ($6.99) and annual ($49.99 - saves 40%) plans with 7-day free trial. Webhook endpoint at `/api/webhooks/revenuecat` syncs subscription status changes (purchases, renewals, cancellations, expirations, billing issues) to the database. Server-side subscription status endpoint at `/api/subscription/:userId` used by client's useSubscription hook.
 -   **SendGrid**: Email service for password reset codes and notifications. Sender: info@simplenow.co
 -   **Deepgram Nova-2**: Voice-to-text transcription for quick task capture via `/api/transcribe` endpoint.
 -   **OpenAI GPT-4o-mini**: AI-powered task extraction from voice transcripts.
