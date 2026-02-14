@@ -1672,6 +1672,10 @@ Examples:
           newStatus = "active";
           break;
 
+        case "TEST":
+          console.log(`[RevenueCat Webhook] Test event received successfully`);
+          return;
+
         default:
           console.log(`[RevenueCat Webhook] Unhandled event type: ${type}`);
           return;
