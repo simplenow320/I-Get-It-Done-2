@@ -35,14 +35,6 @@ export default function WeeklyResetScreen() {
   const { getCompletedTasks, getTasksByLane, moveTask } = useTaskStore();
   const gamification = useGamification();
 
-  if (!isPro) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", backgroundColor: theme.backgroundRoot, paddingTop: headerHeight }}>
-        <ProFeatureGate feature="Weekly Reset Insights" />
-      </View>
-    );
-  }
-
   const completedTasks = getCompletedTasks();
   
   const thisWeekCompleted = useMemo(() => {

@@ -38,7 +38,7 @@ export default function QuickDumpScreen() {
   
   const { isPro } = useSubscription();
   const { unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask, getTasksByLane } = useTaskStore();
-  const FREE_TASK_LIMIT = 5;
+  const FREE_TASK_LIMIT = 10;
   const totalActiveTasks = getTasksByLane("now").length + getTasksByLane("soon").length + getTasksByLane("later").length + getTasksByLane("park").length;
   
   const [phase, setPhase] = useState<Phase>("capture");
@@ -220,31 +220,12 @@ export default function QuickDumpScreen() {
             onSubmitEditing={handleAddTask}
             blurOnSubmit={false}
           />
-          {isPro ? (
-            <VoiceRecorder
-              onTranscriptionComplete={handleVoiceTranscription}
-              onError={handleVoiceError}
-              compact
-              userId={user?.id}
-            />
-          ) : (
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                (navigation as any).navigate("ProfileTab", { screen: "Subscription" });
-              }}
-              style={({ pressed }) => [
-                {
-                  width: 44, height: 44, borderRadius: 22,
-                  backgroundColor: theme.backgroundSecondary,
-                  alignItems: "center" as const, justifyContent: "center" as const,
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}
-            >
-              <Feather name="lock" size={18} color={theme.textSecondary} />
-            </Pressable>
-          )}
+          <VoiceRecorder
+            onTranscriptionComplete={handleVoiceTranscription}
+            onError={handleVoiceError}
+            compact
+            userId={user?.id}
+          />
           <Pressable
             onPress={handleAddTask}
             style={({ pressed }) => [

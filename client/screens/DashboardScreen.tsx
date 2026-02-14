@@ -49,7 +49,7 @@ export default function DashboardScreen() {
   const totalSoonTasks = getTasksByLane("soon").length;
   const totalLaterTasks = getTasksByLane("later").length;
   const totalParkTasks = getTasksByLane("park").length;
-  const FREE_TASK_LIMIT = 5;
+  const FREE_TASK_LIMIT = 10;
   const totalActiveTasks = totalNowTasks + totalSoonTasks + totalLaterTasks + totalParkTasks;
 
   const completedToday = useMemo(() => {
@@ -79,7 +79,7 @@ export default function DashboardScreen() {
       >
         <PaymentStatusBanner />
         
-        {isPro && currentStreak > 0 ? (
+        {currentStreak > 0 ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)} style={styles.streakContainer}>
             <StreakBadge streak={currentStreak} compact />
           </Animated.View>
@@ -93,7 +93,7 @@ export default function DashboardScreen() {
             >
               <Feather name="alert-circle" size={16} color={LaneColors.now.primary} />
               <ThemedText type="small" style={{ color: LaneColors.now.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                {totalActiveTasks}/{FREE_TASK_LIMIT} free tasks used. Upgrade for unlimited.
+                {totalActiveTasks}/{FREE_TASK_LIMIT} tasks used. Upgrade for unlimited.
               </ThemedText>
               <Feather name="chevron-right" size={16} color={LaneColors.now.primary} />
             </Pressable>
