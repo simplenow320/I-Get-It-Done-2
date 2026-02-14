@@ -1558,6 +1558,134 @@ Examples:
     }
   });
 
+  app.get("/api/subscription/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { userId } = req.params;
+
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const userRecord = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (userRecord.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const user = userRecord[0];
+      const status = user.subscriptionStatus || "none";
+      const trialEndsAt = user.trialEndsAt ? user.trialEndsAt.toISOString() : null;
+
+      const isTrialing = status === "trialing" && trialEndsAt && new Date(trialEndsAt) > new Date();
+      const isActive = status === "active" || status === "pro" || isTrialing;
+
+      res.json({
+        subscription: {
+          status: isTrialing ? "trialing" : status,
+          trialEndsAt,
+          isActive,
+          isTrialing: !!isTrialing,
+        },
+      });
+    } catch (error) {
+      console.error("Get subscription error:", error);
+      res.status(500).json({ error: "Failed to get subscription status" });
+    }
+  });
+
+  app.post("/api/webhooks/revenuecat", async (req: Request, res: Response) => {
+    try {
+      const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const authHeader = req.headers["authorization"];
+        if (authHeader !== webhookSecret) {
+          console.error("[RevenueCat Webhook] Invalid authorization header");
+          return res.status(401).json({ error: "Unauthorized" });
+        }
+      }
+
+      res.status(200).json({ received: true });
+
+      const { event } = req.body;
+      if (!event) {
+        console.error("[RevenueCat Webhook] No event in payload");
+        return;
+      }
+
+      const {
+        type,
+        app_user_id,
+        expiration_at_ms,
+        period_type,
+      } = event;
+
+      console.log(`[RevenueCat Webhook] Event: ${type}, User: ${app_user_id}`);
+
+      if (!app_user_id) {
+        console.error("[RevenueCat Webhook] No app_user_id in event");
+        return;
+      }
+
+      const userRecord = await db.select().from(users).where(eq(users.id, app_user_id)).limit(1);
+      if (userRecord.length === 0) {
+        console.error(`[RevenueCat Webhook] User not found: ${app_user_id}`);
+        return;
+      }
+
+      let newStatus: string = userRecord[0].subscriptionStatus || "none";
+      let trialEndsAt: Date | null = userRecord[0].trialEndsAt || null;
+
+      switch (type) {
+        case "INITIAL_PURCHASE":
+        case "RENEWAL":
+        case "UNCANCELLATION":
+        case "SUBSCRIPTION_EXTENDED":
+          if (period_type === "TRIAL") {
+            newStatus = "trialing";
+            if (expiration_at_ms) {
+              trialEndsAt = new Date(expiration_at_ms);
+            }
+          } else {
+            newStatus = "active";
+          }
+          break;
+
+        case "CANCELLATION":
+          newStatus = "canceled";
+          break;
+
+        case "EXPIRATION":
+          newStatus = "none";
+          trialEndsAt = null;
+          break;
+
+        case "BILLING_ISSUE":
+          newStatus = "past_due";
+          break;
+
+        case "PRODUCT_CHANGE":
+          newStatus = "active";
+          break;
+
+        case "NON_RENEWING_PURCHASE":
+          newStatus = "active";
+          break;
+
+        default:
+          console.log(`[RevenueCat Webhook] Unhandled event type: ${type}`);
+          return;
+      }
+
+      await db.update(users).set({
+        subscriptionStatus: newStatus,
+        trialEndsAt,
+      }).where(eq(users.id, app_user_id));
+
+      console.log(`[RevenueCat Webhook] Updated user ${app_user_id}: status=${newStatus}`);
+    } catch (error) {
+      console.error("[RevenueCat Webhook] Processing error:", error);
+    }
+  });
+
   app.post("/api/errors/report", optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { message, platform, appVersion, timestamp } = req.body;
