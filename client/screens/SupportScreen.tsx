@@ -20,7 +20,7 @@ const SUPPORT_OPTIONS = [
     icon: "star" as const,
     title: "Share an Idea",
     subtitle: "Help us build what matters to you",
-    subject: "I Get It Done - New Idea",
+    subject: "I GET IT DONE SUPPORT - New Idea",
     color: LaneColors.soon.primary,
   },
   {
@@ -28,7 +28,7 @@ const SUPPORT_OPTIONS = [
     icon: "alert-circle" as const,
     title: "Report an Issue",
     subtitle: "Something not working right? Let us know",
-    subject: "I Get It Done - Issue Report",
+    subject: "I GET IT DONE SUPPORT - Issue Report",
     color: LaneColors.now.primary,
   },
   {
@@ -36,7 +36,7 @@ const SUPPORT_OPTIONS = [
     icon: "message-circle" as const,
     title: "General Feedback",
     subtitle: "We'd love to hear from you",
-    subject: "I Get It Done - Feedback",
+    subject: "I GET IT DONE SUPPORT - Feedback",
     color: LaneColors.later.primary,
   },
   {
@@ -44,7 +44,7 @@ const SUPPORT_OPTIONS = [
     icon: "heart" as const,
     title: "Just Say Hello",
     subtitle: "Connect with the team",
-    subject: "I Get It Done - Hello",
+    subject: "I GET IT DONE SUPPORT - Hello",
     color: LaneColors.park.primary,
   },
 ];
@@ -132,7 +132,7 @@ export default function SupportScreen() {
 
         <Animated.View entering={FadeInUp.delay(350).duration(400)}>
           <Pressable
-            onPress={() => handleSupportOption("I Get It Done - Support")}
+            onPress={() => handleSupportOption("I GET IT DONE SUPPORT")}
             style={[styles.emailCard, { backgroundColor: theme.backgroundDefault }]}
           >
             <Feather name="at-sign" size={20} color={LaneColors.later.primary} />

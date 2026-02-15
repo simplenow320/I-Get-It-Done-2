@@ -161,23 +161,6 @@ export const insertTeamMemberSchema = createInsertSchema(teamMembers);
 export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
 export type TeamMember = typeof teamMembers.$inferSelect;
 
-export const supportRequests = pgTable("support_requests", {
-  id: varchar("id", { length: 255 })
-    .primaryKey()
-    .default(sql`gen_random_uuid()::text`),
-  userId: varchar("user_id", { length: 255 }).references(() => users.id, { onDelete: "cascade" }),
-  userEmail: varchar("user_email", { length: 255 }),
-  category: varchar("category", { length: 50 }).notNull(),
-  message: text("message").notNull(),
-  platform: varchar("platform", { length: 20 }),
-  status: varchar("status", { length: 20 }).default("open"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
 export const insertVoiceUsageSchema = createInsertSchema(voiceUsage);
 export type InsertVoiceUsage = z.infer<typeof insertVoiceUsageSchema>;
 export type VoiceUsage = typeof voiceUsage.$inferSelect;
-
-export const insertSupportRequestSchema = createInsertSchema(supportRequests);
-export type InsertSupportRequest = z.infer<typeof insertSupportRequestSchema>;
-export type SupportRequest = typeof supportRequests.$inferSelect;

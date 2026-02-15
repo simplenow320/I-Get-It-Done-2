@@ -4,7 +4,7 @@ import multer from "multer";
 import * as fs from "fs";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers, voiceUsage, supportRequests } from "@shared/schema";
+import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers, voiceUsage } from "@shared/schema";
 import { generateToken, requireAuth, optionalAuth, validateUserAccess, type AuthenticatedRequest } from "./authMiddleware";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
