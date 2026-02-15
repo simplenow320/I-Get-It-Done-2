@@ -15,7 +15,7 @@ Notifications.setNotificationHandler({
 
 export interface NotificationData extends Record<string, unknown> {
   taskId?: string;
-  type: "overdue" | "reminder" | "achievement" | "streak";
+  type: "overdue" | "reminder" | "achievement" | "streak" | "pro_nudge";
 }
 
 export async function requestNotificationPermissions(): Promise<boolean> {
@@ -180,4 +180,82 @@ export function addNotificationResponseListener(
   callback: (response: Notifications.NotificationResponse) => void
 ): Notifications.EventSubscription {
   return Notifications.addNotificationResponseReceivedListener(callback);
+}
+
+const PRO_NUDGE_MESSAGES = [
+  { title: "Your potential is showing", body: "Voice capture turns scattered thoughts into organized tasks. Unlock it with Pro." },
+  { title: "Focus is a superpower", body: "Pro's Focus Mode helps you zero in on what matters most. Ready to try it?" },
+  { title: "Small wins, big momentum", body: "Track your streaks and celebrate progress with Pro's gamification features." },
+  { title: "You're doing great", body: "Imagine doing even more with voice capture, focus timers, and team delegation." },
+  { title: "One less thing to think about", body: "Let your voice do the typing. Pro makes task capture effortless." },
+  { title: "Built for brains like yours", body: "Focus Mode, streaks, and weekly insights -- designed to help you thrive." },
+  { title: "Say it. Done.", body: "Voice-to-task AI turns your words into organized action items instantly." },
+  { title: "Keep the momentum going", body: "Unlock streaks, XP, and achievements to make productivity feel rewarding." },
+];
+
+const PRO_NUDGE_IDENTIFIER_PREFIX = "pro_nudge_";
+
+export async function scheduleProNudgeNotifications(): Promise<void> {
+  if (Platform.OS === "web") return;
+
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const existingNudges = scheduled.filter(n => 
+      (n.content.data as NotificationData)?.type === "pro_nudge"
+    );
+    
+    if (existingNudges.length >= 2) return;
+
+    for (const nudge of existingNudges) {
+      await Notifications.cancelScheduledNotificationAsync(nudge.identifier);
+    }
+
+    const shuffled = [...PRO_NUDGE_MESSAGES].sort(() => Math.random() - 0.5);
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: PRO_NUDGE_IDENTIFIER_PREFIX + "1",
+      content: {
+        title: shuffled[0].title,
+        body: shuffled[0].body,
+        data: { type: "pro_nudge" } as NotificationData,
+        sound: false,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 15 * 24 * 60 * 60,
+      },
+    });
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: PRO_NUDGE_IDENTIFIER_PREFIX + "2",
+      content: {
+        title: shuffled[1].title,
+        body: shuffled[1].body,
+        data: { type: "pro_nudge" } as NotificationData,
+        sound: false,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 30 * 24 * 60 * 60,
+      },
+    });
+  } catch (error) {
+    console.log("Failed to schedule pro nudge notifications:", error);
+  }
+}
+
+export async function cancelProNudgeNotifications(): Promise<void> {
+  if (Platform.OS === "web") return;
+
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const nudges = scheduled.filter(n => 
+      (n.content.data as NotificationData)?.type === "pro_nudge"
+    );
+    for (const nudge of nudges) {
+      await Notifications.cancelScheduledNotificationAsync(nudge.identifier);
+    }
+  } catch (error) {
+    console.log("Failed to cancel pro nudge notifications:", error);
+  }
 }

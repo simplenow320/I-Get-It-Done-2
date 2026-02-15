@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import { StyleSheet, View, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -16,6 +16,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { PaymentStatusBanner } from "@/components/PaymentStatusBanner";
 import { useTheme } from "@/hooks/useTheme";
 import { useSubscription } from "@/hooks/useSubscription";
+import { scheduleProNudgeNotifications, cancelProNudgeNotifications } from "@/lib/notifications";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
 import { useGamification } from "@/stores/GamificationStore";
@@ -34,6 +35,14 @@ export default function DashboardScreen() {
   const { isPro, hasProFeatures, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
   const FREE_TASK_LIMIT = 10;
   const SOFT_NUDGE_THRESHOLD = 6;
+
+  useEffect(() => {
+    if (hasProFeatures) {
+      cancelProNudgeNotifications();
+    } else {
+      scheduleProNudgeNotifications();
+    }
+  }, [hasProFeatures]);
 
   const handleLanePress = (lane: Lane) => {
     navigation.navigate("LaneDetail", { lane });

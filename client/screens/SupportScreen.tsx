@@ -1,249 +1,154 @@
-import React, { useState } from "react";
-import { StyleSheet, View, TextInput, Pressable, Alert, ActivityIndicator, Linking } from "react-native";
+import React from "react";
+import { StyleSheet, View, Pressable, Linking, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import * as MailComposer from "expo-mail-composer";
 
-import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
-import { apiRequest } from "@/lib/query-client";
 import { useAuth } from "@/contexts/AuthContext";
+import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
+
+const SUPPORT_EMAIL = "info@simplenow.co";
+
+const SUPPORT_OPTIONS = [
+  {
+    id: "idea",
+    icon: "star" as const,
+    title: "Share an Idea",
+    subtitle: "Help us build what matters to you",
+    subject: "I Get It Done - New Idea",
+    color: LaneColors.soon.primary,
+  },
+  {
+    id: "issue",
+    icon: "alert-circle" as const,
+    title: "Report an Issue",
+    subtitle: "Something not working right? Let us know",
+    subject: "I Get It Done - Issue Report",
+    color: LaneColors.now.primary,
+  },
+  {
+    id: "feedback",
+    icon: "message-circle" as const,
+    title: "General Feedback",
+    subtitle: "We'd love to hear from you",
+    subject: "I Get It Done - Feedback",
+    color: LaneColors.later.primary,
+  },
+  {
+    id: "hello",
+    icon: "heart" as const,
+    title: "Just Say Hello",
+    subtitle: "Connect with the team",
+    subject: "I Get It Done - Hello",
+    color: LaneColors.park.primary,
+  },
+];
 
 export default function SupportScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { user } = useAuth();
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState(user?.email || "");
-  const [message, setMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const handleSupportOption = async (subject: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-  const handleSubmit = async () => {
-    setError("");
+    const body = `\n\n---\nUser: ${user?.email || "Not signed in"}\nPlatform: ${Platform.OS}`;
 
-    if (!name.trim() || !email.trim() || !message.trim()) {
-      setError("Please fill in all fields");
-      return;
-    }
+    const isAvailable = await MailComposer.isAvailableAsync();
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError("Please enter a valid email address");
-      return;
-    }
-
-    setIsLoading(true);
-    Haptics.selectionAsync();
-
-    try {
-      const response = await apiRequest("POST", "/api/support/contact", {
-        name: name.trim(),
-        email: email.trim(),
-        message: message.trim(),
+    if (isAvailable) {
+      await MailComposer.composeAsync({
+        recipients: [SUPPORT_EMAIL],
+        subject,
+        body,
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Failed to send message");
-        setIsLoading(false);
-        return;
+    } else {
+      const mailtoUrl = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      try {
+        await Linking.openURL(mailtoUrl);
+      } catch {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSuccess(true);
-      setName("");
-      setEmail(user?.email || "");
-      setMessage("");
-    } catch (err) {
-      setError("Failed to send message");
-    } finally {
-      setIsLoading(false);
     }
   };
-
-  const handleEmailDirect = async () => {
-    Haptics.selectionAsync();
-    try {
-      await Linking.openURL("mailto:info@simplenow.co?subject=I Get It Done Support");
-    } catch (err) {
-      setError("Unable to open email client. Please email info@simplenow.co directly.");
-    }
-  };
-
-  const inputStyle = [
-    styles.input,
-    {
-      backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
-      color: theme.text,
-    },
-  ];
-
-  if (success) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-        <View style={[styles.successContent, { paddingTop: headerHeight + Spacing.xl }]}>
-          <View style={[styles.successIconBadge, { backgroundColor: LaneColors.later.primary }]}>
-            <Feather name="check" size={32} color="#FFFFFF" />
-          </View>
-          <ThemedText type="h2" style={styles.successTitle}>
-            Message Sent
-          </ThemedText>
-          <ThemedText type="body" secondary style={styles.successDescription}>
-            Thank you for reaching out. We'll get back to you as soon as possible.
-          </ThemedText>
-          <Pressable
-            style={[styles.successButton, { backgroundColor: LaneColors.later.primary }]}
-            onPress={() => setSuccess(false)}
-          >
-            <ThemedText type="body" style={styles.submitText}>
-              Send Another Message
-            </ThemedText>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
 
   return (
-    <KeyboardAwareScrollViewCompat
-      style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
-      contentContainerStyle={[
-        styles.content,
-        {
-          paddingTop: headerHeight + Spacing.lg,
-          paddingBottom: insets.bottom + Spacing.xl,
-        },
-      ]}
-    >
-      <Animated.View entering={FadeInUp.delay(100).duration(400)}>
-        <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
-          <View style={styles.iconContainer}>
-            <View style={[styles.iconBadge, { backgroundColor: LaneColors.soon.primary }]}>
-              <Feather name="mail" size={24} color="#FFFFFF" />
-            </View>
-          </View>
-
-          <ThemedText type="h3" style={styles.title}>
-            Contact Support
+    <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      <Animated.ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: headerHeight + Spacing.lg,
+            paddingBottom: insets.bottom + Spacing.xl,
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeInUp.delay(50).duration(400)} style={styles.header}>
+          <ThemedText type="h2" style={styles.title}>
+            We're Here to Help
           </ThemedText>
-
-          <ThemedText type="body" secondary style={styles.description}>
-            Have a question or need help? Send us a message and we'll get back to you.
+          <ThemedText type="body" secondary style={styles.subtitle}>
+            Tap an option below and your email app will open ready to go
           </ThemedText>
+        </Animated.View>
 
-          <View style={styles.inputContainer}>
-            <ThemedText type="small" secondary style={styles.label}>
-              Your Name
-            </ThemedText>
-            <TextInput
-              style={inputStyle}
-              placeholder="Enter your name"
-              placeholderTextColor={theme.textSecondary}
-              value={name}
-              onChangeText={(text) => {
-                setName(text);
-                setError("");
-              }}
-              autoCapitalize="words"
-              editable={!isLoading}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <ThemedText type="small" secondary style={styles.label}>
-              Email Address
-            </ThemedText>
-            <TextInput
-              style={inputStyle}
-              placeholder="Enter your email"
-              placeholderTextColor={theme.textSecondary}
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setError("");
-              }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={!isLoading}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <ThemedText type="small" secondary style={styles.label}>
-              Message
-            </ThemedText>
-            <TextInput
-              style={[inputStyle, styles.messageInput]}
-              placeholder="How can we help you?"
-              placeholderTextColor={theme.textSecondary}
-              value={message}
-              onChangeText={(text) => {
-                setMessage(text);
-                setError("");
-              }}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              editable={!isLoading}
-            />
-          </View>
-
-          {error ? (
-            <ThemedText type="small" style={styles.errorText}>
-              {error}
-            </ThemedText>
-          ) : null}
-
-          <Pressable
-            style={[
-              styles.submitButton,
-              { backgroundColor: LaneColors.soon.primary },
-              isLoading && { opacity: 0.7 },
-            ]}
-            onPress={handleSubmit}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Feather name="send" size={18} color="#FFFFFF" />
-                <ThemedText type="body" style={styles.submitText}>
-                  Send Message
-                </ThemedText>
-              </>
-            )}
-          </Pressable>
+        <View style={[styles.optionsGroup, { backgroundColor: theme.backgroundDefault }]}>
+          {SUPPORT_OPTIONS.map((option, index) => (
+            <React.Fragment key={option.id}>
+              {index > 0 ? <View style={[styles.divider, { backgroundColor: theme.border }]} /> : null}
+              <Animated.View entering={FadeInUp.delay(100 + index * 50).duration(400)}>
+                <Pressable
+                  onPress={() => handleSupportOption(option.subject)}
+                  style={({ pressed }) => [
+                    styles.optionRow,
+                    { opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <View style={[styles.optionIcon, { backgroundColor: option.color }]}>
+                    <Feather name={option.icon} size={20} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.optionContent}>
+                    <ThemedText type="body" style={{ fontWeight: "500" }}>
+                      {option.title}
+                    </ThemedText>
+                    <ThemedText type="small" secondary>
+                      {option.subtitle}
+                    </ThemedText>
+                  </View>
+                  <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+                </Pressable>
+              </Animated.View>
+            </React.Fragment>
+          ))}
         </View>
-      </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(200).duration(400)}>
-        <Pressable
-          style={[styles.emailCard, { backgroundColor: theme.backgroundDefault }]}
-          onPress={handleEmailDirect}
-        >
-          <Feather name="at-sign" size={20} color={LaneColors.later.primary} />
-          <View style={styles.emailContent}>
-            <ThemedText type="body" style={{ fontWeight: "500" }}>
-              Email us directly
-            </ThemedText>
-            <ThemedText type="small" secondary>
-              info@simplenow.co
-            </ThemedText>
-          </View>
-          <Feather name="external-link" size={18} color={theme.textSecondary} />
-        </Pressable>
-      </Animated.View>
-    </KeyboardAwareScrollViewCompat>
+        <Animated.View entering={FadeInUp.delay(350).duration(400)}>
+          <Pressable
+            onPress={() => handleSupportOption("I Get It Done - Support")}
+            style={[styles.emailCard, { backgroundColor: theme.backgroundDefault }]}
+          >
+            <Feather name="at-sign" size={20} color={LaneColors.later.primary} />
+            <View style={styles.emailContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                {SUPPORT_EMAIL}
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                Tap to email us directly
+              </ThemedText>
+            </View>
+            <Feather name="external-link" size={18} color={theme.textSecondary} />
+          </Pressable>
+        </Animated.View>
+      </Animated.ScrollView>
+    </View>
   );
 }
 
@@ -251,102 +156,57 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   content: {
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.md,
+    gap: Spacing.lg,
   },
-  card: {
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.md,
-  },
-  iconContainer: {
+  header: {
     alignItems: "center",
-  },
-  iconBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
+    gap: Spacing.xs,
   },
   title: {
     textAlign: "center",
   },
-  description: {
+  subtitle: {
     textAlign: "center",
+    maxWidth: 280,
   },
-  inputContainer: {
-    gap: Spacing.xs,
+  optionsGroup: {
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
   },
-  label: {
-    marginLeft: Spacing.xs,
-  },
-  input: {
-    height: 48,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    fontSize: 16,
-  },
-  messageInput: {
-    height: 120,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
-  },
-  errorText: {
-    color: "#FF3B30",
-    textAlign: "center",
-  },
-  submitButton: {
-    height: 48,
-    borderRadius: BorderRadius.md,
+  optionRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    padding: Spacing.md,
+    gap: Spacing.md,
   },
-  submitText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
+  optionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionContent: {
+    flex: 1,
+    gap: 2,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 68,
   },
   emailCard: {
     padding: Spacing.md,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
   },
   emailContent: {
     flex: 1,
-  },
-  successContent: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
-  successIconBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.md,
-  },
-  successTitle: {
-    textAlign: "center",
-  },
-  successDescription: {
-    textAlign: "center",
-    marginBottom: Spacing.lg,
-  },
-  successButton: {
-    height: 48,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.xl,
-    alignItems: "center",
-    justifyContent: "center",
   },
 });
