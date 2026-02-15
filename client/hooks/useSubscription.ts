@@ -9,6 +9,9 @@ interface SubscriptionStatus {
   trialEndsAt: string | null;
   isActive: boolean;
   isTrialing: boolean;
+  lifetimeTasksCreated: number;
+  freeTrialActive: boolean;
+  freeTasksRemaining: number;
 }
 
 interface SubscriptionResponse {
@@ -53,17 +56,24 @@ export function useSubscription() {
     return calculateTrialDaysRemaining(subscription?.trialEndsAt || null);
   }, [subscription?.trialEndsAt]);
 
+  const freeTrialActive = subscription?.freeTrialActive || false;
+  const freeTasksRemaining = subscription?.freeTasksRemaining || 0;
+  const lifetimeTasksCreated = subscription?.lifetimeTasksCreated || 0;
+
   return {
     subscription,
     isLoading: query.isLoading,
     isError: query.isError,
-    isPro: subscription?.isActive || subscription?.isTrialing || false,
+    isPro: subscription?.isActive || subscription?.isTrialing || freeTrialActive || false,
     isTrialing: subscription?.isTrialing || false,
     isPastDue: subscription?.status === "past_due",
     isCanceled: subscription?.status === "canceled",
     status: subscription?.status || "none",
     trialDaysRemaining,
     trialEndsAt: subscription?.trialEndsAt || null,
+    freeTrialActive,
+    freeTasksRemaining,
+    lifetimeTasksCreated,
     refetch: query.refetch,
   };
 }

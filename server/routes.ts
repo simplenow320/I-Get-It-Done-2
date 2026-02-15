@@ -735,10 +735,9 @@ Examples:
       const isPro = subscriptionStatus === "active" || subscriptionStatus === "pro" || isTrialing;
 
       if (!isPro) {
-        const existingTasks = await db.select({ id: tasks.id }).from(tasks)
-          .where(eq(tasks.userId, userId));
-        if (existingTasks.length >= FREE_TASK_LIMIT) {
-          return res.status(403).json({ error: `Free plan limited to ${FREE_TASK_LIMIT} tasks. Upgrade to Pro for unlimited.` });
+        const lifetimeCount = userRecord[0]?.lifetimeTasksCreated || 0;
+        if (lifetimeCount >= FREE_TASK_LIMIT) {
+          return res.status(403).json({ error: `You've used all ${FREE_TASK_LIMIT} free tasks. Subscribe to Pro for unlimited tasks.` });
         }
       }
       
@@ -757,6 +756,10 @@ Examples:
       }
       
       const result = await db.insert(tasks).values(taskValues).returning();
+      
+      await db.update(users)
+        .set({ lifetimeTasksCreated: sql`COALESCE(${users.lifetimeTasksCreated}, 0) + 1` })
+        .where(eq(users.id, userId));
       
       res.json({ task: { ...result[0], subtasks: [], delegationNotes: [] } });
     } catch (error) {
@@ -1580,12 +1583,18 @@ Examples:
       const isTrialing = status === "trialing" && trialEndsAt && new Date(trialEndsAt) > new Date();
       const isActive = status === "active" || status === "pro" || isTrialing;
 
+      const lifetimeTasksCreated = user.lifetimeTasksCreated || 0;
+      const freeTrialActive = !isActive && lifetimeTasksCreated < 10;
+
       res.json({
         subscription: {
           status: isTrialing ? "trialing" : status,
           trialEndsAt,
           isActive,
           isTrialing: !!isTrialing,
+          lifetimeTasksCreated,
+          freeTrialActive,
+          freeTasksRemaining: freeTrialActive ? 10 - lifetimeTasksCreated : 0,
         },
       });
     } catch (error) {

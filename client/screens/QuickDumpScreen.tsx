@@ -36,11 +36,10 @@ export default function QuickDumpScreen() {
   const navigation = useNavigation();
   const inputRef = useRef<TextInput>(null);
   
-  const { isPro } = useSubscription();
+  const { isPro, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
   const { tasks, unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask, getTasksByLane } = useTaskStore();
   const FREE_TASK_LIMIT = 10;
   const SOFT_NUDGE_THRESHOLD = 6;
-  const totalAllTasks = tasks.length;
   
   const [phase, setPhase] = useState<Phase>("capture");
   const [inputValue, setInputValue] = useState("");
@@ -100,8 +99,8 @@ export default function QuickDumpScreen() {
   }, [unsortedTasks.length]);
 
   const handleSortTask = useCallback((lane: Lane) => {
-    if (!isPro && totalAllTasks >= FREE_TASK_LIMIT) {
-      setVoiceError(`Free plan limited to ${FREE_TASK_LIMIT} tasks. Upgrade to Pro for unlimited.`);
+    if (!isPro && lifetimeTasksCreated >= FREE_TASK_LIMIT) {
+      setVoiceError(`You've used all ${FREE_TASK_LIMIT} free tasks. Subscribe to Pro for unlimited.`);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
@@ -110,7 +109,7 @@ export default function QuickDumpScreen() {
       sortUnsortedTask(taskToSort.id, lane);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-  }, [unsortedTasks, sortUnsortedTask, isPro, totalAllTasks]);
+  }, [unsortedTasks, sortUnsortedTask, isPro, lifetimeTasksCreated]);
 
   React.useEffect(() => {
     if (phase === "sort" && unsortedTasks.length === 0) {
@@ -142,14 +141,14 @@ export default function QuickDumpScreen() {
             </ThemedText>
           </Animated.View>
 
-          {!isPro && totalAllTasks >= SOFT_NUDGE_THRESHOLD && totalAllTasks < FREE_TASK_LIMIT ? (
+          {freeTrialActive && lifetimeTasksCreated >= SOFT_NUDGE_THRESHOLD ? (
             <Pressable
               onPress={() => { navigation.goBack(); (navigation as any).navigate("ProfileTab", { screen: "Subscription" }); }}
               style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.md, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, backgroundColor: LaneColors.soon.primary + "10", borderRadius: BorderRadius.md, borderWidth: 1, borderColor: LaneColors.soon.primary + "25" }}
             >
               <Feather name="zap" size={14} color={LaneColors.soon.primary} />
               <ThemedText type="small" style={{ color: LaneColors.soon.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                {FREE_TASK_LIMIT - totalAllTasks} free tasks left. Go Pro for unlimited.
+                {freeTasksRemaining} free tasks left. Go Pro for unlimited.
               </ThemedText>
             </Pressable>
           ) : null}

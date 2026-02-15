@@ -60,7 +60,7 @@ export function ProFeatureGate({ children, feature, showUpgradePrompt = true }: 
 }
 
 export function useProFeature() {
-  const { isPro, isTrialing, isPastDue, status, trialDaysRemaining } = useSubscription();
+  const { isPro, isTrialing, isPastDue, status, trialDaysRemaining, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
   
   return {
     isPro,
@@ -69,6 +69,9 @@ export function useProFeature() {
     canUseProFeatures: isPro && !isPastDue,
     status,
     trialDaysRemaining,
+    freeTrialActive,
+    freeTasksRemaining,
+    lifetimeTasksCreated,
   };
 }
 

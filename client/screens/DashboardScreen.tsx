@@ -31,7 +31,7 @@ export default function DashboardScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { tasks, getTasksByLane, unsortedTasks, getCompletedTasks } = useTaskStore();
   const { currentStreak } = useGamification();
-  const { isPro } = useSubscription();
+  const { isPro, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
 
   const handleLanePress = (lane: Lane) => {
     navigation.navigate("LaneDetail", { lane });
@@ -52,7 +52,6 @@ export default function DashboardScreen() {
   const FREE_TASK_LIMIT = 10;
   const SOFT_NUDGE_THRESHOLD = 6;
   const totalActiveTasks = totalNowTasks + totalSoonTasks + totalLaterTasks + totalParkTasks;
-  const totalAllTasks = tasks.length;
 
   const completedToday = useMemo(() => {
     const today = new Date();
@@ -87,7 +86,7 @@ export default function DashboardScreen() {
           </Animated.View>
         ) : null}
 
-        {!isPro && totalAllTasks >= FREE_TASK_LIMIT ? (
+        {!isPro && lifetimeTasksCreated >= FREE_TASK_LIMIT ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)}>
             <Pressable
               onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
@@ -95,12 +94,12 @@ export default function DashboardScreen() {
             >
               <Feather name="alert-circle" size={16} color={LaneColors.now.primary} />
               <ThemedText type="small" style={{ color: LaneColors.now.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                {totalAllTasks}/{FREE_TASK_LIMIT} tasks used. Upgrade for unlimited.
+                {lifetimeTasksCreated}/{FREE_TASK_LIMIT} tasks used. Upgrade for unlimited.
               </ThemedText>
               <Feather name="chevron-right" size={16} color={LaneColors.now.primary} />
             </Pressable>
           </Animated.View>
-        ) : !isPro && totalAllTasks >= SOFT_NUDGE_THRESHOLD ? (
+        ) : freeTrialActive && lifetimeTasksCreated >= SOFT_NUDGE_THRESHOLD ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)}>
             <Pressable
               onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
@@ -108,7 +107,7 @@ export default function DashboardScreen() {
             >
               <Feather name="zap" size={16} color={LaneColors.soon.primary} />
               <ThemedText type="small" style={{ color: LaneColors.soon.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                {FREE_TASK_LIMIT - totalAllTasks} free tasks left. Go Pro for unlimited.
+                {freeTasksRemaining} free tasks left. Go Pro for unlimited.
               </ThemedText>
               <Feather name="chevron-right" size={16} color={LaneColors.soon.primary} />
             </Pressable>

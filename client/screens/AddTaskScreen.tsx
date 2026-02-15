@@ -25,11 +25,10 @@ export default function AddTaskScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, "AddTask">>();
-  const { isPro } = useSubscription();
+  const { isPro, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
   const { tasks, addTask, getTasksByLane } = useTaskStore();
   const FREE_TASK_LIMIT = 10;
   const SOFT_NUDGE_THRESHOLD = 6;
-  const totalAllTasks = tasks.length;
 
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -68,9 +67,9 @@ export default function AddTaskScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
-    if (!isPro && totalAllTasks >= FREE_TASK_LIMIT) {
+    if (!isPro && lifetimeTasksCreated >= FREE_TASK_LIMIT) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      setVoiceError(`Free plan limited to ${FREE_TASK_LIMIT} tasks. Upgrade to Pro for unlimited.`);
+      setVoiceError(`You've used all ${FREE_TASK_LIMIT} free tasks. Subscribe to Pro for unlimited.`);
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -105,14 +104,14 @@ export default function AddTaskScreen() {
         </Pressable>
       </View>
 
-      {!isPro && totalAllTasks >= SOFT_NUDGE_THRESHOLD && totalAllTasks < FREE_TASK_LIMIT ? (
+      {freeTrialActive && lifetimeTasksCreated >= SOFT_NUDGE_THRESHOLD ? (
         <Pressable
           onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
           style={{ flexDirection: "row", alignItems: "center", marginHorizontal: Spacing.lg, marginTop: Spacing.sm, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, backgroundColor: LaneColors.soon.primary + "10", borderRadius: BorderRadius.md, borderWidth: 1, borderColor: LaneColors.soon.primary + "25" }}
         >
           <Feather name="zap" size={14} color={LaneColors.soon.primary} />
           <ThemedText type="small" style={{ color: LaneColors.soon.primary, marginLeft: Spacing.xs, flex: 1 }}>
-            {FREE_TASK_LIMIT - totalAllTasks} free tasks left. Go Pro for unlimited.
+            {freeTasksRemaining} free tasks left. Go Pro for unlimited.
           </ThemedText>
         </Pressable>
       ) : null}

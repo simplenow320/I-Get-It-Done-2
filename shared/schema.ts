@@ -17,6 +17,7 @@ export const users = pgTable("users", {
   resetTokenExpiry: timestamp("reset_token_expiry"),
   subscriptionStatus: varchar("subscription_status", { length: 50 }).default("none"),
   trialEndsAt: timestamp("trial_ends_at"),
+  lifetimeTasksCreated: integer("lifetime_tasks_created").default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
