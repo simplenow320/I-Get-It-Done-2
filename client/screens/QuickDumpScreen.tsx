@@ -36,10 +36,8 @@ export default function QuickDumpScreen() {
   const navigation = useNavigation();
   const inputRef = useRef<TextInput>(null);
   
-  const { isPro, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
+  const { hasProFeatures, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
   const { tasks, unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask, getTasksByLane } = useTaskStore();
-  const FREE_TASK_LIMIT = 10;
-  const SOFT_NUDGE_THRESHOLD = 6;
   
   const [phase, setPhase] = useState<Phase>("capture");
   const [inputValue, setInputValue] = useState("");
@@ -99,17 +97,12 @@ export default function QuickDumpScreen() {
   }, [unsortedTasks.length]);
 
   const handleSortTask = useCallback((lane: Lane) => {
-    if (!isPro && lifetimeTasksCreated >= FREE_TASK_LIMIT) {
-      setVoiceError(`You've used all ${FREE_TASK_LIMIT} free tasks. Subscribe to Pro for unlimited.`);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return;
-    }
     const taskToSort = unsortedTasks[0];
     if (taskToSort) {
       sortUnsortedTask(taskToSort.id, lane);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-  }, [unsortedTasks, sortUnsortedTask, isPro, lifetimeTasksCreated]);
+  }, [unsortedTasks, sortUnsortedTask]);
 
   React.useEffect(() => {
     if (phase === "sort" && unsortedTasks.length === 0) {
@@ -140,18 +133,6 @@ export default function QuickDumpScreen() {
               {unsortedTasks.length} remaining
             </ThemedText>
           </Animated.View>
-
-          {freeTrialActive && lifetimeTasksCreated >= SOFT_NUDGE_THRESHOLD ? (
-            <Pressable
-              onPress={() => { navigation.goBack(); (navigation as any).navigate("ProfileTab", { screen: "Subscription" }); }}
-              style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.md, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, backgroundColor: LaneColors.soon.primary + "10", borderRadius: BorderRadius.md, borderWidth: 1, borderColor: LaneColors.soon.primary + "25" }}
-            >
-              <Feather name="zap" size={14} color={LaneColors.soon.primary} />
-              <ThemedText type="small" style={{ color: LaneColors.soon.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                {freeTasksRemaining} free tasks left. Go Pro for unlimited.
-              </ThemedText>
-            </Pressable>
-          ) : null}
 
           <Animated.View
             key={currentTask.id}
@@ -232,7 +213,7 @@ export default function QuickDumpScreen() {
             onSubmitEditing={handleAddTask}
             blurOnSubmit={false}
           />
-          {isPro ? (
+          {hasProFeatures ? (
             <VoiceRecorder
               onTranscriptionComplete={handleVoiceTranscription}
               onError={handleVoiceError}

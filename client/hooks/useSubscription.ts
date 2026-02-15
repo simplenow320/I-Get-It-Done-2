@@ -60,11 +60,15 @@ export function useSubscription() {
   const freeTasksRemaining = subscription?.freeTasksRemaining || 0;
   const lifetimeTasksCreated = subscription?.lifetimeTasksCreated || 0;
 
+  const isPaidPro = subscription?.isActive || subscription?.isTrialing || false;
+  const hasProFeatures = isPaidPro || freeTrialActive;
+
   return {
     subscription,
     isLoading: query.isLoading,
     isError: query.isError,
-    isPro: subscription?.isActive || subscription?.isTrialing || freeTrialActive || false,
+    isPro: isPaidPro,
+    hasProFeatures,
     isTrialing: subscription?.isTrialing || false,
     isPastDue: subscription?.status === "past_due",
     isCanceled: subscription?.status === "canceled",

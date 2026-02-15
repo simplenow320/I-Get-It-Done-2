@@ -35,7 +35,7 @@ export default function FocusModeScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { isPro } = useSubscription();
+  const { hasProFeatures } = useSubscription();
   
   const { getTasksByLane, completeTask, moveTask, getTaskProgress } = useTaskStore();
   const { recordTaskComplete, recordNowCleared } = useGamification();
@@ -44,7 +44,7 @@ export default function FocusModeScreen() {
   const [showConfetti, setShowConfetti] = useState(false);
   const translateX = useSharedValue(0);
 
-  if (!isPro) {
+  if (!hasProFeatures) {
     return (
       <ThemedView style={{ flex: 1, justifyContent: "center", paddingTop: headerHeight, paddingBottom: tabBarHeight }}>
         <ProFeatureGate feature="Focus Mode" />

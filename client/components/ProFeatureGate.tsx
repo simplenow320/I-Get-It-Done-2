@@ -16,7 +16,7 @@ interface ProFeatureGateProps {
 }
 
 export function ProFeatureGate({ children, feature, showUpgradePrompt = true }: ProFeatureGateProps) {
-  const { isPro } = useSubscription();
+  const { hasProFeatures: isPro } = useSubscription();
   const { theme } = useTheme();
   const navigation = useNavigation();
 
@@ -60,13 +60,14 @@ export function ProFeatureGate({ children, feature, showUpgradePrompt = true }: 
 }
 
 export function useProFeature() {
-  const { isPro, isTrialing, isPastDue, status, trialDaysRemaining, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
+  const { isPro, hasProFeatures, isTrialing, isPastDue, status, trialDaysRemaining, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
   
   return {
     isPro,
+    hasProFeatures,
     isTrialing,
     isPastDue,
-    canUseProFeatures: isPro && !isPastDue,
+    canUseProFeatures: hasProFeatures && !isPastDue,
     status,
     trialDaysRemaining,
     freeTrialActive,

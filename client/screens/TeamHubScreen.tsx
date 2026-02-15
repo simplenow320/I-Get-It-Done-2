@@ -39,7 +39,7 @@ export default function TeamHubScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { isPro } = useSubscription();
+  const { hasProFeatures } = useSubscription();
   const navigation = useNavigation<any>();
   const { 
     contacts, addContact, deleteContact, getDelegatedTasks, getDelegatedTasksByContact,
@@ -63,7 +63,7 @@ export default function TeamHubScreen() {
     refreshTeamData();
   }, [refreshTeamData]);
 
-  if (!isPro) {
+  if (!hasProFeatures) {
     return (
       <ThemedView style={{ flex: 1, justifyContent: "center", paddingTop: headerHeight, paddingBottom: tabBarHeight }}>
         <ProFeatureGate feature="Team Delegation" />

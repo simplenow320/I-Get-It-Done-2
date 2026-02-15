@@ -734,12 +734,7 @@ Examples:
       const isTrialing = subscriptionStatus === "trialing" && trialEndsAt && new Date(trialEndsAt) > new Date();
       const isPro = subscriptionStatus === "active" || subscriptionStatus === "pro" || isTrialing;
 
-      if (!isPro) {
-        const lifetimeCount = userRecord[0]?.lifetimeTasksCreated || 0;
-        if (lifetimeCount >= FREE_TASK_LIMIT) {
-          return res.status(403).json({ error: `You've used all ${FREE_TASK_LIMIT} free tasks. Subscribe to Pro for unlimited tasks.` });
-        }
-      }
+      
       
       const taskValues: any = {
         userId,

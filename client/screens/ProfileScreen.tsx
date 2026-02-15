@@ -50,7 +50,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { settings, userId } = useTaskStore();
   const { logout, user } = useAuth();
-  const { isPro, isTrialing, isPastDue, trialDaysRemaining } = useSubscriptionWithFocusRefetch();
+  const { isPro, hasProFeatures, isTrialing, isPastDue, trialDaysRemaining } = useSubscriptionWithFocusRefetch();
   
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
@@ -339,7 +339,7 @@ export default function ProfileScreen() {
         </View>
       </Animated.View>
 
-      {!isPro ? (
+      {!hasProFeatures ? (
         <Animated.View entering={FadeInUp.delay(350).duration(400)}>
           <Pressable onPress={handleSubscription} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
             <LinearGradient
@@ -357,7 +357,7 @@ export default function ProfileScreen() {
                     Upgrade to Pro
                   </ThemedText>
                   <ThemedText type="small" style={styles.proSubtitle}>
-                    7-day free trial included
+                    Unlock voice, focus mode & more
                   </ThemedText>
                 </View>
                 <Feather name="chevron-right" size={24} color="#FFFFFF" />

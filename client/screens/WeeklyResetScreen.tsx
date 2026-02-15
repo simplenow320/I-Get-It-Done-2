@@ -30,12 +30,12 @@ export default function WeeklyResetScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
-  const { isPro } = useSubscription();
+  const { hasProFeatures } = useSubscription();
   const navigation = useNavigation();
   const { getCompletedTasks, getTasksByLane, moveTask } = useTaskStore();
   const gamification = useGamification();
 
-  if (!isPro) {
+  if (!hasProFeatures) {
     return (
       <View style={{ flex: 1, justifyContent: "center", backgroundColor: theme.backgroundRoot, paddingTop: headerHeight }}>
         <ProFeatureGate feature="Weekly Reset Insights" />

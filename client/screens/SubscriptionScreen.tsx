@@ -17,8 +17,7 @@ import { openSubscriptionManagement } from "@/lib/billing";
 type PricingPlan = "monthly" | "annual";
 
 const FEATURES = [
-  { icon: "zap", text: "Unlimited tasks across all lanes" },
-  { icon: "mic", text: "Voice-to-task capture" },
+  { icon: "mic", text: "Voice-to-task AI capture" },
   { icon: "clock", text: "Focus timers and sprints" },
   { icon: "award", text: "Gamification and streaks" },
   { icon: "users", text: "Team delegation mode" },

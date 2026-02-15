@@ -31,7 +31,9 @@ export default function DashboardScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { tasks, getTasksByLane, unsortedTasks, getCompletedTasks } = useTaskStore();
   const { currentStreak } = useGamification();
-  const { isPro, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
+  const { isPro, hasProFeatures, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
+  const FREE_TASK_LIMIT = 10;
+  const SOFT_NUDGE_THRESHOLD = 6;
 
   const handleLanePress = (lane: Lane) => {
     navigation.navigate("LaneDetail", { lane });
@@ -49,8 +51,6 @@ export default function DashboardScreen() {
   const totalSoonTasks = getTasksByLane("soon").length;
   const totalLaterTasks = getTasksByLane("later").length;
   const totalParkTasks = getTasksByLane("park").length;
-  const FREE_TASK_LIMIT = 10;
-  const SOFT_NUDGE_THRESHOLD = 6;
   const totalActiveTasks = totalNowTasks + totalSoonTasks + totalLaterTasks + totalParkTasks;
 
   const completedToday = useMemo(() => {
@@ -80,21 +80,21 @@ export default function DashboardScreen() {
       >
         <PaymentStatusBanner />
         
-        {isPro && currentStreak > 0 ? (
+        {hasProFeatures && currentStreak > 0 ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)} style={styles.streakContainer}>
             <StreakBadge streak={currentStreak} compact />
           </Animated.View>
         ) : null}
 
-        {!isPro && lifetimeTasksCreated >= FREE_TASK_LIMIT ? (
+        {!hasProFeatures ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)}>
             <Pressable
               onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
               style={[styles.limitBanner, { backgroundColor: LaneColors.now.primary + "15", borderColor: LaneColors.now.primary + "30" }]}
             >
-              <Feather name="alert-circle" size={16} color={LaneColors.now.primary} />
+              <Feather name="lock" size={16} color={LaneColors.now.primary} />
               <ThemedText type="small" style={{ color: LaneColors.now.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                {lifetimeTasksCreated}/{FREE_TASK_LIMIT} tasks used. Upgrade for unlimited.
+                Unlock voice capture, focus mode, streaks & more
               </ThemedText>
               <Feather name="chevron-right" size={16} color={LaneColors.now.primary} />
             </Pressable>
@@ -107,7 +107,7 @@ export default function DashboardScreen() {
             >
               <Feather name="zap" size={16} color={LaneColors.soon.primary} />
               <ThemedText type="small" style={{ color: LaneColors.soon.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                {freeTasksRemaining} free tasks left. Go Pro for unlimited.
+                {freeTasksRemaining} free Pro uses left. Subscribe to keep premium features.
               </ThemedText>
               <Feather name="chevron-right" size={16} color={LaneColors.soon.primary} />
             </Pressable>

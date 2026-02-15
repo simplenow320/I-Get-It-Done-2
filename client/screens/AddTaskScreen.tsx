@@ -25,10 +25,8 @@ export default function AddTaskScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, "AddTask">>();
-  const { isPro, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
+  const { hasProFeatures, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
   const { tasks, addTask, getTasksByLane } = useTaskStore();
-  const FREE_TASK_LIMIT = 10;
-  const SOFT_NUDGE_THRESHOLD = 6;
 
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -67,11 +65,6 @@ export default function AddTaskScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
-    if (!isPro && lifetimeTasksCreated >= FREE_TASK_LIMIT) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      setVoiceError(`You've used all ${FREE_TASK_LIMIT} free tasks. Subscribe to Pro for unlimited.`);
-      return;
-    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setVoiceError(null);
     addTask(title.trim(), selectedLane, notes.trim() || undefined);
@@ -104,18 +97,6 @@ export default function AddTaskScreen() {
         </Pressable>
       </View>
 
-      {freeTrialActive && lifetimeTasksCreated >= SOFT_NUDGE_THRESHOLD ? (
-        <Pressable
-          onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
-          style={{ flexDirection: "row", alignItems: "center", marginHorizontal: Spacing.lg, marginTop: Spacing.sm, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, backgroundColor: LaneColors.soon.primary + "10", borderRadius: BorderRadius.md, borderWidth: 1, borderColor: LaneColors.soon.primary + "25" }}
-        >
-          <Feather name="zap" size={14} color={LaneColors.soon.primary} />
-          <ThemedText type="small" style={{ color: LaneColors.soon.primary, marginLeft: Spacing.xs, flex: 1 }}>
-            {freeTasksRemaining} free tasks left. Go Pro for unlimited.
-          </ThemedText>
-        </Pressable>
-      ) : null}
-
       <KeyboardAwareScrollViewCompat
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
@@ -132,7 +113,7 @@ export default function AddTaskScreen() {
             maxLength={200}
           />
           <View style={styles.voiceContainer}>
-            {isPro ? (
+            {hasProFeatures ? (
               <VoiceRecorder
                 onTranscriptionComplete={handleVoiceTranscription}
                 onError={handleVoiceError}
