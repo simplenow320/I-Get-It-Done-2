@@ -3,7 +3,13 @@
 ## Overview
 "I GET IT DONE" is a premium, ADHD-optimized mobile task management application designed to help users with ADHD overcome common challenges like task initiation, overwhelm, and focus maintenance. It integrates research-backed insights to provide a fast, intuitive, and rewarding experience. The app aims to keep users focused, facilitate task completion, and prevent mental overload through features like quick capture, task chunking, and gamification.
 
-The project has reached its Full MVP stage, including essential features like Quick Dump, Break It Down, Focus Mode, Focus Timer, Gamification, an Enhanced Weekly Reset, and Delegation capabilities. It also incorporates robust JWT-based authentication with security hardening and RevenueCat integration for subscription monetization via Apple's App Store, offering a 7-day free trial, monthly ($6.99), and annual ($49.99) plans.
+The project has reached its Full MVP stage, including essential features like Quick Dump, Break It Down, Focus Mode, Focus Timer, Gamification, an Enhanced Weekly Reset, and Delegation capabilities. It also incorporates robust JWT-based authentication with security hardening and RevenueCat integration for subscription monetization via Apple's App Store.
+
+### Monetization Model (Freemium)
+-   **Free forever**: Unlimited task creation, 4-lane management (Now/Soon/Later/Park), Quick Dump, Break It Down subtasks, basic dashboard.
+-   **Free Pro trial**: First 10 lifetime tasks unlock ALL Pro features (voice capture, focus mode, gamification, team delegation, weekly reset insights). Lifetime counter only increments, never decreases on task deletion.
+-   **Pro subscription**: After 10 lifetime tasks, Pro features lock. Users must subscribe for continued access. Basic task management remains free forever.
+-   **Key distinction**: `isPro` = paid subscriber. `hasProFeatures` = paid subscriber OR free trial active (lifetime tasks < 10). Task creation is never blocked.
 
 ## User Preferences
 - Premium, modern aesthetic (Apple meets ESPN)
