@@ -50,7 +50,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { settings, userId } = useTaskStore();
   const { logout, user } = useAuth();
-  const { isPro, hasProFeatures, isTrialing, isPastDue, trialDaysRemaining } = useSubscriptionWithFocusRefetch();
+  const { isPro, hasProFeatures, isTrialing, isPastDue, trialDaysRemaining, freeTrialActive, freeTasksRemaining } = useSubscriptionWithFocusRefetch();
   
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
@@ -363,6 +363,25 @@ export default function ProfileScreen() {
                 <Feather name="chevron-right" size={24} color="#FFFFFF" />
               </View>
             </LinearGradient>
+          </Pressable>
+        </Animated.View>
+      ) : freeTrialActive && !isPro ? (
+        <Animated.View entering={FadeInUp.delay(350).duration(400)}>
+          <Pressable onPress={handleSubscription} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
+            <View style={[styles.proActiveCard, { backgroundColor: theme.backgroundDefault }]}>
+              <View style={[styles.proBadge, { backgroundColor: LaneColors.soon.primary + "15" }]}>
+                <Feather name="zap" size={20} color={LaneColors.soon.primary} />
+              </View>
+              <View style={styles.proActiveContent}>
+                <ThemedText type="h4">Free Trial</ThemedText>
+                <ThemedText type="small" secondary>
+                  {freeTasksRemaining} free task{freeTasksRemaining !== 1 ? "s" : ""} remaining
+                </ThemedText>
+              </View>
+              <ThemedText type="small" style={{ color: LaneColors.now.primary }}>
+                Upgrade
+              </ThemedText>
+            </View>
           </Pressable>
         </Animated.View>
       ) : (
