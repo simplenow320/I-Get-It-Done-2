@@ -30,7 +30,7 @@ export function ProFeatureGate({ children, feature, showUpgradePrompt = true }: 
 
   const handleUpgrade = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    (navigation as any).navigate("Profile", { screen: "Subscription" });
+    (navigation as any).navigate("ProfileTab", { screen: "Subscription" });
   };
 
   return (

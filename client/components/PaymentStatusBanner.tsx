@@ -21,7 +21,7 @@ export function PaymentStatusBanner({ compact = false }: PaymentStatusBannerProp
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    (navigation as any).navigate("Profile", { screen: "Subscription" });
+    (navigation as any).navigate("ProfileTab", { screen: "Subscription" });
   };
 
   if (isPastDue) {
