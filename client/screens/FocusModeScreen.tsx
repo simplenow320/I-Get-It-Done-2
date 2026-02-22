@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { StyleSheet, View, Pressable, Dimensions, ScrollView } from "react-native";
+import { StyleSheet, View, Pressable, Dimensions, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -35,7 +35,7 @@ export default function FocusModeScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { hasProFeatures } = useSubscription();
+  const { hasProFeatures, isLoading: subscriptionLoading } = useSubscription();
   
   const { getTasksByLane, completeTask, moveTask, getTaskProgress } = useTaskStore();
   const { recordTaskComplete, recordNowCleared } = useGamification();
@@ -43,6 +43,14 @@ export default function FocusModeScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
   const translateX = useSharedValue(0);
+
+  if (subscriptionLoading) {
+    return (
+      <ThemedView style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingTop: headerHeight, paddingBottom: tabBarHeight }}>
+        <ActivityIndicator size="large" color={LaneColors.now.primary} />
+      </ThemedView>
+    );
+  }
 
   if (!hasProFeatures) {
     return (

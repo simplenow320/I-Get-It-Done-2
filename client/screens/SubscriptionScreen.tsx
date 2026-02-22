@@ -12,6 +12,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRevenueCat } from "@/contexts/RevenueCatContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { openSubscriptionManagement } from "@/lib/billing";
 
 type PricingPlan = "monthly" | "annual";
@@ -31,13 +32,17 @@ export default function SubscriptionScreen() {
   const { user } = useAuth();
   const { 
     isReady: rcReady, 
-    isPro, 
-    isTrialing, 
+    isPro: rcIsPro, 
+    isTrialing: rcIsTrialing, 
     purchasePackage, 
     restorePurchases,
     monthlyPackage,
     annualPackage,
   } = useRevenueCat();
+  const { isPro: serverIsPro, isTrialing: serverIsTrialing, freeTrialActive, freeTasksRemaining } = useSubscription();
+  
+  const isPro = rcIsPro || serverIsPro;
+  const isTrialing = rcIsTrialing || serverIsTrialing;
   
   const [selectedPlan, setSelectedPlan] = useState<PricingPlan>("annual");
   const [isLoading, setIsLoading] = useState(false);
@@ -233,6 +238,22 @@ export default function SubscriptionScreen() {
             Your busy brain deserves better tools
           </ThemedText>
         </Animated.View>
+
+        {freeTrialActive ? (
+          <Animated.View entering={FadeInUp.delay(150).duration(400)}>
+            <View style={[styles.trialCard, { backgroundColor: LaneColors.soon.primary + "15" }]}>
+              <Feather name="zap" size={24} color={LaneColors.soon.primary} />
+              <View style={styles.trialCardContent}>
+                <ThemedText type="h4" style={{ color: LaneColors.soon.primary }}>
+                  Free Trial Active
+                </ThemedText>
+                <ThemedText type="small" secondary>
+                  You have {freeTasksRemaining} free task{freeTasksRemaining !== 1 ? "s" : ""} remaining. Subscribe now to keep all Pro features forever.
+                </ThemedText>
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
 
         <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.plansContainer}>
               <Pressable
