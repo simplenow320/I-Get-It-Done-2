@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useMemo } from "react";
 import { getApiUrl } from "@/lib/query-client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, getStoredAuthToken } from "@/contexts/AuthContext";
 
 interface SubscriptionStatus {
   status: "none" | "trialing" | "active" | "past_due" | "canceled";
@@ -39,9 +39,14 @@ export function useSubscription() {
       if (!user?.id) {
         throw new Error("No user ID");
       }
+      const token = await getStoredAuthToken();
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const response = await fetch(
         new URL(`/api/subscription/${user.id}`, getApiUrl()).toString(),
-        { credentials: "include" }
+        { credentials: "include", headers }
       );
       if (!response.ok) {
         throw new Error("Failed to fetch subscription");
