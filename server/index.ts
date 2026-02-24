@@ -197,6 +197,10 @@ function configureExpoAndLanding(app: express.Application) {
     path.resolve(process.cwd(), "server", "templates", "terms.html"),
     "utf-8"
   );
+  const dataDeletionTemplate = fs.readFileSync(
+    path.resolve(process.cwd(), "server", "templates", "data-deletion.html"),
+    "utf-8"
+  );
 
   log("Serving static Expo files with dynamic manifest routing");
 
@@ -228,6 +232,11 @@ function configureExpoAndLanding(app: express.Application) {
     if (req.path === "/terms") {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(200).send(termsTemplate);
+    }
+
+    if (req.path === "/data-deletion") {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(dataDeletionTemplate);
     }
 
     if (req.path !== "/" && req.path !== "/manifest") {
