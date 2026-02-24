@@ -15,7 +15,7 @@ import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } fr
 import { getInfoAsync } from "expo-file-system/legacy";
 
 import { getApiUrl } from "@/lib/query-client";
-import { getStoredAuthToken, handleExpiredSession } from "@/contexts/AuthContext";
+import { getStoredAuthToken } from "@/contexts/AuthContext";
 import { LaneColors, Spacing } from "@/constants/theme";
 import { ConsentDisclosure } from "./ConsentDisclosure";
 import { ThemedText } from "./ThemedText";
@@ -358,7 +358,6 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       if (response.status === 401) {
         onError?.("Session expired - please log in again");
         setState("idle");
-        await handleExpiredSession();
         return;
       }
 
@@ -425,7 +424,6 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
           errorMessage = "Voice service error - try again";
         } else if (msg.includes("no_auth_token")) {
           errorMessage = "Please log in to use voice";
-          handleExpiredSession();
         }
         setLastError(errorMessage);
         setCanRetry(true);

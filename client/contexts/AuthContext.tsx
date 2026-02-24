@@ -11,6 +11,7 @@ interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  didExplicitLogout: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -49,6 +50,7 @@ export async function handleExpiredSession(): Promise<void> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [didExplicitLogout, setDidExplicitLogout] = useState(false);
 
   useEffect(() => {
     loadStoredAuth();
@@ -117,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: data.user.email,
         };
 
+        setDidExplicitLogout(false);
         setUser(authUser);
         cachedToken = data.token;
 
@@ -159,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: data.user.email,
       };
 
+      setDidExplicitLogout(false);
       setUser(authUser);
       cachedToken = data.token;
       
@@ -176,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      setDidExplicitLogout(true);
       try {
         await fetch(new URL("/api/auth/logout", getApiUrl()).toString(), {
           method: "POST",
@@ -198,6 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         isAuthenticated: !!user,
+        didExplicitLogout,
         login,
         register,
         logout,

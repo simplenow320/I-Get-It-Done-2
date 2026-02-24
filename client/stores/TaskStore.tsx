@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from "react";
+import { AppState, AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest } from "@/lib/query-client";
 import { scheduleOverdueNotification } from "@/lib/notifications";
@@ -183,7 +184,7 @@ const CONTACTS_CACHE_KEY_PREFIX = "@contacts_cache_";
 const TaskStoreContext = createContext<TaskStoreContext | null>(null);
 
 export function TaskStoreProvider({ children }: { children: ReactNode }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading: authIsLoading, didExplicitLogout } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [unsortedTasks, setUnsortedTasks] = useState<UnsortedTask[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -193,6 +194,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [isLoaded, setIsLoaded] = useState(false);
   const loadingRef = React.useRef(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const userId = user?.id || null;
 
   const generateId = () => {
@@ -208,9 +210,11 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const getContactsCacheKey = () => `${CONTACTS_CACHE_KEY_PREFIX}${userId}`;
 
   useEffect(() => {
+    if (authIsLoading) return;
+
     if (isAuthenticated && userId) {
       loadState();
-    } else if (!isAuthenticated) {
+    } else if (!isAuthenticated && didExplicitLogout) {
       loadingRef.current = false;
       setTasks([]);
       setUnsortedTasks([]);
@@ -219,7 +223,27 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       setSettings(defaultSettings);
       setIsLoaded(false);
     }
-  }, [isAuthenticated, userId]);
+  }, [isAuthenticated, userId, authIsLoading, didExplicitLogout]);
+
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === "active" &&
+        isAuthenticated &&
+        userId &&
+        isLoaded
+      ) {
+        loadFromDatabase().catch((err) =>
+          console.error("Foreground refresh failed:", err)
+        );
+      }
+      appStateRef.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    return () => subscription.remove();
+  }, [isAuthenticated, userId, isLoaded]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -398,7 +422,11 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       const is401 = error?.message?.startsWith("401");
       console.error(`Failed to load from database (attempt ${retryCount + 1}):`, error);
-      if (!is401 && retryCount < MAX_RETRIES) {
+      if (is401) {
+        console.log("Auth expired during data load — preserving local cache");
+        return;
+      }
+      if (retryCount < MAX_RETRIES) {
         const delay = Math.min(1000 * Math.pow(2, retryCount), 8000);
         await new Promise(resolve => setTimeout(resolve, delay));
         return loadFromDatabase(retryCount + 1);
@@ -422,6 +450,8 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       if (tasks.length > 0 || contacts.length > 0) {
         await cacheTasksLocally(tasks, contacts);
       }
+      // Intentionally never cache empty tasks — prevents race conditions
+      // from wiping the local backup when auth is reloading
     } catch (error) {
       console.error("Failed to save local state:", error);
     }
