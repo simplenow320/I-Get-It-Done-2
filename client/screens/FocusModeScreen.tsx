@@ -61,8 +61,20 @@ export default function FocusModeScreen() {
   }
 
   const nowTasks = getTasksByLane("now");
+  const soonTasks = getTasksByLane("soon");
+  const laterTasks = getTasksByLane("later");
+  const parkTasks = getTasksByLane("park");
+  const hasOtherTasks = soonTasks.length > 0 || laterTasks.length > 0 || parkTasks.length > 0;
   const safeIndex = Math.min(currentIndex, Math.max(0, nowTasks.length - 1));
   const currentTask = nowTasks[safeIndex];
+
+  const handleMoveTopTaskToNow = useCallback(() => {
+    const taskToMove = soonTasks[0] || laterTasks[0] || parkTasks[0];
+    if (taskToMove) {
+      moveTask(taskToMove.id, "now");
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  }, [soonTasks, laterTasks, parkTasks, moveTask]);
 
   const handleComplete = useCallback(() => {
     if (!currentTask) return;
@@ -123,11 +135,30 @@ export default function FocusModeScreen() {
     return (
       <ThemedView style={styles.container}>
         <View style={[styles.content, { paddingTop: headerHeight + Spacing.lg, paddingBottom: tabBarHeight + Spacing.xl }]}>
-          <EmptyState
-            icon="check-circle"
-            title="All caught up"
-            description="You've completed all your Now tasks. Great work!"
-          />
+          {hasOtherTasks ? (
+            <View style={styles.emptyWithAction}>
+              <EmptyState
+                icon="inbox"
+                title="No tasks in Now"
+                description="Move a task to the Now lane to start focusing on it."
+              />
+              <Pressable
+                onPress={handleMoveTopTaskToNow}
+                style={[styles.moveTaskButton, { backgroundColor: LaneColors.now.primary }]}
+              >
+                <Feather name="arrow-up-circle" size={20} color="#FFFFFF" />
+                <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600" }}>
+                  Pull Next Task to Now
+                </ThemedText>
+              </Pressable>
+            </View>
+          ) : (
+            <EmptyState
+              icon="check-circle"
+              title="All caught up"
+              description="You have no tasks yet. Add tasks from the Dashboard to get started."
+            />
+          )}
         </View>
       </ThemedView>
     );
@@ -331,6 +362,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  emptyWithAction: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: Spacing.xl,
+  },
+  moveTaskButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.full,
     gap: Spacing.sm,
   },
 });
