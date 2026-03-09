@@ -1,5 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { getStoredAuthToken } from "@/contexts/AuthContext";
+import { getStoredAuthToken, handleExpiredSession } from "@/contexts/AuthContext";
 import { getApiUrl } from "@/lib/api-url";
 
 export { getApiUrl };
@@ -38,6 +38,10 @@ export async function apiRequest(
     credentials: "include",
   });
 
+  if (res.status === 401) {
+    handleExpiredSession();
+  }
+
   await throwIfResNotOk(res);
   return res;
 }
@@ -58,6 +62,7 @@ export const getQueryFn: <T>(options: {
     });
 
     if (res.status === 401) {
+      handleExpiredSession();
       if (unauthorizedBehavior === "returnNull") {
         return null;
       }

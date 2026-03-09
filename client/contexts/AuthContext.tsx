@@ -37,7 +37,11 @@ export async function getStoredAuthToken(): Promise<string | null> {
   }
 }
 
+let expiredSessionInProgress = false;
+
 export async function handleExpiredSession(): Promise<void> {
+  if (expiredSessionInProgress) return;
+  expiredSessionInProgress = true;
   cachedToken = null;
   try {
     await AsyncStorage.multiRemove([AUTH_STORAGE_KEY, AUTH_TOKEN_KEY]);
@@ -45,6 +49,7 @@ export async function handleExpiredSession(): Promise<void> {
   if (forceLogoutCallback) {
     await forceLogoutCallback();
   }
+  expiredSessionInProgress = false;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -122,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setDidExplicitLogout(false);
         setUser(authUser);
         cachedToken = data.token;
+        expiredSessionInProgress = false;
 
         await AsyncStorage.multiSet([
           [AUTH_STORAGE_KEY, JSON.stringify(authUser)],

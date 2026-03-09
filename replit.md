@@ -47,7 +47,7 @@ Overdue tasks automatically move between Now, Soon, and Later lanes to maintain 
 -   **Gamification**: Includes streak tracking, points/XP, level progression, and achievement notifications to sustain motivation.
 -   **Enhanced Weekly Reset**: Provides a structured review of completed tasks, auto-move summaries, cleanup suggestions, and future planning.
 -   **Delegation**: A "Team Hub" for task hand-off, status tracking, and in-app communication.
--   **Authentication**: JWT-based authentication with bcrypt hashing, `requireAuth` middleware for all API routes, and user identity verification. Rate limiting is applied to authentication endpoints.
+-   **Authentication**: JWT-based authentication with bcrypt hashing, `requireAuth` middleware for all API routes, and user identity verification. Rate limiting is applied to authentication endpoints. Global 401 interceptor in `query-client.ts` and `useSubscription.ts` calls `handleExpiredSession()` to clear auth state and redirect to login on token expiry, preventing infinite request loops.
 
 ### Navigation Structure
 The application uses a `RootStackNavigator` that branches into `Auth`, `Onboarding`, and `Main` (Tab Navigator). The `Main` tab navigator includes `Dashboard`, `Focus`, `Team` (conditional), and `Profile` tabs, each with its own stack.
