@@ -52,11 +52,31 @@ export async function getExpoPushToken(): Promise<string | null> {
   }
 }
 
-export async function savePushToken(userId: string, token: string): Promise<void> {
+export async function savePushToken(userId: string, token: string, enableNotifications?: boolean): Promise<void> {
   try {
-    await apiRequest("PUT", `/api/users/${userId}/push-token`, { pushToken: token });
+    const body: Record<string, any> = { pushToken: token };
+    if (enableNotifications !== undefined) {
+      body.notificationsEnabled = enableNotifications;
+    }
+    await apiRequest("PUT", `/api/users/${userId}/push-token`, body);
   } catch (error) {
     console.error("Failed to save push token:", error);
+  }
+}
+
+export async function registerPushTokenIfNeeded(userId: string): Promise<void> {
+  if (Platform.OS === "web") return;
+
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== "granted") return;
+
+    const token = await getExpoPushToken();
+    if (token) {
+      await savePushToken(userId, token);
+    }
+  } catch (error) {
+    console.log("Push token registration skipped:", error);
   }
 }
 

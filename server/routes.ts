@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers, voiceUsage } from "@shared/schema";
 import { generateToken, requireAuth, optionalAuth, validateUserAccess, type AuthenticatedRequest } from "./authMiddleware";
+import { sendPushNotification, sendDelegationNotification, startNotificationScheduler } from "./pushNotifications";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
 const FREE_TASK_LIMIT = 10;
@@ -1720,6 +1721,60 @@ Examples:
       res.status(500).json({ error: "Failed to log error" });
     }
   });
+
+  app.get("/api/users/:id/notification-settings", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      if (!req.user || req.user.userId !== id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const [user] = await db.select({
+        pushToken: users.pushToken,
+        notificationsEnabled: users.notificationsEnabled,
+      }).from(users).where(eq(users.id, id)).limit(1);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json({
+        notificationsEnabled: user.notificationsEnabled || false,
+        hasPushToken: !!user.pushToken,
+      });
+    } catch (error) {
+      console.error("Get notification settings error:", error);
+      res.status(500).json({ error: "Failed to get notification settings" });
+    }
+  });
+
+  app.post("/api/notifications/test", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const [user] = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
+
+      if (!user?.pushToken) {
+        return res.status(400).json({ error: "No push token registered. Enable notifications first." });
+      }
+
+      const sent = await sendPushNotification(
+        user.pushToken,
+        "I GET IT DONE",
+        "Push notifications are working! You'll receive task reminders here.",
+        { type: "test" }
+      );
+
+      res.json({ success: sent });
+    } catch (error) {
+      console.error("Test notification error:", error);
+      res.status(500).json({ error: "Failed to send test notification" });
+    }
+  });
+
+  startNotificationScheduler();
 
   const httpServer = createServer(app);
 

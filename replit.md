@@ -82,6 +82,7 @@ All secrets are configured in Replit Secrets. The following are required for ful
 -   **AsyncStorage**: For persistent authentication state on the client-side.
 -   **Expo SDK 54**: The framework for React Native development.
 -   **bcrypt**: For password hashing in authentication.
+-   **expo-server-sdk**: Server-side Expo push notification delivery via `server/pushNotifications.ts`. Background scheduler runs overdue/streak/due-soon checks at configurable intervals. API endpoints: `GET /api/users/:id/notification-settings`, `POST /api/notifications/test`. Auto-registers push tokens on login via `registerPushTokenIfNeeded` in `App.tsx`.
 
 ## Production Readiness
 

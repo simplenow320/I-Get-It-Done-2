@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -18,10 +18,19 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { RevenueCatProvider } from "@/contexts/RevenueCatContext";
 import { useTheme } from "@/hooks/useTheme";
+import { registerPushTokenIfNeeded } from "@/lib/notifications";
 
 function AppContent() {
   const { isDark } = useTheme();
   const { user } = useAuth();
+  const lastRegisteredUserId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (user?.id && user.id !== lastRegisteredUserId.current) {
+      lastRegisteredUserId.current = user.id;
+      registerPushTokenIfNeeded(user.id);
+    }
+  }, [user?.id]);
   
   return (
     <RevenueCatProvider userId={user?.id}>
