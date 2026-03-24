@@ -100,7 +100,7 @@ export default function DashboardScreen() {
             >
               <View style={styles.proBannerHeader}>
                 <View style={[styles.proBannerIcon, { backgroundColor: LaneColors.now.primary + "15" }]}>
-                  <Feather name="zap" size={16} color={LaneColors.now.primary} />
+                  <Feather name="star" size={16} color={LaneColors.now.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <ThemedText type="body" style={{ fontWeight: "600" }}>
@@ -140,7 +140,7 @@ export default function DashboardScreen() {
             >
               <View style={styles.proBannerHeader}>
                 <View style={[styles.proBannerIcon, { backgroundColor: LaneColors.soon.primary + "15" }]}>
-                  <Feather name="zap" size={16} color={LaneColors.soon.primary} />
+                  <Feather name="star" size={16} color={LaneColors.soon.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <ThemedText type="body" style={{ fontWeight: "600" }}>

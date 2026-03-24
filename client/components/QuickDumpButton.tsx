@@ -44,7 +44,7 @@ export default function QuickDumpButton({ onPress }: QuickDumpButtonProps) {
         style={styles.container}
       >
         <View style={styles.iconContainer}>
-          <Feather name="zap" size={24} color="#FFFFFF" />
+          <Feather name="message-circle" size={24} color="#FFFFFF" />
         </View>
         <View style={styles.textContainer}>
           <ThemedText
@@ -60,7 +60,7 @@ export default function QuickDumpButton({ onPress }: QuickDumpButtonProps) {
             lightColor="rgba(255,255,255,0.8)"
             darkColor="rgba(255,255,255,0.8)"
           >
-            Capture ideas fast
+            Just speak or type it
           </ThemedText>
         </View>
         <Feather name="chevron-right" size={24} color="rgba(255,255,255,0.8)" />
