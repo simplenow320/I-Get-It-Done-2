@@ -19,6 +19,7 @@ import { scheduleProNudgeNotifications, cancelProNudgeNotifications } from "@/li
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
 import { useGamification } from "@/stores/GamificationStore";
+import DailySummaryCard from "@/components/DailySummaryCard";
 import { DashboardStackParamList } from "@/navigation/DashboardStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<DashboardStackParamList, "Dashboard">;
@@ -155,6 +156,12 @@ export default function DashboardScreen() {
             </Pressable>
           </Animated.View>
         ) : null}
+
+        <Animated.View entering={FadeInUp.delay(30).duration(400)}>
+          <DailySummaryCard
+            onStartTask={(taskId) => navigation.navigate("TaskDetail", { taskId })}
+          />
+        </Animated.View>
 
         <Animated.View entering={FadeInUp.delay(50).duration(400)}>
           <QuickDumpButton onPress={handleQuickDump} />

@@ -14,6 +14,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { ThemedText } from "@/components/ThemedText";
 import StreakBadge from "@/components/StreakBadge";
 import { NotificationSettings } from "@/components/NotificationSettings";
+import { DailyReminderSettings } from "@/components/DailyReminderSettings";
 import { useTheme } from "@/hooks/useTheme";
 import { useSubscriptionWithFocusRefetch } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
@@ -497,6 +498,7 @@ export default function ProfileScreen() {
           Notifications
         </ThemedText>
         {userId ? <NotificationSettings userId={userId} /> : null}
+        {userId ? <DailyReminderSettings userId={userId} /> : null}
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(450).duration(400)}>
