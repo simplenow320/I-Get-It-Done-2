@@ -30,7 +30,7 @@ export default function DashboardScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { tasks, getTasksByLane, unsortedTasks, getCompletedTasks } = useTaskStore();
+  const { tasks, getTasksByLane, unsortedTasks } = useTaskStore();
   const { currentStreak } = useGamification();
   const { isPro, hasProFeatures, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
   const FREE_TASK_LIMIT = 10;
@@ -65,13 +65,13 @@ export default function DashboardScreen() {
   const completedToday = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return getCompletedTasks().filter((task) => {
+    return tasks.filter((task) => {
       if (!task.completedAt) return false;
       const completedDate = new Date(task.completedAt);
       completedDate.setHours(0, 0, 0, 0);
       return completedDate.getTime() === today.getTime();
     });
-  }, [getCompletedTasks]);
+  }, [tasks]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
