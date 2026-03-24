@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable } from "react-native";
+import { Pressable, View, StyleSheet } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 
@@ -51,9 +51,11 @@ export default function DashboardStackNavigator() {
             <Pressable
               onPress={() => navigation.navigate("TourLanding", { isTour: true })}
               hitSlop={12}
-              style={{ marginRight: 4 }}
+              style={infoStyles.button}
             >
-              <Feather name="info" size={22} color={theme.text} />
+              <View style={[infoStyles.circle, { borderColor: theme.text }]}>
+                <Feather name="info" size={16} color={theme.text} />
+              </View>
             </Pressable>
           ),
         })}
@@ -125,3 +127,17 @@ export default function DashboardStackNavigator() {
     </Stack.Navigator>
   );
 }
+
+const infoStyles = StyleSheet.create({
+  button: {
+    marginRight: 4,
+  },
+  circle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

@@ -26,16 +26,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
+    height: 30,
   },
   icon: {
-    width: 28,
-    height: 28,
-    marginRight: Spacing.sm,
+    width: 26,
+    height: 26,
+    marginRight: Spacing.xs,
     borderRadius: 6,
   },
   title: {
     fontSize: 17,
     fontWeight: "600",
     letterSpacing: 0.5,
+    lineHeight: 22,
   },
 });
