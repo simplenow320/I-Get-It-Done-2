@@ -1278,7 +1278,7 @@ Examples:
       }
       
       if (invite.inviterId === userId) {
-        return res.status(400).json({ error: "Cannot accept your own invite" });
+        return res.status(400).json({ error: "Can't join your own team" });
       }
       
       const existingRelation = await db.select().from(teamMembers).where(

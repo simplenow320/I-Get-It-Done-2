@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { scheduleOverdueNotification } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -152,7 +152,7 @@ interface TaskStoreContext {
   getDelegatedTasksByContact: (contactId: string) => Task[];
   checkOverdueTasks: () => { movedCount: number; tasks: Task[] };
   createTeamInvite: (inviteeEmail?: string) => Promise<TeamInvite | null>;
-  acceptTeamInvite: (inviteCode: string) => Promise<boolean>;
+  acceptTeamInvite: (inviteCode: string) => Promise<{ success: boolean; error?: string }>;
   declineTeamInvite: (inviteId: string) => Promise<boolean>;
   cancelSentInvite: (inviteId: string) => Promise<boolean>;
   resendInvite: (inviteId: string) => Promise<TeamInvite | null>;
@@ -1007,18 +1007,33 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [userId]);
 
-  const acceptTeamInvite = useCallback(async (inviteCode: string): Promise<boolean> => {
-    if (!userId) return false;
+  const acceptTeamInvite = useCallback(async (inviteCode: string): Promise<{ success: boolean; error?: string }> => {
+    if (!userId) return { success: false, error: "Not logged in" };
     try {
-      const response = await apiRequest("POST", "/api/team/invite/accept", { inviteCode, userId });
+      const baseUrl = getApiUrl();
+      const url = new URL("/api/team/invite/accept", baseUrl);
+      const authHeaders = await getAuthHeaders();
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
+        body: JSON.stringify({ inviteCode, userId }),
+        credentials: "include",
+      });
+      
+      const data = await response.json();
+      
       if (response.ok) {
         await refreshTeamData();
-        return true;
+        return { success: true };
       }
-      return false;
+      return { success: false, error: data.error || "Failed to join team" };
     } catch (error) {
       console.error("Failed to accept invite:", error);
-      return false;
+      return { success: false, error: "Failed to join team" };
     }
   }, [userId, refreshTeamData]);
 

@@ -157,12 +157,12 @@ export default function TeamHubScreen() {
   const handleAcceptInvite = async (inviteCode: string) => {
     setIsLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const success = await acceptTeamInvite(inviteCode);
+    const result = await acceptTeamInvite(inviteCode);
     setIsLoading(false);
-    if (success) {
+    if (result.success) {
       Alert.alert("Success!", "You've joined the team.");
     } else {
-      Alert.alert("Error", "Invalid or expired invite code.");
+      Alert.alert("Error", result.error || "Failed to join team.");
     }
   };
 
@@ -228,13 +228,13 @@ export default function TeamHubScreen() {
 
   const handleJoinWithCode = async () => {
     if (!joinCode.trim()) return;
-    const success = await acceptTeamInvite(joinCode.trim().toUpperCase());
-    if (success) {
+    const result = await acceptTeamInvite(joinCode.trim().toUpperCase());
+    if (result.success) {
       setShowJoinModal(false);
       setJoinCode("");
       Alert.alert("Success!", "You've joined the team.");
     } else {
-      Alert.alert("Error", "Invalid or expired invite code.");
+      Alert.alert("Error", result.error || "Failed to join team.");
     }
   };
 
