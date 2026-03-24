@@ -8,6 +8,7 @@ import LaneDetailScreen from "@/screens/LaneDetailScreen";
 import AddTaskScreen from "@/screens/AddTaskScreen";
 import TaskDetailScreen from "@/screens/TaskDetailScreen";
 import QuickDumpScreen from "@/screens/QuickDumpScreen";
+import TaskHistoryScreen from "@/screens/TaskHistoryScreen";
 import LandingScreen from "@/screens/LandingScreen";
 import LearnMoreScreen from "@/screens/LearnMoreScreen";
 import FAQScreen from "@/screens/FAQScreen";
@@ -22,6 +23,7 @@ export type DashboardStackParamList = {
   AddTask: { defaultLane?: Lane } | undefined;
   TaskDetail: { taskId: string };
   QuickDump: undefined;
+  TaskHistory: undefined;
   TourLanding: { isTour: boolean };
   TourLearnMore: { isTour: boolean };
   TourFAQ: { isTour: boolean };
@@ -99,6 +101,13 @@ export default function DashboardStackNavigator() {
             </Pressable>
           ),
         })}
+      />
+      <Stack.Screen
+        name="TaskHistory"
+        component={TaskHistoryScreen}
+        options={{
+          headerTitle: "History",
+        }}
       />
       <Stack.Screen
         name="TourLanding"

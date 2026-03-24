@@ -186,12 +186,17 @@ export default function DashboardScreen() {
         </View>
 
         <Animated.View entering={FadeInUp.delay(300).duration(400)}>
-          <View style={styles.doneTodaySection}>
+          <Pressable onPress={() => navigation.navigate("TaskHistory")} style={styles.doneTodaySection}>
             <View style={styles.doneTodayHeader}>
               <Feather name="check-circle" size={16} color={LaneColors.later.primary} />
               <ThemedText type="small" style={{ color: LaneColors.later.primary, marginLeft: Spacing.xs }}>
                 Done Today
               </ThemedText>
+              <View style={{ flex: 1 }} />
+              <ThemedText type="caption" secondary>
+                View All
+              </ThemedText>
+              <Feather name="chevron-right" size={14} color={theme.textSecondary} style={{ marginLeft: 2 }} />
             </View>
             <View style={[styles.doneTodayCard, { backgroundColor: theme.backgroundSecondary }]}>
               <ThemedText type="h2" style={{ color: LaneColors.later.primary }}>
@@ -201,7 +206,7 @@ export default function DashboardScreen() {
                 task{completedToday.length !== 1 ? "s" : ""} completed
               </ThemedText>
             </View>
-          </View>
+          </Pressable>
         </Animated.View>
       </ScrollView>
       <FloatingAddButton onPress={handleAddTask} bottom={tabBarHeight + Spacing.lg} />
