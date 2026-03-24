@@ -4,7 +4,7 @@ import { getApiUrl } from "@/lib/api-url";
 
 export { getApiUrl };
 
-async function getAuthHeaders(): Promise<HeadersInit> {
+export async function getAuthHeaders(): Promise<HeadersInit> {
   const token = await getStoredAuthToken();
   if (token) {
     return { Authorization: `Bearer ${token}` };

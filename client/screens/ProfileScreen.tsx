@@ -21,7 +21,7 @@ import { useTaskStore } from "@/stores/TaskStore";
 import { useGamification, Level } from "@/stores/GamificationStore";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 
 type NavigationProp = NativeStackNavigationProp<ProfileStackParamList, "Profile">;
 type ThemeMode = "light" | "dark" | "system";
@@ -154,7 +154,20 @@ export default function ProfileScreen() {
     setDeleteError("");
     
     try {
-      const response = await apiRequest("DELETE", `/api/account/${userId}`, { password: deletePassword });
+      const baseUrl = getApiUrl();
+      const url = new URL(`/api/account/${userId}`, baseUrl);
+      const authHeaders = await getAuthHeaders();
+      
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
+        body: JSON.stringify({ password: deletePassword }),
+        credentials: "include",
+      });
+      
       const data = await response.json();
       
       if (!response.ok) {
