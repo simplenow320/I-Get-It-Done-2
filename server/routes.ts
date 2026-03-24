@@ -296,6 +296,11 @@ Examples:
       if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required" });
       }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
+      }
       
       if (password.length < 6) {
         return res.status(400).json({ error: "Password must be at least 6 characters" });
@@ -350,6 +355,11 @@ Examples:
       
       if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required" });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
       }
       
       const normalizedEmail = email.toLowerCase().trim();
