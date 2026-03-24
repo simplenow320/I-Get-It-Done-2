@@ -7,7 +7,6 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-
 import { LaneCard } from "@/components/LaneCard";
 import { FloatingAddButton } from "@/components/FloatingAddButton";
 import QuickDumpButton from "@/components/QuickDumpButton";
@@ -133,6 +132,46 @@ export default function DashboardScreen() {
             </View>
           ) : null}
         </Animated.View>
+
+        {totalActiveTasks === 0 && unsortedTasks.length === 0 && completedToday.length === 0 ? (
+          <Animated.View entering={FadeInUp.delay(80).duration(400)}>
+            <View style={[styles.welcomeCard, { backgroundColor: theme.backgroundSecondary }]}>
+              <ThemedText type="h3" style={{ marginBottom: Spacing.xs }}>
+                Ready to get started?
+              </ThemedText>
+              <ThemedText type="body" secondary style={{ marginBottom: Spacing.lg, lineHeight: 22 }}>
+                Capture what's on your mind. Type a task or use Quick Dump above to brain-dump everything at once.
+              </ThemedText>
+
+              <Pressable
+                onPress={handleAddTask}
+                style={[styles.welcomeAction, { backgroundColor: LaneColors.now.primary }]}
+              >
+                <Feather name="plus" size={18} color="#FFFFFF" />
+                <ThemedText type="body" style={{ color: "#FFFFFF", fontWeight: "600", marginLeft: Spacing.sm }}>
+                  Add Your First Task
+                </ThemedText>
+              </Pressable>
+
+              <Pressable
+                onPress={handleQuickDump}
+                style={[styles.welcomeAction, { backgroundColor: theme.backgroundDefault, marginTop: Spacing.sm }]}
+              >
+                <Feather name="zap" size={18} color={LaneColors.now.primary} />
+                <ThemedText type="body" style={{ color: LaneColors.now.primary, fontWeight: "600", marginLeft: Spacing.sm }}>
+                  Brain Dump Everything
+                </ThemedText>
+              </Pressable>
+
+              <View style={styles.welcomeHint}>
+                <Feather name="info" size={14} color={theme.textSecondary} />
+                <ThemedText type="caption" secondary style={{ marginLeft: Spacing.xs, flex: 1 }}>
+                  Tasks go into 4 lanes: Now, Soon, Later, Park. Each lane keeps your priorities clear.
+                </ThemedText>
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
 
         <View style={styles.sectionHeader}>
           <ThemedText type="h4">Your Lanes</ThemedText>
@@ -268,5 +307,26 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     marginBottom: Spacing.md,
+  },
+  welcomeCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.md,
+  },
+  welcomeAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+  },
+  welcomeHint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(128,128,128,0.2)",
   },
 });

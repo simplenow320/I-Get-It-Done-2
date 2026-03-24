@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { StyleSheet, View, FlatList } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -10,9 +10,11 @@ import * as Haptics from "expo-haptics";
 import { TaskCard } from "@/components/TaskCard";
 import { EmptyState } from "@/components/EmptyState";
 import { FloatingAddButton } from "@/components/FloatingAddButton";
+import Confetti from "@/components/Confetti";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing } from "@/constants/theme";
 import { useTaskStore, Task, Lane } from "@/stores/TaskStore";
+import { useGamification } from "@/stores/GamificationStore";
 import { DashboardStackParamList } from "@/navigation/DashboardStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<DashboardStackParamList, "LaneDetail">;
@@ -41,6 +43,8 @@ export default function LaneDetailScreen() {
   const route = useRoute<RouteType>();
   const { lane } = route.params;
   const { getTasksByLane, completeTask } = useTaskStore();
+  const { recordTaskComplete } = useGamification();
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const tasks = getTasksByLane(lane);
   const empty = emptyMessages[lane];
@@ -49,10 +53,14 @@ export default function LaneDetailScreen() {
     navigation.navigate("TaskDetail", { taskId: task.id });
   }, [navigation]);
 
-  const handleComplete = useCallback((id: string) => {
+  const handleComplete = useCallback((task: Task) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    completeTask(id);
-  }, [completeTask]);
+    const hasSubtasks = (task.subtasks?.length || 0) > 0;
+    const subtaskCount = task.subtasks?.length || 0;
+    completeTask(task.id);
+    recordTaskComplete(hasSubtasks, subtaskCount);
+    setShowConfetti(true);
+  }, [completeTask, recordTaskComplete]);
 
   const handleAddTask = () => {
     navigation.navigate("AddTask", { defaultLane: lane });
@@ -62,7 +70,7 @@ export default function LaneDetailScreen() {
     ({ item }: { item: Task }) => (
       <TaskCard
         task={item}
-        onComplete={() => handleComplete(item.id)}
+        onComplete={() => handleComplete(item)}
         onPress={() => handleTaskPress(item)}
       />
     ),
@@ -90,6 +98,7 @@ export default function LaneDetailScreen() {
         scrollIndicatorInsets={{ bottom: insets.bottom }}
       />
       <FloatingAddButton onPress={handleAddTask} bottom={tabBarHeight + Spacing.xl} />
+      <Confetti visible={showConfetti} onComplete={() => setShowConfetti(false)} count={30} />
     </View>
   );
 }
