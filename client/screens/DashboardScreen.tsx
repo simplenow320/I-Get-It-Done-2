@@ -59,8 +59,6 @@ export default function DashboardScreen() {
   const totalSoonTasks = getTasksByLane("soon").length;
   const totalLaterTasks = getTasksByLane("later").length;
   const totalParkTasks = getTasksByLane("park").length;
-  const totalActiveTasks = totalNowTasks + totalSoonTasks + totalLaterTasks + totalParkTasks;
-
   const completedToday = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -98,26 +96,62 @@ export default function DashboardScreen() {
           <Animated.View entering={FadeInUp.delay(0).duration(400)}>
             <Pressable
               onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
-              style={[styles.limitBanner, { backgroundColor: LaneColors.now.primary + "15", borderColor: LaneColors.now.primary + "30" }]}
+              style={[styles.proBanner, { backgroundColor: theme.backgroundSecondary }]}
             >
-              <Feather name="lock" size={16} color={LaneColors.now.primary} />
-              <ThemedText type="small" style={{ color: LaneColors.now.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                Unlock voice capture, focus mode, streaks & more
-              </ThemedText>
-              <Feather name="chevron-right" size={16} color={LaneColors.now.primary} />
+              <View style={styles.proBannerHeader}>
+                <View style={[styles.proBannerIcon, { backgroundColor: LaneColors.now.primary + "15" }]}>
+                  <Feather name="zap" size={16} color={LaneColors.now.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedText type="body" style={{ fontWeight: "600" }}>
+                    Unlock Pro
+                  </ThemedText>
+                  <ThemedText type="caption" secondary>
+                    Get the full experience
+                  </ThemedText>
+                </View>
+                <Feather name="chevron-right" size={16} color={theme.textSecondary} />
+              </View>
+              <View style={styles.proBenefitsRow}>
+                <View style={styles.proBenefitItem}>
+                  <Feather name="mic" size={12} color={LaneColors.later.primary} />
+                  <ThemedText type="caption" secondary style={{ marginLeft: 4 }}>Voice</ThemedText>
+                </View>
+                <View style={styles.proBenefitItem}>
+                  <Feather name="target" size={12} color={LaneColors.later.primary} />
+                  <ThemedText type="caption" secondary style={{ marginLeft: 4 }}>Focus</ThemedText>
+                </View>
+                <View style={styles.proBenefitItem}>
+                  <Feather name="trending-up" size={12} color={LaneColors.later.primary} />
+                  <ThemedText type="caption" secondary style={{ marginLeft: 4 }}>Streaks</ThemedText>
+                </View>
+                <View style={styles.proBenefitItem}>
+                  <Feather name="users" size={12} color={LaneColors.later.primary} />
+                  <ThemedText type="caption" secondary style={{ marginLeft: 4 }}>Teams</ThemedText>
+                </View>
+              </View>
             </Pressable>
           </Animated.View>
         ) : freeTrialActive && lifetimeTasksCreated >= SOFT_NUDGE_THRESHOLD ? (
           <Animated.View entering={FadeInUp.delay(0).duration(400)}>
             <Pressable
               onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
-              style={[styles.limitBanner, { backgroundColor: LaneColors.soon.primary + "10", borderColor: LaneColors.soon.primary + "25" }]}
+              style={[styles.proBanner, { backgroundColor: theme.backgroundSecondary }]}
             >
-              <Feather name="zap" size={16} color={LaneColors.soon.primary} />
-              <ThemedText type="small" style={{ color: LaneColors.soon.primary, marginLeft: Spacing.xs, flex: 1 }}>
-                {freeTasksRemaining} free Pro uses left. Subscribe to keep premium features.
-              </ThemedText>
-              <Feather name="chevron-right" size={16} color={LaneColors.soon.primary} />
+              <View style={styles.proBannerHeader}>
+                <View style={[styles.proBannerIcon, { backgroundColor: LaneColors.soon.primary + "15" }]}>
+                  <Feather name="zap" size={16} color={LaneColors.soon.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedText type="body" style={{ fontWeight: "600" }}>
+                    {freeTasksRemaining} free Pro uses left
+                  </ThemedText>
+                  <ThemedText type="caption" secondary>
+                    Subscribe to keep all features
+                  </ThemedText>
+                </View>
+                <Feather name="chevron-right" size={16} color={theme.textSecondary} />
+              </View>
             </Pressable>
           </Animated.View>
         ) : null}
@@ -132,46 +166,6 @@ export default function DashboardScreen() {
             </View>
           ) : null}
         </Animated.View>
-
-        {totalActiveTasks === 0 && unsortedTasks.length === 0 && completedToday.length === 0 ? (
-          <Animated.View entering={FadeInUp.delay(80).duration(400)}>
-            <View style={[styles.welcomeCard, { backgroundColor: theme.backgroundSecondary }]}>
-              <ThemedText type="h3" style={{ marginBottom: Spacing.xs }}>
-                Ready to get started?
-              </ThemedText>
-              <ThemedText type="body" secondary style={{ marginBottom: Spacing.lg, lineHeight: 22 }}>
-                Capture what's on your mind. Type a task or use Quick Dump above to brain-dump everything at once.
-              </ThemedText>
-
-              <Pressable
-                onPress={handleAddTask}
-                style={[styles.welcomeAction, { backgroundColor: LaneColors.now.primary }]}
-              >
-                <Feather name="plus" size={18} color="#FFFFFF" />
-                <ThemedText type="body" style={{ color: "#FFFFFF", fontWeight: "600", marginLeft: Spacing.sm }}>
-                  Add Your First Task
-                </ThemedText>
-              </Pressable>
-
-              <Pressable
-                onPress={handleQuickDump}
-                style={[styles.welcomeAction, { backgroundColor: theme.backgroundDefault, marginTop: Spacing.sm }]}
-              >
-                <Feather name="zap" size={18} color={LaneColors.now.primary} />
-                <ThemedText type="body" style={{ color: LaneColors.now.primary, fontWeight: "600", marginLeft: Spacing.sm }}>
-                  Brain Dump Everything
-                </ThemedText>
-              </Pressable>
-
-              <View style={styles.welcomeHint}>
-                <Feather name="info" size={14} color={theme.textSecondary} />
-                <ThemedText type="caption" secondary style={{ marginLeft: Spacing.xs, flex: 1 }}>
-                  Tasks go into 4 lanes: Now, Soon, Later, Park. Each lane keeps your priorities clear.
-                </ThemedText>
-              </View>
-            </View>
-          </Animated.View>
-        ) : null}
 
         <View style={styles.sectionHeader}>
           <ThemedText type="h4">Your Lanes</ThemedText>
@@ -300,33 +294,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.lg,
   },
-  limitBanner: {
-    flexDirection: "row",
-    alignItems: "center",
+  proBanner: {
     padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
   },
-  welcomeCard: {
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    marginTop: Spacing.md,
-  },
-  welcomeAction: {
+  proBannerHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
   },
-  welcomeHint: {
+  proBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proBenefitsRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: Spacing.lg,
-    paddingTop: Spacing.md,
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    gap: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(128,128,128,0.2)",
+    borderTopColor: "rgba(128,128,128,0.15)",
+  },
+  proBenefitItem: {
+    flexDirection: "row",
+    alignItems: "center",
   },
 });
