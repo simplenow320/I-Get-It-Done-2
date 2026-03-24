@@ -57,8 +57,28 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      setError("Password must include at least one uppercase letter");
+      return;
+    }
+
+    if (!/[a-z]/.test(password)) {
+      setError("Password must include at least one lowercase letter");
+      return;
+    }
+
+    if (!/[0-9]/.test(password)) {
+      setError("Password must include at least one number");
+      return;
+    }
+
+    if (!/[^A-Za-z0-9]/.test(password)) {
+      setError("Password must include at least one special character");
       return;
     }
 
@@ -157,7 +177,7 @@ export default function RegisterScreen() {
                 </Pressable>
               </View>
               <ThemedText style={[styles.hint, { color: colors.textSecondary }]}>
-                At least 6 characters
+                Min 8 characters with uppercase, lowercase, number, and special character
               </ThemedText>
             </View>
 
