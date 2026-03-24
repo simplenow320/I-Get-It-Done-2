@@ -95,7 +95,7 @@ export default function FocusModeScreen() {
 
   const handleDefer = useCallback(() => {
     if (!currentTask) return;
-    moveTask(currentTask.id, "soon");
+    moveTask(currentTask.id, "park");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setCurrentIndex((prev) => Math.min(prev, Math.max(0, nowTasks.length - 2)));
   }, [currentTask, moveTask, nowTasks.length]);
@@ -260,9 +260,9 @@ export default function FocusModeScreen() {
           </Pressable>
           <Pressable
             onPress={handleDefer}
-            style={[styles.quickAction, { backgroundColor: LaneColors.soon.primary }]}
+            style={[styles.quickAction, { backgroundColor: LaneColors.park.primary }]}
           >
-            <Feather name="clock" size={24} color="#FFFFFF" />
+            <Feather name="pause" size={24} color="#FFFFFF" />
             <ThemedText type="small" lightColor="#FFFFFF" darkColor="#FFFFFF">
               Defer
             </ThemedText>
