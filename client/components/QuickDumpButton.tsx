@@ -60,7 +60,7 @@ export default function QuickDumpButton({ onPress }: QuickDumpButtonProps) {
             lightColor="rgba(255,255,255,0.8)"
             darkColor="rgba(255,255,255,0.8)"
           >
-            Just speak or type it
+            Get it out of your head
           </ThemedText>
         </View>
         <Feather name="chevron-right" size={24} color="rgba(255,255,255,0.8)" />

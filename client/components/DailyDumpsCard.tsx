@@ -130,7 +130,7 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
             Daily Dumps
           </ThemedText>
           <ThemedText type="small" secondary>
-            {allDone ? "All done for today" : "Morning, midday, and evening check-ins"}
+            {allDone ? "Three for three. Your head's clear." : "Morning, midday, and evening check-ins"}
           </ThemedText>
         </View>
         <View style={styles.headerRight}>

@@ -150,7 +150,7 @@ export default function QuickDumpScreen() {
               <Feather name="check" size={32} color={LaneColors.later.primary} />
             </View>
             <ThemedText type="h2" style={styles.doneTitle}>
-              You captured {sortedTasks.length} task{sortedTasks.length > 1 ? "s" : ""}
+              That's {sortedTasks.length} fewer thing{sortedTasks.length > 1 ? "s" : ""} in your head
             </ThemedText>
             <ThemedText type="body" secondary>
               All sorted and ready to go.

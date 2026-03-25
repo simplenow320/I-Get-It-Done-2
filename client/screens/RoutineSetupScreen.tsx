@@ -176,7 +176,7 @@ export default function RoutineSetupScreen() {
               Build Your Rhythm
             </ThemedText>
             <ThemedText type="body" secondary style={styles.subtitle}>
-              Structure makes everything easier. Pick the check-ins that work for you and we'll send a quick nudge to keep you moving.
+              Most people feel clearest when they check in a few times a day. We'll send a nudge so you don't have to remember.
             </ThemedText>
           </Animated.View>
 
