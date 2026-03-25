@@ -113,7 +113,7 @@ export default function ModeSelectionScreen() {
 
   const handleContinue = () => {
     updateSettings({ mode: selectedMode });
-    completeOnboarding();
+    navigation.navigate("RoutineSetup");
   };
 
   const handleBack = () => {

@@ -14,6 +14,7 @@ import { requestNotificationPermissions } from "@/lib/notifications";
 const STORAGE_KEY_PREFIX = "@daily_reminders_";
 const MORNING_ID = "daily_reminder_morning";
 const EVENING_ID = "daily_reminder_evening";
+const MIDDAY_ID = "daily_reminder_midday";
 
 interface ReminderState {
   morningEnabled: boolean;
@@ -22,6 +23,9 @@ interface ReminderState {
   eveningEnabled: boolean;
   eveningHour: number;
   eveningMinute: number;
+  middayEnabled: boolean;
+  middayHour: number;
+  middayMinute: number;
 }
 
 const DEFAULT_STATE: ReminderState = {
@@ -31,6 +35,9 @@ const DEFAULT_STATE: ReminderState = {
   eveningEnabled: false,
   eveningHour: 20,
   eveningMinute: 0,
+  middayEnabled: false,
+  middayHour: 12,
+  middayMinute: 30,
 };
 
 const MORNING_MESSAGES = [
@@ -43,6 +50,12 @@ const EVENING_MESSAGES = [
   { title: "How'd today go?", body: "Review what you finished and set up tomorrow." },
   { title: "Time to wrap up", body: "Check off what's done and park the rest." },
   { title: "End of day check-in", body: "See your progress and plan ahead." },
+];
+
+const MIDDAY_MESSAGES = [
+  { title: "Quick reset", body: "Refocus. What matters right now?" },
+  { title: "Midday check-in", body: "How's the day going? Adjust your lanes." },
+  { title: "Halfway there", body: "Take a breath and re-prioritize." },
 ];
 
 function formatTime(hour: number, minute: number): string {
@@ -155,25 +168,41 @@ export function DailyReminderSettings({ userId }: DailyReminderSettingsProps) {
     }
   };
 
+  const handleMiddayToggle = async () => {
+    if (isWeb) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (!state.middayEnabled) {
+      const granted = await requestNotificationPermissions();
+      if (!granted) return;
+      await scheduleDailyReminder(MIDDAY_ID, state.middayHour, state.middayMinute, MIDDAY_MESSAGES);
+      persist({ ...state, middayEnabled: true });
+    } else {
+      await cancelDailyReminder(MIDDAY_ID);
+      persist({ ...state, middayEnabled: false });
+    }
+  };
+
   const cycleTime = async (
-    type: "morning" | "evening",
+    type: "morning" | "evening" | "midday",
     direction: "up" | "down"
   ) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const hourKey = type === "morning" ? "morningHour" : "eveningHour";
-    const enabledKey = type === "morning" ? "morningEnabled" : "eveningEnabled";
-    const identifier = type === "morning" ? MORNING_ID : EVENING_ID;
-    const messages = type === "morning" ? MORNING_MESSAGES : EVENING_MESSAGES;
+    const config = {
+      morning: { hourKey: "morningHour" as const, enabledKey: "morningEnabled" as const, minuteKey: "morningMinute" as const, identifier: MORNING_ID, messages: MORNING_MESSAGES },
+      evening: { hourKey: "eveningHour" as const, enabledKey: "eveningEnabled" as const, minuteKey: "eveningMinute" as const, identifier: EVENING_ID, messages: EVENING_MESSAGES },
+      midday: { hourKey: "middayHour" as const, enabledKey: "middayEnabled" as const, minuteKey: "middayMinute" as const, identifier: MIDDAY_ID, messages: MIDDAY_MESSAGES },
+    }[type];
 
-    let newHour = state[hourKey] + (direction === "up" ? 1 : -1);
+    let newHour = state[config.hourKey] + (direction === "up" ? 1 : -1);
     if (newHour > 23) newHour = 0;
     if (newHour < 0) newHour = 23;
 
-    const next = { ...state, [hourKey]: newHour };
+    const next = { ...state, [config.hourKey]: newHour };
     await persist(next);
 
-    if (next[enabledKey]) {
-      await scheduleDailyReminder(identifier, newHour, next[type === "morning" ? "morningMinute" : "eveningMinute"], messages);
+    if (next[config.enabledKey]) {
+      await scheduleDailyReminder(config.identifier, newHour, next[config.minuteKey], config.messages);
     }
   };
 
@@ -213,6 +242,36 @@ export function DailyReminderSettings({ userId }: DailyReminderSettingsProps) {
           disabled={isWeb}
           trackColor={{ false: theme.border, true: LaneColors.soon.primary }}
           thumbColor={state.morningEnabled ? "#FFFFFF" : theme.textSecondary}
+        />
+      </View>
+
+      <View style={[styles.reminderRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }]}>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={styles.label}>Midday reset</ThemedText>
+          {state.middayEnabled ? (
+            <View style={styles.timeRow}>
+              <Pressable onPress={() => cycleTime("midday", "down")} hitSlop={8}>
+                <Feather name="minus" size={14} color={theme.textSecondary} />
+              </Pressable>
+              <ThemedText type="caption" style={{ color: LaneColors.later.primary, marginHorizontal: Spacing.xs }}>
+                {formatTime(state.middayHour, state.middayMinute)}
+              </ThemedText>
+              <Pressable onPress={() => cycleTime("midday", "up")} hitSlop={8}>
+                <Feather name="plus" size={14} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+          ) : (
+            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+              {isWeb ? "Run in Expo Go to enable" : "Off"}
+            </ThemedText>
+          )}
+        </View>
+        <Switch
+          value={state.middayEnabled}
+          onValueChange={handleMiddayToggle}
+          disabled={isWeb}
+          trackColor={{ false: theme.border, true: LaneColors.later.primary }}
+          thumbColor={state.middayEnabled ? "#FFFFFF" : theme.textSecondary}
         />
       </View>
 
