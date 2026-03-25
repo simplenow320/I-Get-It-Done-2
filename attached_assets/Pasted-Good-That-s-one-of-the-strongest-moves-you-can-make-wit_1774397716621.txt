@@ -1,0 +1,158 @@
+Good. That’s one of the strongest moves you can make without overbuilding.
+
+Let’s tighten it so it actually drives behavior, not just sit there as a feature.
+
+⸻
+
+🧠 The Idea: “Dump Times”
+
+You’re not just adding reminders.
+
+You’re creating anchors in a person’s day.
+
+👉 That’s what builds habit.
+
+⸻
+
+🎯 The 3 Dump Times (Keep It Simple)
+
+Don’t overcomplicate this. Start with 2, optionally 3.
+
+1. Morning Dump (High Priority)
+
+Purpose: Clear the mind + set direction
+
+Trigger time: 7am–9am (user adjustable later)
+
+Prompt:
+	•	“Start your day. Dump what’s on your mind.”
+	•	“What needs your attention today?”
+
+👉 This becomes their daily starting ritual
+
+⸻
+
+2. Midday Reset (Optional but Powerful)
+
+Purpose: Regain focus
+
+Trigger time: 12pm–2pm
+
+Prompt:
+	•	“Quick reset. What’s still on your plate?”
+	•	“Refocus. What matters right now?”
+
+👉 Helps people who fall off during the day
+
+⸻
+
+3. Evening Dump (High Priority)
+
+Purpose: Closure + mental relief
+
+Trigger time: 7pm–10pm
+
+Prompt:
+	•	“Wrap your day. What did you finish?”
+	•	“Clear your mind before tomorrow.”
+
+👉 This is huge for retention
+
+⸻
+
+🔥 Why This Works
+
+You’re aligning with natural behavior patterns:
+	•	Morning → planning
+	•	Midday → correction
+	•	Evening → reflection
+
+👉 Now your app fits life instead of interrupting it
+
+⸻
+
+⚙️ What To Tell Your Dev (Simple Build)
+
+Feature: “Daily Dump Times”
+
+1. Default Setup (No friction)
+	•	Morning dump ON by default
+	•	Evening dump ON by default
+	•	Midday optional toggle
+
+⸻
+
+2. Notification System
+	•	Push notifications at selected times
+	•	Simple text only, no overload
+
+⸻
+
+3. One-Tap Entry
+
+When user clicks notification:
+	•	Opens directly to voice input
+	•	No extra screens
+
+⸻
+
+4. Dashboard Sync
+
+After they open:
+	•	Show “Start Your Dump” card if not completed
+	•	After completion, replace with:
+	•	“You’re done for now”
+	•	Or next suggested action
+
+⸻
+
+⚠️ Keep This Tight
+
+Do NOT:
+	•	Add complex scheduling UI
+	•	Add too many options
+	•	Add customization early
+
+👉 Start simple:
+	•	Morning + Evening default
+	•	Let usage guide expansion
+
+⸻
+
+🧩 What This Solves Immediately
+	•	Gives users a reason to come back
+	•	Builds routine without effort
+	•	Increases daily active users
+	•	Improves retention fast
+
+⸻
+
+🧭 If You Want Maximum Impact
+
+Combine this with ONE thing:
+
+👉 After each dump, show:
+	•	“Here’s what to focus on next”
+
+Now it’s not just dumping
+It’s guiding
+
+⸻
+
+Straight Truth
+
+If you implement this clean:
+
+You move from:
+
+“I’ll use it when I remember”
+
+To:
+
+“I use this every morning and night”
+
+That’s the shift you’re after.
+
+⸻
+
+If you want, I can map the exact UI flow for this so your dev doesn’t overbuild it.

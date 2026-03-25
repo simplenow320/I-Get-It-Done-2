@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useMemo } from "react";
 import { StyleSheet, View, TextInput, Pressable, ScrollView, Keyboard, TouchableWithoutFeedback } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -19,7 +19,13 @@ import { useTaskStore, Lane, UnsortedTask } from "@/stores/TaskStore";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
 
-type Phase = "capture" | "sort";
+type Phase = "capture" | "sort" | "done";
+
+interface SortedTaskRecord {
+  taskId: string;
+  title: string;
+  lane: Lane;
+}
 
 const LANE_OPTIONS: { lane: Lane; label: string; icon: keyof typeof Feather.glyphMap; color: string }[] = [
   { lane: "now", label: "Now", icon: "zap", color: LaneColors.now.primary },
@@ -37,12 +43,13 @@ export default function QuickDumpScreen() {
   const inputRef = useRef<TextInput>(null);
   
   const { hasProFeatures, freeTrialActive, freeTasksRemaining, lifetimeTasksCreated } = useSubscription();
-  const { tasks, unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask, getTasksByLane } = useTaskStore();
+  const { unsortedTasks, addUnsortedTask, sortUnsortedTask, removeUnsortedTask } = useTaskStore();
   
   const [phase, setPhase] = useState<Phase>("capture");
   const [inputValue, setInputValue] = useState("");
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [sortedTasks, setSortedTasks] = useState<SortedTaskRecord[]>([]);
 
   const dismissKeyboard = useCallback(() => {
     Keyboard.dismiss();
@@ -99,16 +106,20 @@ export default function QuickDumpScreen() {
   const handleSortTask = useCallback((lane: Lane) => {
     const taskToSort = unsortedTasks[0];
     if (taskToSort) {
-      sortUnsortedTask(taskToSort.id, lane);
+      const createdId = sortUnsortedTask(taskToSort.id, lane);
+      if (createdId) {
+        setSortedTasks((prev) => [...prev, { taskId: createdId, title: taskToSort.title, lane }]);
+      }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
   }, [unsortedTasks, sortUnsortedTask]);
 
   React.useEffect(() => {
-    if (phase === "sort" && unsortedTasks.length === 0) {
-      navigation.goBack();
+    if (phase === "sort" && unsortedTasks.length === 0 && sortedTasks.length > 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPhase("done");
     }
-  }, [phase, unsortedTasks.length, navigation]);
+  }, [phase, unsortedTasks.length, sortedTasks.length]);
 
   const handleSkip = useCallback(() => {
     navigation.goBack();
@@ -120,6 +131,83 @@ export default function QuickDumpScreen() {
   }, [removeUnsortedTask]);
 
   const currentTask = unsortedTasks[0];
+
+  const nowTaskFromSorted = useMemo(() => {
+    const nowSorted = sortedTasks.filter((t) => t.lane === "now");
+    if (nowSorted.length > 0) return nowSorted[0];
+    const soonSorted = sortedTasks.filter((t) => t.lane === "soon");
+    if (soonSorted.length > 0) return soonSorted[0];
+    return sortedTasks[0] || null;
+  }, [sortedTasks]);
+
+  if (phase === "done" && sortedTasks.length > 0) {
+    const laneLabel = (lane: Lane) => LANE_OPTIONS.find((o) => o.lane === lane);
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.content, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }]}>
+          <Animated.View entering={FadeInUp.duration(400)} style={styles.doneHeader}>
+            <View style={[styles.doneCheckCircle, { backgroundColor: LaneColors.later.primary + "20" }]}>
+              <Feather name="check" size={32} color={LaneColors.later.primary} />
+            </View>
+            <ThemedText type="h2" style={styles.doneTitle}>
+              You captured {sortedTasks.length} task{sortedTasks.length > 1 ? "s" : ""}
+            </ThemedText>
+            <ThemedText type="body" secondary>
+              All sorted and ready to go.
+            </ThemedText>
+          </Animated.View>
+
+          <ScrollView style={styles.doneList} showsVerticalScrollIndicator={false}>
+            {sortedTasks.map((item, index) => {
+              const laneInfo = laneLabel(item.lane);
+              return (
+                <Animated.View
+                  key={index}
+                  entering={FadeInUp.delay(100 + index * 50).duration(300)}
+                  style={[styles.doneTaskRow, { backgroundColor: theme.backgroundDefault }]}
+                >
+                  <View style={[styles.doneLaneDot, { backgroundColor: laneInfo?.color || theme.textSecondary }]} />
+                  <ThemedText type="body" style={{ flex: 1 }} numberOfLines={1}>
+                    {item.title}
+                  </ThemedText>
+                  <ThemedText type="caption" style={{ color: laneInfo?.color || theme.textSecondary }}>
+                    {laneInfo?.label}
+                  </ThemedText>
+                </Animated.View>
+              );
+            })}
+          </ScrollView>
+
+          {nowTaskFromSorted ? (
+            <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+              <Pressable
+                onPress={() => {
+                  navigation.goBack();
+                  setTimeout(() => {
+                    (navigation as any).navigate("TaskDetail", { taskId: nowTaskFromSorted.taskId });
+                  }, 100);
+                }}
+                style={[styles.startHereButton, { backgroundColor: LaneColors[nowTaskFromSorted.lane].primary }]}
+              >
+                <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600" }}>
+                  Start here
+                </ThemedText>
+                <Feather name="arrow-right" size={18} color="#FFFFFF" />
+              </Pressable>
+            </Animated.View>
+          ) : null}
+
+          <Animated.View entering={FadeInUp.delay(400).duration(300)}>
+            <Pressable onPress={() => navigation.goBack()} style={styles.doneBackButton}>
+              <ThemedText type="body" secondary>
+                Back to dashboard
+              </ThemedText>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </ThemedView>
+    );
+  }
 
   if (phase === "sort" && currentTask && unsortedTasks.length > 0) {
     return (
@@ -196,7 +284,7 @@ export default function QuickDumpScreen() {
             Brain Dump
           </ThemedText>
           <ThemedText type="body" secondary>
-            Type fast. Sort later.
+            Say it or type it. Sort later.
           </ThemedText>
         </Animated.View>
 
@@ -302,7 +390,7 @@ export default function QuickDumpScreen() {
           <Animated.View entering={FadeInUp.delay(200).duration(300)} style={styles.emptyState}>
             <Feather name="inbox" size={48} color={theme.textSecondary} />
             <ThemedText type="body" secondary style={styles.emptyText}>
-              Start typing to capture your thoughts
+              Tap the mic or start typing
             </ThemedText>
           </Animated.View>
         )}
@@ -425,5 +513,51 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.xs,
+  },
+  doneHeader: {
+    alignItems: "center",
+    marginBottom: Spacing.xl,
+  },
+  doneCheckCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.md,
+  },
+  doneTitle: {
+    textAlign: "center",
+    marginBottom: Spacing.xs,
+  },
+  doneList: {
+    flex: 1,
+    marginBottom: Spacing.md,
+  },
+  doneTaskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  doneLaneDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  startHereButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  doneBackButton: {
+    alignItems: "center",
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
   },
 });

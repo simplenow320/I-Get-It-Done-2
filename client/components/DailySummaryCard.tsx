@@ -12,6 +12,16 @@ interface DailySummaryCardProps {
   onStartTask?: (taskId: string) => void;
 }
 
+function getMotivatingLine(yesterdayCompleted: number, todayCompleted: number, currentStreak: number): string {
+  if (currentStreak >= 7) return `${currentStreak}-day streak. You're on fire.`;
+  if (currentStreak >= 3) return `${currentStreak} days in a row. Don't break the chain.`;
+  if (yesterdayCompleted >= 5) return `You crushed ${yesterdayCompleted} yesterday. Keep that energy.`;
+  if (yesterdayCompleted > 0) return `You knocked out ${yesterdayCompleted} yesterday. Keep it going.`;
+  if (todayCompleted > 0) return `${todayCompleted} down today. Nice start.`;
+  if (currentStreak === 1) return "You showed up yesterday. Do it again.";
+  return "Pick up where you left off.";
+}
+
 export default function DailySummaryCard({ onStartTask }: DailySummaryCardProps) {
   const { theme } = useTheme();
   const { tasks, getTasksByLane } = useTaskStore();
@@ -44,9 +54,11 @@ export default function DailySummaryCard({ onStartTask }: DailySummaryCardProps)
     }).length;
   }, [tasks]);
 
-  const hasContent = yesterdayCompleted > 0 || currentStreak > 0 || suggestedTask;
+  const hasContent = yesterdayCompleted > 0 || currentStreak > 0 || todayCompleted > 0 || suggestedTask;
 
   if (!hasContent) return null;
+
+  const motivatingLine = getMotivatingLine(yesterdayCompleted, todayCompleted, currentStreak);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundSecondary }]}>
@@ -57,6 +69,10 @@ export default function DailySummaryCard({ onStartTask }: DailySummaryCardProps)
         </ThemedText>
       </View>
 
+      <ThemedText type="body" style={styles.motivatingLine}>
+        {motivatingLine}
+      </ThemedText>
+
       <View style={styles.statsRow}>
         {yesterdayCompleted > 0 ? (
           <View style={styles.statItem}>
@@ -64,7 +80,7 @@ export default function DailySummaryCard({ onStartTask }: DailySummaryCardProps)
               {yesterdayCompleted}
             </ThemedText>
             <ThemedText type="caption" secondary>
-              done yesterday
+              yesterday
             </ThemedText>
           </View>
         ) : null}
@@ -75,7 +91,7 @@ export default function DailySummaryCard({ onStartTask }: DailySummaryCardProps)
               {todayCompleted}
             </ThemedText>
             <ThemedText type="caption" secondary>
-              done today
+              today
             </ThemedText>
           </View>
         ) : null}
@@ -100,7 +116,7 @@ export default function DailySummaryCard({ onStartTask }: DailySummaryCardProps)
           <View style={[styles.suggestedDot, { backgroundColor: LaneColors[suggestedTask.lane || "now"].primary }]} />
           <View style={{ flex: 1 }}>
             <ThemedText type="caption" secondary>
-              Start here
+              Pick up here
             </ThemedText>
             <ThemedText type="small" numberOfLines={1}>
               {suggestedTask.title}
@@ -122,6 +138,10 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: Spacing.xs,
+  },
+  motivatingLine: {
+    fontWeight: "600",
     marginBottom: Spacing.sm,
   },
   statsRow: {

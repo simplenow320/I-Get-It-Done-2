@@ -124,7 +124,7 @@ interface TaskStoreContext {
   addTask: (title: string, lane: Lane, notes?: string) => void;
   addUnsortedTask: (title: string) => void;
   addMultipleUnsortedTasks: (titles: string[]) => void;
-  sortUnsortedTask: (id: string, lane: Lane) => void;
+  sortUnsortedTask: (id: string, lane: Lane) => string | null;
   removeUnsortedTask: (id: string) => void;
   completeTask: (id: string) => void;
   deleteTask: (id: string) => void;
@@ -642,7 +642,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     setUnsortedTasks((prev) => [...prev, ...newTasks]);
   }, []);
 
-  const sortUnsortedTask = useCallback((id: string, lane: Lane) => {
+  const sortUnsortedTask = useCallback((id: string, lane: Lane): string | null => {
     const unsorted = unsortedTasks.find((t) => t.id === id);
     if (unsorted) {
       const newTask: Task = {
@@ -659,7 +659,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       setTasks((prev) => [newTask, ...prev]);
       setUnsortedTasks((prev) => prev.filter((t) => t.id !== id));
       saveTaskToApi(newTask, true);
+      return newTask.id;
     }
+    return null;
   }, [unsortedTasks, calculateDueDate, userId]);
 
   const removeUnsortedTask = useCallback((id: string) => {

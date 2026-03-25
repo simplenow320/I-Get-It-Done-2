@@ -87,14 +87,25 @@ export default function DashboardScreen() {
       >
         <PaymentStatusBanner />
         
+        <Animated.View entering={FadeInUp.delay(0).duration(400)}>
+          <QuickDumpButton onPress={handleQuickDump} />
+          {unsortedTasks.length > 0 ? (
+            <View style={styles.unsortedBadge}>
+              <ThemedText type="small" secondary>
+                {unsortedTasks.length} task{unsortedTasks.length > 1 ? "s" : ""} to sort
+              </ThemedText>
+            </View>
+          ) : null}
+        </Animated.View>
+
         {hasProFeatures && currentStreak > 0 ? (
-          <Animated.View entering={FadeInUp.delay(0).duration(400)} style={styles.streakContainer}>
+          <Animated.View entering={FadeInUp.delay(30).duration(400)} style={styles.streakContainer}>
             <StreakBadge streak={currentStreak} compact />
           </Animated.View>
         ) : null}
 
         {!hasProFeatures ? (
-          <Animated.View entering={FadeInUp.delay(0).duration(400)}>
+          <Animated.View entering={FadeInUp.delay(30).duration(400)}>
             <Pressable
               onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
               style={[styles.proBanner, { backgroundColor: theme.backgroundSecondary }]}
@@ -134,7 +145,7 @@ export default function DashboardScreen() {
             </Pressable>
           </Animated.View>
         ) : freeTrialActive && lifetimeTasksCreated >= SOFT_NUDGE_THRESHOLD ? (
-          <Animated.View entering={FadeInUp.delay(0).duration(400)}>
+          <Animated.View entering={FadeInUp.delay(30).duration(400)}>
             <Pressable
               onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
               style={[styles.proBanner, { backgroundColor: theme.backgroundSecondary }]}
@@ -156,23 +167,6 @@ export default function DashboardScreen() {
             </Pressable>
           </Animated.View>
         ) : null}
-
-        <Animated.View entering={FadeInUp.delay(30).duration(400)}>
-          <DailySummaryCard
-            onStartTask={(taskId) => navigation.navigate("TaskDetail", { taskId })}
-          />
-        </Animated.View>
-
-        <Animated.View entering={FadeInUp.delay(50).duration(400)}>
-          <QuickDumpButton onPress={handleQuickDump} />
-          {unsortedTasks.length > 0 ? (
-            <View style={styles.unsortedBadge}>
-              <ThemedText type="small" secondary>
-                {unsortedTasks.length} task{unsortedTasks.length > 1 ? "s" : ""} to sort
-              </ThemedText>
-            </View>
-          ) : null}
-        </Animated.View>
 
         <View style={styles.sectionHeader}>
           <ThemedText type="h4">Your Lanes</ThemedText>
@@ -224,6 +218,12 @@ export default function DashboardScreen() {
             </Animated.View>
           </View>
         </View>
+
+        <Animated.View entering={FadeInUp.delay(280).duration(400)}>
+          <DailySummaryCard
+            onStartTask={(taskId) => navigation.navigate("TaskDetail", { taskId })}
+          />
+        </Animated.View>
 
         <Animated.View entering={FadeInUp.delay(300).duration(400)}>
           <Pressable onPress={() => navigation.navigate("TaskHistory")} style={styles.doneTodaySection}>
