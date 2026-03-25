@@ -169,7 +169,7 @@ export default function DashboardScreen() {
           </Animated.View>
         ) : null}
 
-        <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ marginTop: Spacing.sm }}>
+        <Animated.View entering={FadeInUp.delay(50).duration(400)} style={{ marginTop: Spacing.lg }}>
           <DailyDumpsCard onStartDump={handleQuickDump} />
         </Animated.View>
 
