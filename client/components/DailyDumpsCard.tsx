@@ -45,7 +45,7 @@ const SLOTS: SlotConfig[] = [
   {
     key: "evening",
     label: "Evening Dump",
-    prompt: "Wrap your day. Clear your mind for tomorrow.",
+    prompt: "Clear your mind for tomorrow.",
     startHour: 17,
     endHour: 24,
     icon: "moon",
@@ -102,6 +102,7 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
 
   const completedCount = Object.values(completedSlots).filter(Boolean).length;
   const totalVisible = SLOTS.length;
+  const allDone = completedCount === totalVisible;
 
   const toggleExpand = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -114,54 +115,36 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
     }
   }, [completedSlots, onStartDump]);
 
-  const nextIncomplete = useMemo(() => {
-    if (currentSlot && !completedSlots[currentSlot]) {
-      return SLOTS.find((s) => s.key === currentSlot) || null;
-    }
-    return SLOTS.find((s) => !completedSlots[s.key]) || null;
-  }, [currentSlot, completedSlots]);
-
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundSecondary }]}>
       <Pressable onPress={toggleExpand} style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Feather name="repeat" size={14} color={LaneColors.soon.primary} />
-          <ThemedText type="caption" style={{ color: LaneColors.soon.primary, fontWeight: "600", marginLeft: Spacing.xs }}>
+        <View style={[styles.iconContainer, { backgroundColor: (allDone ? LaneColors.later.primary : LaneColors.soon.primary) + "15" }]}>
+          <Feather
+            name={allDone ? "check-circle" : "repeat"}
+            size={22}
+            color={allDone ? LaneColors.later.primary : LaneColors.soon.primary}
+          />
+        </View>
+        <View style={styles.textContainer}>
+          <ThemedText type="h4" style={styles.title}>
             Daily Dumps
+          </ThemedText>
+          <ThemedText type="small" secondary>
+            {allDone ? "All done for today" : `${completedCount} of ${totalVisible} complete`}
           </ThemedText>
         </View>
         <View style={styles.headerRight}>
-          <ThemedText type="caption" secondary>
+          <ThemedText type="body" style={{ color: allDone ? LaneColors.later.primary : LaneColors.soon.primary, fontWeight: "600" }}>
             {completedCount}/{totalVisible}
           </ThemedText>
           <Feather
             name={expanded ? "chevron-up" : "chevron-down"}
-            size={16}
+            size={20}
             color={theme.textSecondary}
             style={{ marginLeft: Spacing.xs }}
           />
         </View>
       </Pressable>
-
-      {!expanded && nextIncomplete ? (
-        <Pressable
-          onPress={() => handleSlotPress(nextIncomplete)}
-          style={[styles.collapsedPrompt, { borderTopColor: theme.border }]}
-        >
-          <Feather name={nextIncomplete.icon} size={14} color={nextIncomplete.color} />
-          <ThemedText type="small" style={{ flex: 1, marginLeft: Spacing.sm }}>
-            {nextIncomplete.prompt}
-          </ThemedText>
-          <Feather name="arrow-right" size={14} color={nextIncomplete.color} />
-        </Pressable>
-      ) : !expanded && !nextIncomplete ? (
-        <View style={[styles.collapsedPrompt, { borderTopColor: theme.border }]}>
-          <Feather name="check-circle" size={14} color={LaneColors.later.primary} />
-          <ThemedText type="small" secondary style={{ marginLeft: Spacing.sm }}>
-            All dumps done for today
-          </ThemedText>
-        </View>
-      ) : null}
 
       {expanded ? (
         <View style={[styles.slotsContainer, { borderTopColor: theme.border }]}>
@@ -181,13 +164,13 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
                 <View style={[styles.slotIcon, { backgroundColor: (isDone ? LaneColors.later.primary : slot.color) + "15" }]}>
                   <Feather
                     name={isDone ? "check" : slot.icon}
-                    size={14}
+                    size={16}
                     color={isDone ? LaneColors.later.primary : slot.color}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <ThemedText
-                    type="small"
+                    type="body"
                     style={[
                       { fontWeight: "500" },
                       isDone ? { textDecorationLine: "line-through", opacity: 0.5 } : undefined,
@@ -207,7 +190,7 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
                   )}
                 </View>
                 {!isDone ? (
-                  <Feather name="arrow-right" size={14} color={slot.color} />
+                  <Feather name="arrow-right" size={16} color={slot.color} />
                 ) : null}
               </Pressable>
             );
@@ -220,31 +203,32 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
     overflow: "hidden",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    padding: Spacing.md,
+    gap: Spacing.md,
   },
-  headerLeft: {
-    flexDirection: "row",
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  textContainer: {
+    flex: 1,
+  },
+  title: {
+    marginBottom: 2,
   },
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  collapsedPrompt: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   slotsContainer: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -257,8 +241,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   slotIcon: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
