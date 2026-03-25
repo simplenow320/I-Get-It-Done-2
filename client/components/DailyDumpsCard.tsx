@@ -28,7 +28,7 @@ const SLOTS: SlotConfig[] = [
     key: "morning",
     label: "Morning Dump",
     prompt: "Start your day. What needs your attention?",
-    startHour: 5,
+    startHour: 0,
     endHour: 12,
     icon: "sunrise",
     color: LaneColors.soon.primary,
