@@ -3,6 +3,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { getApiUrl } from "@/lib/query-client";
 import { useAuth, getStoredAuthToken, handleExpiredSession } from "@/contexts/AuthContext";
+import { useRevenueCat } from "@/contexts/RevenueCatContext";
 
 interface SubscriptionStatus {
   status: "none" | "trialing" | "active" | "past_due" | "canceled";
@@ -47,6 +48,7 @@ export function resetSessionExpiredFlag() {
 
 export function useSubscription() {
   const { user } = useAuth();
+  const { isPro: rcIsPro, isTrialing: rcIsTrialing } = useRevenueCat();
 
   useEffect(() => {
     if (user?.id) {
@@ -101,7 +103,8 @@ export function useSubscription() {
   const freeTasksRemaining = subscription?.freeTasksRemaining || 0;
   const lifetimeTasksCreated = subscription?.lifetimeTasksCreated || 0;
 
-  const isPaidPro = subscription?.isActive || subscription?.isTrialing || false;
+  const serverIsPro = subscription?.isActive || subscription?.isTrialing || false;
+  const isPaidPro = serverIsPro || rcIsPro || rcIsTrialing;
   const hasProFeatures = isPaidPro || freeTrialActive;
 
   return {

@@ -39,10 +39,7 @@ export default function SubscriptionScreen() {
     monthlyPackage,
     annualPackage,
   } = useRevenueCat();
-  const { isPro: serverIsPro, isTrialing: serverIsTrialing, freeTrialActive, freeTasksRemaining } = useSubscription();
-  
-  const isPro = rcIsPro || serverIsPro;
-  const isTrialing = rcIsTrialing || serverIsTrialing;
+  const { isPro, isTrialing, freeTrialActive, freeTasksRemaining } = useSubscription();
   
   const [selectedPlan, setSelectedPlan] = useState<PricingPlan>("annual");
   const [isLoading, setIsLoading] = useState(false);
