@@ -6,6 +6,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore } from "@/stores/TaskStore";
+import { useGamification } from "@/stores/GamificationStore";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -61,6 +62,23 @@ function getCurrentSlot(): DumpSlot | null {
   return null;
 }
 
+function getMissedSlotLabel(completedSlots: Record<DumpSlot, boolean>, currentSlot: DumpSlot | null): string | null {
+  const slotOrder: DumpSlot[] = ["morning", "midday", "evening"];
+  const currentIndex = currentSlot ? slotOrder.indexOf(currentSlot) : -1;
+
+  for (let i = 0; i < currentIndex; i++) {
+    if (!completedSlots[slotOrder[i]]) {
+      const labels: Record<DumpSlot, string> = {
+        morning: "morning dump",
+        midday: "midday reset",
+        evening: "evening dump",
+      };
+      return labels[slotOrder[i]];
+    }
+  }
+  return null;
+}
+
 interface DailyDumpsCardProps {
   onStartDump: () => void;
 }
@@ -68,6 +86,7 @@ interface DailyDumpsCardProps {
 export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
   const { theme } = useTheme();
   const { tasks } = useTaskStore();
+  const { currentStreak } = useGamification();
   const [expanded, setExpanded] = useState(false);
 
   const currentSlot = getCurrentSlot();
@@ -104,6 +123,36 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
   const totalVisible = SLOTS.length;
   const allDone = completedCount === totalVisible;
 
+  const missedLabel = useMemo(
+    () => getMissedSlotLabel(completedSlots, currentSlot),
+    [completedSlots, currentSlot]
+  );
+
+  const streakStatus = useMemo(() => {
+    if (allDone) {
+      if (currentStreak >= 3) {
+        return { text: `${completedCount} for ${totalVisible}. ${currentStreak}-day streak alive.`, color: LaneColors.later.primary };
+      }
+      return { text: "Three for three. Your head's clear.", color: LaneColors.later.primary };
+    }
+
+    if (missedLabel) {
+      return { text: `You missed your ${missedLabel}`, color: LaneColors.now.primary, showDumpButton: true };
+    }
+
+    if (currentStreak >= 7) {
+      return { text: `${currentStreak} Day Streak`, subtext: "Don't break it", color: LaneColors.now.primary };
+    }
+    if (currentStreak >= 3) {
+      return { text: `${currentStreak} Day Streak`, subtext: "Don't break it", color: LaneColors.soon.primary };
+    }
+    if (currentStreak >= 1) {
+      return { text: `${currentStreak} Day Streak`, subtext: "Keep it going", color: LaneColors.soon.primary };
+    }
+
+    return { text: "Morning, midday, and evening check-ins", color: theme.textSecondary };
+  }, [allDone, missedLabel, currentStreak, completedCount, totalVisible, theme.textSecondary]);
+
   const toggleExpand = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpanded((prev) => !prev);
@@ -129,9 +178,27 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
           <ThemedText type="h4" style={styles.title}>
             Daily Dumps
           </ThemedText>
-          <ThemedText type="small" secondary>
-            {allDone ? "Three for three. Your head's clear." : "Morning, midday, and evening check-ins"}
-          </ThemedText>
+          <View style={styles.streakRow}>
+            <ThemedText type="small" style={{ color: streakStatus.color }}>
+              {streakStatus.text}
+            </ThemedText>
+            {"subtext" in streakStatus && streakStatus.subtext ? (
+              <ThemedText type="small" secondary style={styles.streakSubtext}>
+                {" "}{streakStatus.subtext}
+              </ThemedText>
+            ) : null}
+          </View>
+          {"showDumpButton" in streakStatus && streakStatus.showDumpButton ? (
+            <Pressable
+              onPress={onStartDump}
+              style={[styles.missedDumpButton, { backgroundColor: LaneColors.now.primary + "15" }]}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <ThemedText type="small" style={{ color: LaneColors.now.primary, fontWeight: "600" }}>
+                Quick Dump
+              </ThemedText>
+            </Pressable>
+          ) : null}
         </View>
         <View style={styles.headerRight}>
           <ThemedText type="body" style={{ color: allDone ? LaneColors.later.primary : LaneColors.soon.primary, fontWeight: "600" }}>
@@ -225,6 +292,21 @@ const styles = StyleSheet.create({
   },
   title: {
     marginBottom: 2,
+  },
+  streakRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  streakSubtext: {
+    fontSize: 12,
+  },
+  missedDumpButton: {
+    alignSelf: "flex-start",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    marginTop: 4,
   },
   headerRight: {
     flexDirection: "row",

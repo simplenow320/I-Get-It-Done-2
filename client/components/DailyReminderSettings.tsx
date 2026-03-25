@@ -41,21 +41,21 @@ const DEFAULT_STATE: ReminderState = {
 };
 
 const MORNING_MESSAGES = [
-  { title: "New day, fresh start", body: "Brain dump what's on your mind and own today." },
-  { title: "What matters today?", body: "Capture your priorities. One quick dump is all it takes." },
-  { title: "Your lanes are waiting", body: "Open up and plan your day in seconds." },
+  { title: "Start your day", body: "Get it out of your head." },
+  { title: "Quick brain dump", body: "Before the day runs you." },
+  { title: "Clear your head", body: "What's on your mind?" },
 ];
 
 const EVENING_MESSAGES = [
-  { title: "How'd today go?", body: "Review what you finished and set up tomorrow." },
-  { title: "Time to wrap up", body: "Check off what's done and park the rest." },
-  { title: "End of day check-in", body: "See your progress and plan ahead." },
+  { title: "Wrap your day", body: "Clear your mind." },
+  { title: "What did you finish today?", body: "Check it off and let it go." },
+  { title: "Don't carry it into tomorrow", body: "Dump it." },
 ];
 
 const MIDDAY_MESSAGES = [
-  { title: "Quick reset", body: "Refocus. What matters right now?" },
-  { title: "Midday check-in", body: "How's the day going? Adjust your lanes." },
-  { title: "Halfway there", body: "Take a breath and re-prioritize." },
+  { title: "Quick reset", body: "What's still on your plate?" },
+  { title: "Refocus", body: "What matters right now?" },
+  { title: "Take 30 seconds", body: "Reset your day." },
 ];
 
 function formatTime(hour: number, minute: number): string {

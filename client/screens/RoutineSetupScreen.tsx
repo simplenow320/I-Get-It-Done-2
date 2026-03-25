@@ -45,7 +45,7 @@ const REMINDERS: ReminderOption[] = [
     hour: 8,
     icon: "sunrise",
     color: LaneColors.soon.primary,
-    message: { title: "New day, fresh start", body: "Brain dump what's on your mind and own today." },
+    message: { title: "Start your day", body: "Get it out of your head." },
   },
   {
     key: "evening",
@@ -55,7 +55,7 @@ const REMINDERS: ReminderOption[] = [
     hour: 20,
     icon: "moon",
     color: LaneColors.park.primary,
-    message: { title: "How'd today go?", body: "Review what you finished and set up tomorrow." },
+    message: { title: "Wrap your day", body: "Clear your mind." },
   },
   {
     key: "midday",
@@ -65,7 +65,7 @@ const REMINDERS: ReminderOption[] = [
     hour: 12,
     icon: "sun",
     color: LaneColors.later.primary,
-    message: { title: "Quick reset", body: "Refocus. What matters right now?" },
+    message: { title: "Quick reset", body: "What's still on your plate?" },
   },
 ];
 
