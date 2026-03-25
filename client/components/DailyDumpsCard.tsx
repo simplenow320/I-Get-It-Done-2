@@ -137,7 +137,7 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
     }
 
     if (missedLabel) {
-      return { text: `You missed your ${missedLabel}`, color: LaneColors.now.primary, showDumpButton: true };
+      return { text: `You missed your ${missedLabel}`, color: LaneColors.now.primary };
     }
 
     if (currentStreak >= 7) {
@@ -188,17 +188,6 @@ export default function DailyDumpsCard({ onStartDump }: DailyDumpsCardProps) {
               </ThemedText>
             ) : null}
           </View>
-          {"showDumpButton" in streakStatus && streakStatus.showDumpButton ? (
-            <Pressable
-              onPress={onStartDump}
-              style={[styles.missedDumpButton, { backgroundColor: LaneColors.now.primary + "15" }]}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              <ThemedText type="small" style={{ color: LaneColors.now.primary, fontWeight: "600" }}>
-                Quick Dump
-              </ThemedText>
-            </Pressable>
-          ) : null}
         </View>
         <View style={styles.headerRight}>
           <ThemedText type="body" style={{ color: allDone ? LaneColors.later.primary : LaneColors.soon.primary, fontWeight: "600" }}>
@@ -300,13 +289,6 @@ const styles = StyleSheet.create({
   },
   streakSubtext: {
     fontSize: 12,
-  },
-  missedDumpButton: {
-    alignSelf: "flex-start",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.sm,
-    marginTop: 4,
   },
   headerRight: {
     flexDirection: "row",
