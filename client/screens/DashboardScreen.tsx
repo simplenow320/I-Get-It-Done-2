@@ -20,6 +20,7 @@ import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane } from "@/stores/TaskStore";
 import { useGamification } from "@/stores/GamificationStore";
 import DailySummaryCard from "@/components/DailySummaryCard";
+import DailyDumpsCard from "@/components/DailyDumpsCard";
 import { DashboardStackParamList } from "@/navigation/DashboardStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<DashboardStackParamList, "Dashboard">;
@@ -167,6 +168,10 @@ export default function DashboardScreen() {
             </Pressable>
           </Animated.View>
         ) : null}
+
+        <Animated.View entering={FadeInUp.delay(50).duration(400)}>
+          <DailyDumpsCard onStartDump={handleQuickDump} />
+        </Animated.View>
 
         <View style={styles.sectionHeader}>
           <ThemedText type="h4">Your Lanes</ThemedText>
