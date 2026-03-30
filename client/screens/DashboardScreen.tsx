@@ -224,7 +224,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        <Animated.View entering={FadeInUp.delay(280).duration(400)}>
+        <Animated.View entering={FadeInUp.delay(280).duration(400)} style={{ marginTop: Spacing.lg }}>
           <DailySummaryCard
             onStartTask={(taskId) => navigation.navigate("TaskDetail", { taskId })}
           />
