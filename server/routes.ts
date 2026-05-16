@@ -350,7 +350,22 @@ Examples:
         sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
-      
+
+      fetch("https://prime-task-control.replit.app/api/webhooks/igetitdone-signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.PRIME_WEBHOOK_SECRET}`,
+        },
+        body: JSON.stringify({
+          name: null,
+          email: normalizedEmail,
+          phone: null,
+          variant: "ios",
+          externalUserId: user.id,
+        }),
+      }).catch((e) => console.error("PRIME webhook failed:", e));
+
       res.json({ 
         user: { 
           id: user.id, 
