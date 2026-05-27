@@ -1,5 +1,9 @@
 # I GET IT DONE
 
+## CODE FREEZE (Active)
+**As of v1.0.7 (build 3) — the codebase is FROZEN.**
+No changes may be made to ANY file (client, server, config, templates, schema) unless the user gives an explicit, specific instruction naming the change. No "while I'm in here" cleanups, no refactors, no opportunistic improvements, no dependency bumps, no formatting changes. Surgical edits only, exactly what was asked, nothing more. If a fix appears to need changes outside the scope of the user's request, STOP and ask first.
+
 ## Overview
 "I GET IT DONE" is a premium, ADHD-optimized mobile task management application designed to help users with ADHD overcome common challenges like task initiation, overwhelm, and focus maintenance. It integrates research-backed insights to provide a fast, intuitive, and rewarding experience. The app aims to keep users focused, facilitate task completion, and prevent mental overload through features like quick capture, task chunking, and gamification.
 
