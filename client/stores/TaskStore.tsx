@@ -483,6 +483,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           dueDate: task.dueDate?.toISOString(),
           focusTimeMinutes: task.focusTimeMinutes,
           assignedTo: task.assignedTo,
+          delegatedToUserId: task.delegatedToUserId,
           delegationStatus: task.delegationStatus,
           delegatedAt: task.delegatedAt?.toISOString(),
           lastDelegationUpdate: task.lastDelegationUpdate?.toISOString(),

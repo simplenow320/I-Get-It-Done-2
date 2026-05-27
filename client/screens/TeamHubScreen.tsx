@@ -136,7 +136,7 @@ export default function TeamHubScreen() {
     if (!generatedInvite) return;
     try {
       await Share.share({
-        message: `Join my team on I GET IT DONE!\n\nYour invite code: ${generatedInvite.inviteCode}\n\nHow to join:\n1. Download the app: https://www.igetitdone.co\n2. Create your account\n3. Go to Team Hub and tap "Join Team"\n4. Enter the code above\n\nOnce connected, we can share tasks with each other!`,
+        message: `Join my team on I GET IT DONE!\n\nYour invite code: ${generatedInvite.inviteCode}\n\nHow to join:\n1. Download the app: https://apps.apple.com/app/id6756545884\n2. Create your account\n3. Go to Team Hub and tap "Join Team"\n4. Enter the code above\n\nOnce connected, we can share tasks with each other!`,
       });
     } catch (error) {
       console.error("Share error:", error);
@@ -195,7 +195,7 @@ export default function TeamHubScreen() {
     if (invite) {
       try {
         await Share.share({
-          message: `Join my team on I GET IT DONE!\n\nYour invite code: ${invite.inviteCode}\n\nHow to join:\n1. Download the app: https://www.igetitdone.co\n2. Create your account\n3. Go to Team Hub and tap "Join Team"\n4. Enter the code above\n\nOnce connected, we can share tasks with each other!`,
+          message: `Join my team on I GET IT DONE!\n\nYour invite code: ${invite.inviteCode}\n\nHow to join:\n1. Download the app: https://apps.apple.com/app/id6756545884\n2. Create your account\n3. Go to Team Hub and tap "Join Team"\n4. Enter the code above\n\nOnce connected, we can share tasks with each other!`,
         });
       } catch (error) {
         if (Platform.OS === "web") {
