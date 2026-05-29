@@ -117,7 +117,7 @@ export default function ProfileScreen() {
   const handlePrivacyPolicy = async () => {
     Haptics.selectionAsync();
     try {
-      await Linking.openURL("https://www.igetitdone.co/privacy");
+      await Linking.openURL("https://igetitdone.co/privacy");
     } catch (error) {
       Alert.alert("Error", "Could not open Privacy Policy");
     }

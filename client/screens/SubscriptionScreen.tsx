@@ -405,7 +405,7 @@ export default function SubscriptionScreen() {
               </Pressable>
               
               <View style={styles.legalLinks}>
-                <Pressable onPress={() => Linking.openURL("https://www.igetitdone.co/privacy")}>
+                <Pressable onPress={() => Linking.openURL("https://igetitdone.co/privacy")}>
                   <ThemedText type="caption" style={styles.legalLink}>Privacy Policy</ThemedText>
                 </Pressable>
                 <ThemedText type="caption" secondary style={styles.legalSeparator}>|</ThemedText>
