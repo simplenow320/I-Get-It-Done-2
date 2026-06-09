@@ -1617,8 +1617,11 @@ Examples:
       const status = user.subscriptionStatus || "none";
       const trialEndsAt = user.trialEndsAt ? user.trialEndsAt.toISOString() : null;
 
+      const OWNER_EMAILS = ["troyevansspeaks@gmail.com"];
+      const isOwner = !!user.email && OWNER_EMAILS.includes(user.email.toLowerCase());
+
       const isTrialing = status === "trialing" && trialEndsAt && new Date(trialEndsAt) > new Date();
-      const isActive = status === "active" || status === "pro" || isTrialing;
+      const isActive = isOwner || status === "active" || status === "pro" || isTrialing;
 
       const lifetimeTasksCreated = user.lifetimeTasksCreated || 0;
       const freeTrialActive = !isActive && lifetimeTasksCreated < 10;
