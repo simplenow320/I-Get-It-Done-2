@@ -309,6 +309,7 @@ const styles = StyleSheet.create({
   proBanner: {
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
+    marginTop: Spacing.md,
     marginBottom: Spacing.md,
   },
   proBannerHeader: {
