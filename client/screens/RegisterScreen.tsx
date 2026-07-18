@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -19,6 +19,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/contexts/AuthContext";
 import { LaneColors, Spacing, BorderRadius } from "@/constants/theme";
 import { AuthStackParamList } from "@/navigation/AuthStackNavigator";
+import { getPendingReferral, clearPendingReferral } from "@/lib/referral";
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "Register">;
 
@@ -35,6 +36,15 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [referralSourceUrl, setReferralSourceUrl] = useState("");
+
+  useEffect(() => {
+    getPendingReferral().then(({ code, sourceUrl }) => {
+      if (code) setReferralCode(code);
+      if (sourceUrl) setReferralSourceUrl(sourceUrl);
+    });
+  }, []);
 
   const isValidEmail = (value: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -90,12 +100,19 @@ export default function RegisterScreen() {
     setIsLoading(true);
     setError("");
 
-    const result = await register(email.trim(), password);
+    const result = await register(
+      email.trim(),
+      password,
+      referralCode.trim() || undefined,
+      referralSourceUrl || undefined
+    );
 
     setIsLoading(false);
 
     if (!result.success) {
       setError(result.error || "Registration failed");
+    } else {
+      clearPendingReferral();
     }
   };
 
@@ -204,6 +221,24 @@ export default function RegisterScreen() {
                     color={colors.textSecondary}
                   />
                 </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <ThemedText style={[styles.label, { color: colors.textSecondary }]}>Referral code (optional)</ThemedText>
+              <View style={[styles.inputContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Feather name="gift" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="Enter a referral code"
+                  placeholderTextColor={colors.textSecondary}
+                  value={referralCode}
+                  onChangeText={setReferralCode}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  editable={true}
+                  selectTextOnFocus
+                />
               </View>
             </View>
 

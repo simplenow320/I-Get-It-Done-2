@@ -291,7 +291,7 @@ Examples:
 
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, referralCode, referralSourceUrl } = req.body;
       
       if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required" });
@@ -365,6 +365,37 @@ Examples:
           externalUserId: user.id,
         }),
       }).catch((e) => console.error("PRIME webhook failed:", e));
+
+      if (typeof referralCode === "string" && referralCode.trim().length > 0) {
+        const sendReferral = async (attempt: number): Promise<void> => {
+          try {
+            const response = await fetch("https://ambassador-plus.replit.app/api/track/referral", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                appSlug: "i-get-it-done-",
+                referralCode: referralCode.trim(),
+                referredUserId: user.id,
+                sourceUrl: typeof referralSourceUrl === "string" && referralSourceUrl.length > 0 ? referralSourceUrl : undefined,
+              }),
+            });
+            if (response.status === 201) {
+              console.log(`Ambassador referral recorded for user ${user.id} (code: ${referralCode.trim()})`);
+            } else if (response.status === 400) {
+              console.log(`Ambassador referral code unknown, skipped: ${referralCode.trim()}`);
+            } else {
+              console.error(`Ambassador referral unexpected status ${response.status} for user ${user.id}`);
+            }
+          } catch (err) {
+            if (attempt < 1) {
+              await sendReferral(attempt + 1);
+            } else {
+              console.error("Ambassador referral network error (after retry):", err);
+            }
+          }
+        };
+        sendReferral(0).catch(() => {});
+      }
 
       res.json({ 
         user: { 

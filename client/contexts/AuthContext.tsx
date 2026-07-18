@@ -13,7 +13,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   didExplicitLogout: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string, referralCode?: string, referralSourceUrl?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   getAuthToken: () => Promise<string | null>;
 }
@@ -148,12 +148,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const register = async (email: string, password: string, referralCode?: string, referralSourceUrl?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const response = await fetch(new URL("/api/auth/register", getApiUrl()).toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          referralCode: referralCode?.trim() || undefined,
+          referralSourceUrl: referralSourceUrl || undefined,
+        }),
         credentials: "include",
       });
 

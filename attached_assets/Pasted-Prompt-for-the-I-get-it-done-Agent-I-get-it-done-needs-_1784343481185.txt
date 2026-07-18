@@ -1,0 +1,24 @@
+Prompt for the "I get it done" Agent:
+
+"I get it done" needs to report referrals to our separate Ambassador HQ system so ambassadors get commission credit automatically.
+
+Background: Ambassadors share referral links. When their customer signs up in this app and later pays, our Ambassador HQ server receives the payment from RevenueCat — but it can only credit the ambassador if this app first told it which referral code the customer came from. The app currently never sends that message, so no commissions are created.
+
+What to build:
+
+Capture the referral code. When a new user arrives via an ambassador link, the referral code (example: ERINEV62) needs to be captured. Support whichever fits best: read a ref parameter from the signup/landing URL or deep link, and also add an optional "Referral code" field on the signup screen as a fallback. Store the code locally until signup completes.
+Send it to Ambassador HQ exactly once, right after the user account is created (before or at the same time the RevenueCat user is set up):
+POST https://ambassador-plus.replit.app/api/track/referral
+Content-Type: application/json
+{
+  "appSlug": "i-get-it-done-",
+  "referralCode": "<the captured code, e.g. ERINEV62>",
+  "referredUserId": "<this user's RevenueCat app_user_id>",
+  "sourceUrl": "<the URL or link the user arrived from, optional>"
+}
+Critical requirement: referredUserId MUST be exactly the same ID this app uses as the RevenueCat app_user_id for this user. If these two IDs don't match, Ambassador HQ cannot connect the payment to the referral and the commission won't be created.
+
+Handle responses gracefully: a 201 means the referral was recorded. A 400 means the code was unknown — don't block signup, just skip silently or log it. Never let a failure of this call break the signup flow; it's fire-and-forget from the user's perspective (retry once on network error if easy).
+Only send it once per user (on first signup, not on every app launch or login).
+How to test: create a test signup with a real ambassador referral code and confirm the request returns 201.
+Note the appSlug is i-get-it-done- (with the dash at the end) — that's exactly how it's registered in Ambassador HQ, so don't change it.

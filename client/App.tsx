@@ -19,11 +19,18 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { RevenueCatProvider } from "@/contexts/RevenueCatContext";
 import { useTheme } from "@/hooks/useTheme";
 import { registerPushTokenIfNeeded } from "@/lib/notifications";
+import { captureReferralFromUrl, subscribeToReferralLinks } from "@/lib/referral";
 
 function AppContent() {
   const { isDark } = useTheme();
   const { user } = useAuth();
   const lastRegisteredUserId = useRef<string | null>(null);
+
+  useEffect(() => {
+    captureReferralFromUrl();
+    const subscription = subscribeToReferralLinks();
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     if (user?.id && user.id !== lastRegisteredUserId.current) {
