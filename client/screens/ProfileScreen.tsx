@@ -79,6 +79,11 @@ export default function ProfileScreen() {
     navigation.navigate("WeeklyReset");
   };
 
+  const handleNotificationSettings = () => {
+    Haptics.selectionAsync();
+    navigation.navigate("NotificationSettings");
+  };
+
   const handleLaneTimings = () => {
     Haptics.selectionAsync();
     navigation.navigate("LaneTimingsSettings");
@@ -506,6 +511,27 @@ export default function ProfileScreen() {
           Settings
         </ThemedText>
         <View style={[styles.menuGroup, { backgroundColor: theme.backgroundDefault }]}>
+          <Pressable
+            onPress={handleNotificationSettings}
+            style={({ pressed }) => [
+              styles.menuItemInGroup,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: LaneColors.now.primary }]}>
+              <Feather name="bell" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.menuContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                Notifications & Nudges
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                Reminders, intensity, daily check-ins
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          </Pressable>
+          <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
           <Pressable
             onPress={handleLaneTimings}
             style={({ pressed }) => [

@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import ProfileScreen from "@/screens/ProfileScreen";
 import WeeklyResetScreen from "@/screens/WeeklyResetScreen";
 import LaneTimingsSettingsScreen from "@/screens/LaneTimingsSettingsScreen";
+import NotificationSettingsScreen from "@/screens/NotificationSettingsScreen";
 import ModeSettingsScreen from "@/screens/ModeSettingsScreen";
 import HowItWorksScreen from "@/screens/HowItWorksScreen";
 import ChangePasswordScreen from "@/screens/ChangePasswordScreen";
@@ -20,6 +21,7 @@ export type ProfileStackParamList = {
   Profile: undefined;
   WeeklyReset: undefined;
   LaneTimingsSettings: undefined;
+  NotificationSettings: undefined;
   ModeSettings: undefined;
   HowItWorks: undefined;
   ChangePassword: undefined;
@@ -58,6 +60,13 @@ export default function ProfileStackNavigator() {
         component={LaneTimingsSettingsScreen}
         options={{
           title: "Lane Timings",
+        }}
+      />
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+        options={{
+          title: "Notifications",
         }}
       />
       <Stack.Screen

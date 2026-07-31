@@ -15,7 +15,42 @@ Notifications.setNotificationHandler({
 
 export interface NotificationData extends Record<string, unknown> {
   taskId?: string;
-  type: "overdue" | "reminder" | "achievement" | "streak" | "pro_nudge";
+  type:
+    | "overdue"
+    | "reminder"
+    | "achievement"
+    | "streak"
+    | "pro_nudge"
+    | "escalating_nudge"
+    | "morning_kickoff"
+    | "evening_checkin"
+    | "streak_saver";
+}
+
+export const TASK_NUDGE_CATEGORY = "task_nudge";
+export const ACTION_MARK_DONE = "mark_done";
+export const ACTION_START_FOCUS = "start_focus";
+
+export async function setupNotificationCategories(): Promise<void> {
+  if (Platform.OS === "web") return;
+
+  try {
+    await Notifications.setNotificationCategoryAsync(TASK_NUDGE_CATEGORY, [
+      {
+        identifier: ACTION_MARK_DONE,
+        buttonTitle: "\u2713 Mark done",
+        // Foreground-open so the JS response listener reliably runs the API call
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: ACTION_START_FOCUS,
+        buttonTitle: "Start focus timer",
+        options: { opensAppToForeground: true },
+      },
+    ]);
+  } catch (error) {
+    console.log("Failed to set notification categories:", error);
+  }
 }
 
 export async function requestNotificationPermissions(): Promise<boolean> {
@@ -54,7 +89,10 @@ export async function getExpoPushToken(): Promise<string | null> {
 
 export async function savePushToken(userId: string, token: string, enableNotifications?: boolean): Promise<void> {
   try {
-    const body: Record<string, any> = { pushToken: token };
+    const body: Record<string, any> = {
+      pushToken: token,
+      timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+    };
     if (enableNotifications !== undefined) {
       body.notificationsEnabled = enableNotifications;
     }

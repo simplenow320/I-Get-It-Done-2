@@ -39,6 +39,18 @@ export class MemStorage implements IStorage {
       resetTokenExpiry: insertUser.resetTokenExpiry ?? null,
       subscriptionStatus: insertUser.subscriptionStatus ?? null,
       trialEndsAt: insertUser.trialEndsAt ?? null,
+      lifetimeTasksCreated: insertUser.lifetimeTasksCreated ?? 0,
+      notificationIntensity: insertUser.notificationIntensity ?? "standard",
+      escalatingRemindersEnabled: insertUser.escalatingRemindersEnabled ?? true,
+      morningKickoffEnabled: insertUser.morningKickoffEnabled ?? true,
+      eveningCheckinEnabled: insertUser.eveningCheckinEnabled ?? true,
+      streakSaverEnabled: insertUser.streakSaverEnabled ?? true,
+      morningKickoffHour: insertUser.morningKickoffHour ?? 8,
+      eveningCheckinHour: insertUser.eveningCheckinHour ?? 19,
+      timezoneOffsetMinutes: insertUser.timezoneOffsetMinutes ?? 0,
+      lastMorningKickoffDate: insertUser.lastMorningKickoffDate ?? null,
+      lastEveningCheckinDate: insertUser.lastEveningCheckinDate ?? null,
+      lastStreakSaverDate: insertUser.lastStreakSaverDate ?? null,
       createdAt: now,
     };
     this.users.set(id, user);

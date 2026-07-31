@@ -52,7 +52,7 @@ export async function sendPushNotification(
 }
 
 export async function sendBulkPushNotifications(
-  notifications: { token: string; title: string; body: string; data?: Record<string, unknown> }[]
+  notifications: { token: string; title: string; body: string; data?: Record<string, unknown>; categoryId?: string }[]
 ): Promise<PushResult> {
   const result: PushResult = { sent: 0, failed: 0, errors: [] };
 
@@ -64,6 +64,7 @@ export async function sendBulkPushNotifications(
       title: n.title,
       body: n.body,
       data: n.data || {},
+      ...(n.categoryId ? { categoryId: n.categoryId } : {}),
     }));
 
   if (messages.length === 0) return result;
@@ -272,13 +273,11 @@ export async function sendDelegationNotification(
 }
 
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
-let lastOverdueCheck = 0;
-let lastStreakCheck = 0;
 let lastDueSoonCheck = 0;
+let lastNudgeCheck = 0;
 
-const OVERDUE_INTERVAL = 4 * 60 * 60 * 1000;
-const STREAK_INTERVAL = 8 * 60 * 60 * 1000;
 const DUE_SOON_INTERVAL = 30 * 60 * 1000;
+const NUDGE_INTERVAL = 10 * 60 * 1000;
 
 export function startNotificationScheduler(): void {
   if (schedulerInterval) return;
@@ -296,19 +295,23 @@ export function startNotificationScheduler(): void {
       }
     }
 
-    if (now - lastOverdueCheck >= OVERDUE_INTERVAL) {
-      lastOverdueCheck = now;
-      const result = await sendOverdueTaskNotifications();
-      if (result.sent > 0) {
-        console.log(`[Notifications] Overdue: ${result.sent} sent, ${result.failed} failed`);
-      }
-    }
-
-    if (now - lastStreakCheck >= STREAK_INTERVAL) {
-      lastStreakCheck = now;
-      const result = await sendStreakReminderNotifications();
-      if (result.sent > 0) {
-        console.log(`[Notifications] Streak: ${result.sent} sent, ${result.failed} failed`);
+    if (now - lastNudgeCheck >= NUDGE_INTERVAL) {
+      lastNudgeCheck = now;
+      try {
+        const { sendEscalatingNudges, sendDailyRhythmNotifications, sendStreakSaverNotifications } =
+          await import("./nudgeEngine");
+        const [nudges, rhythm, streaks] = [
+          await sendEscalatingNudges(),
+          await sendDailyRhythmNotifications(),
+          await sendStreakSaverNotifications(),
+        ];
+        if (nudges + rhythm + streaks > 0) {
+          console.log(
+            `[Notifications] Nudges: ${nudges} escalating, ${rhythm} daily-rhythm, ${streaks} streak-saver`
+          );
+        }
+      } catch (e) {
+        console.error("[Notifications] Nudge engine error:", e);
       }
     }
   }, 60 * 1000);

@@ -1,0 +1,2 @@
+- [Schema changes via SQL](schema-push-workaround.md) — drizzle-kit push prompts interactively (rename vs create) and can't be piped; apply ALTERs via SQL, keep schema.ts in sync.
+- [ADHD nudge engine](nudge-engine.md) — server-side escalating/daily/streak nudges: local-time via user tz offset, claim-before-send idempotency, per-user intensity; don't add parallel schedulers.

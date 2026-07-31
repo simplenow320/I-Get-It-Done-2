@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { StyleSheet } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -18,8 +18,17 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { RevenueCatProvider } from "@/contexts/RevenueCatContext";
 import { useTheme } from "@/hooks/useTheme";
-import { registerPushTokenIfNeeded } from "@/lib/notifications";
+import {
+  registerPushTokenIfNeeded,
+  setupNotificationCategories,
+  addNotificationResponseListener,
+  ACTION_MARK_DONE,
+  ACTION_START_FOCUS,
+} from "@/lib/notifications";
+import { apiRequest } from "@/lib/query-client";
 import { captureReferralFromUrl, subscribeToReferralLinks } from "@/lib/referral";
+
+const navigationRef = createNavigationContainerRef();
 
 function AppContent() {
   const { isDark } = useTheme();
@@ -33,6 +42,51 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    setupNotificationCategories();
+
+    const subscription = addNotificationResponseListener(async (response) => {
+      const data = response.notification.request.content.data as {
+        taskId?: string;
+        type?: string;
+      };
+      const action = response.actionIdentifier;
+
+      if (action === ACTION_MARK_DONE && data?.taskId) {
+        try {
+          await apiRequest("PUT", `/api/tasks/${data.taskId}`, {
+            completedAt: new Date().toISOString(),
+          });
+          queryClient.invalidateQueries();
+        } catch (error) {
+          console.log("Failed to mark task done from notification:", error);
+        }
+        return;
+      }
+
+      if (action === ACTION_START_FOCUS && data?.taskId) {
+        // App is foregrounded by this action; navigate once ready.
+        const target = () => {
+          if (navigationRef.isReady()) {
+            try {
+              (navigationRef.navigate as (name: string, params?: object) => void)("Main", {
+                screen: "FocusTab",
+                params: { screen: "FocusTimer", params: { taskId: data.taskId } },
+              });
+            } catch (error) {
+              console.log("Focus navigation failed:", error);
+            }
+          } else {
+            setTimeout(target, 500);
+          }
+        };
+        target();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
     if (user?.id && user.id !== lastRegisteredUserId.current) {
       lastRegisteredUserId.current = user.id;
       registerPushTokenIfNeeded(user.id);
@@ -41,7 +95,7 @@ function AppContent() {
   
   return (
     <RevenueCatProvider userId={user?.id}>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <RootStackNavigator />
       </NavigationContainer>
       <AchievementUnlockModal />

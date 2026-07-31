@@ -1057,11 +1057,14 @@ Examples:
         return res.status(403).json({ error: "Access denied" });
       }
       
-      const { pushToken, notificationsEnabled } = req.body;
+      const { pushToken, notificationsEnabled, timezoneOffsetMinutes } = req.body;
       
       const updates: any = {};
       if (pushToken !== undefined) updates.pushToken = pushToken;
       if (notificationsEnabled !== undefined) updates.notificationsEnabled = notificationsEnabled;
+      if (Number.isInteger(timezoneOffsetMinutes) && Math.abs(timezoneOffsetMinutes) <= 14 * 60) {
+        updates.timezoneOffsetMinutes = timezoneOffsetMinutes;
+      }
       
       const result = await db.update(users).set(updates).where(eq(users.id, id)).returning();
       
@@ -1073,6 +1076,89 @@ Examples:
     } catch (error) {
       console.error("Update push token error:", error);
       res.status(500).json({ error: "Failed to update push token" });
+    }
+  });
+
+  app.get("/api/users/:id/notification-prefs", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      if (!req.user || req.user.userId !== id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const result = await db
+        .select({
+          notificationsEnabled: users.notificationsEnabled,
+          notificationIntensity: users.notificationIntensity,
+          escalatingRemindersEnabled: users.escalatingRemindersEnabled,
+          morningKickoffEnabled: users.morningKickoffEnabled,
+          eveningCheckinEnabled: users.eveningCheckinEnabled,
+          streakSaverEnabled: users.streakSaverEnabled,
+          morningKickoffHour: users.morningKickoffHour,
+          eveningCheckinHour: users.eveningCheckinHour,
+        })
+        .from(users)
+        .where(eq(users.id, id))
+        .limit(1);
+      if (result.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json({ prefs: result[0] });
+    } catch (error) {
+      console.error("Get notification prefs error:", error);
+      res.status(500).json({ error: "Failed to get notification preferences" });
+    }
+  });
+
+  app.put("/api/users/:id/notification-prefs", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      if (!req.user || req.user.userId !== id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const {
+        notificationIntensity,
+        escalatingRemindersEnabled,
+        morningKickoffEnabled,
+        eveningCheckinEnabled,
+        streakSaverEnabled,
+        morningKickoffHour,
+        eveningCheckinHour,
+        timezoneOffsetMinutes,
+      } = req.body;
+
+      const updates: Record<string, unknown> = {};
+      if (notificationIntensity !== undefined) {
+        if (!["gentle", "standard", "relentless"].includes(notificationIntensity)) {
+          return res.status(400).json({ error: "Invalid intensity" });
+        }
+        updates.notificationIntensity = notificationIntensity;
+      }
+      if (typeof escalatingRemindersEnabled === "boolean") updates.escalatingRemindersEnabled = escalatingRemindersEnabled;
+      if (typeof morningKickoffEnabled === "boolean") updates.morningKickoffEnabled = morningKickoffEnabled;
+      if (typeof eveningCheckinEnabled === "boolean") updates.eveningCheckinEnabled = eveningCheckinEnabled;
+      if (typeof streakSaverEnabled === "boolean") updates.streakSaverEnabled = streakSaverEnabled;
+      if (Number.isInteger(morningKickoffHour) && morningKickoffHour >= 5 && morningKickoffHour <= 12) {
+        updates.morningKickoffHour = morningKickoffHour;
+      }
+      if (Number.isInteger(eveningCheckinHour) && eveningCheckinHour >= 15 && eveningCheckinHour <= 22) {
+        updates.eveningCheckinHour = eveningCheckinHour;
+      }
+      if (Number.isInteger(timezoneOffsetMinutes) && Math.abs(timezoneOffsetMinutes) <= 14 * 60) {
+        updates.timezoneOffsetMinutes = timezoneOffsetMinutes;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No valid preferences provided" });
+      }
+
+      const result = await db.update(users).set(updates).where(eq(users.id, id)).returning({ id: users.id });
+      if (result.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Update notification prefs error:", error);
+      res.status(500).json({ error: "Failed to update notification preferences" });
     }
   });
 
