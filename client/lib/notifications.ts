@@ -30,6 +30,7 @@ export interface NotificationData extends Record<string, unknown> {
 export const TASK_NUDGE_CATEGORY = "task_nudge";
 export const ACTION_MARK_DONE = "mark_done";
 export const ACTION_START_FOCUS = "start_focus";
+export const ACTION_SNOOZE = "snooze_1h";
 
 export async function setupNotificationCategories(): Promise<void> {
   if (Platform.OS === "web") return;
@@ -45,6 +46,12 @@ export async function setupNotificationCategories(): Promise<void> {
       {
         identifier: ACTION_START_FOCUS,
         buttonTitle: "Start focus timer",
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: ACTION_SNOOZE,
+        buttonTitle: "Snooze 1h",
+        // Foreground-open so the JS response listener reliably runs the API call
         options: { opensAppToForeground: true },
       },
     ]);

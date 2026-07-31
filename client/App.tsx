@@ -24,6 +24,7 @@ import {
   addNotificationResponseListener,
   ACTION_MARK_DONE,
   ACTION_START_FOCUS,
+  ACTION_SNOOZE,
 } from "@/lib/notifications";
 import { apiRequest } from "@/lib/query-client";
 import { captureReferralFromUrl, subscribeToReferralLinks } from "@/lib/referral";
@@ -59,6 +60,15 @@ function AppContent() {
           queryClient.invalidateQueries();
         } catch (error) {
           console.log("Failed to mark task done from notification:", error);
+        }
+        return;
+      }
+
+      if (action === ACTION_SNOOZE && data?.taskId) {
+        try {
+          await apiRequest("POST", `/api/tasks/${data.taskId}/snooze`, {});
+        } catch (error) {
+          console.log("Failed to snooze task from notification:", error);
         }
         return;
       }

@@ -925,6 +925,35 @@ Examples:
     }
   });
 
+  app.post("/api/tasks/:id/snooze", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const existingTask = await db.select().from(tasks).where(eq(tasks.id, id));
+
+      if (existingTask.length === 0) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      if (existingTask[0].userId !== req.user?.userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Bump lastNudgeAt one hour into the future so the nudge engine's
+      // interval check waits at least an extra hour before the next nudge.
+      const snoozedUntilBase = new Date(Date.now() + 60 * 60 * 1000);
+      const result = await db
+        .update(tasks)
+        .set({ lastNudgeAt: snoozedUntilBase })
+        .where(eq(tasks.id, id))
+        .returning();
+
+      res.json(result[0]);
+    } catch (error) {
+      console.error("Snooze task error:", error);
+      res.status(500).json({ error: "Failed to snooze task" });
+    }
+  });
+
   app.delete("/api/tasks/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
