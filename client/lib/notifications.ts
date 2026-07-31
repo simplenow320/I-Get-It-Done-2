@@ -125,6 +125,105 @@ export async function registerPushTokenIfNeeded(userId: string): Promise<void> {
   }
 }
 
+// ---- Web push (browser notifications) ----
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const output = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) output[i] = rawData.charCodeAt(i);
+  return output;
+}
+
+export function isWebPushSupported(): boolean {
+  return (
+    Platform.OS === "web" &&
+    typeof navigator !== "undefined" &&
+    "serviceWorker" in navigator &&
+    typeof window !== "undefined" &&
+    "PushManager" in window &&
+    "Notification" in window
+  );
+}
+
+export async function getWebPushSubscription(): Promise<PushSubscription | null> {
+  if (!isWebPushSupported()) return null;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+    if (!registration) return null;
+    return await registration.pushManager.getSubscription();
+  } catch {
+    return null;
+  }
+}
+
+// Asks for browser permission, registers the service worker, subscribes with the
+// server's VAPID key, and saves the subscription. Returns true on success.
+export async function enableWebPush(userId: string): Promise<boolean> {
+  if (!isWebPushSupported()) return false;
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return false;
+
+    const registration = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+
+    const keyResponse = await fetch(new URL("/api/web-push/vapid-public-key", getApiUrl()).toString());
+    if (!keyResponse.ok) throw new Error("Failed to fetch VAPID public key");
+    const { publicKey } = await keyResponse.json();
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
+      });
+    }
+
+    await apiRequest("POST", `/api/users/${userId}/web-push-subscriptions`, {
+      subscription: subscription.toJSON(),
+      timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Failed to enable web push:", error);
+    return false;
+  }
+}
+
+export async function disableWebPush(userId: string): Promise<void> {
+  try {
+    const subscription = await getWebPushSubscription();
+    if (subscription) {
+      await apiRequest("DELETE", `/api/users/${userId}/web-push-subscriptions`, {
+        endpoint: subscription.endpoint,
+      });
+      await subscription.unsubscribe();
+    }
+  } catch (error) {
+    console.error("Failed to disable web push:", error);
+  }
+}
+
+// Re-syncs an existing browser subscription with the server on app start.
+export async function registerWebPushIfNeeded(userId: string): Promise<void> {
+  if (!isWebPushSupported()) return;
+  try {
+    if (Notification.permission !== "granted") return;
+    const subscription = await getWebPushSubscription();
+    if (!subscription) return;
+    await apiRequest("POST", `/api/users/${userId}/web-push-subscriptions`, {
+      subscription: subscription.toJSON(),
+      timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+    });
+  } catch (error) {
+    console.log("Web push re-registration skipped:", error);
+  }
+}
+
 export async function scheduleOverdueNotification(taskTitle: string, taskId: string): Promise<string | null> {
   if (Platform.OS === "web") return null;
 

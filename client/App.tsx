@@ -20,6 +20,7 @@ import { RevenueCatProvider } from "@/contexts/RevenueCatContext";
 import { useTheme } from "@/hooks/useTheme";
 import {
   registerPushTokenIfNeeded,
+  registerWebPushIfNeeded,
   setupNotificationCategories,
   addNotificationResponseListener,
   ACTION_MARK_DONE,
@@ -100,6 +101,7 @@ function AppContent() {
     if (user?.id && user.id !== lastRegisteredUserId.current) {
       lastRegisteredUserId.current = user.id;
       registerPushTokenIfNeeded(user.id);
+      registerWebPushIfNeeded(user.id);
     }
   }, [user?.id]);
   

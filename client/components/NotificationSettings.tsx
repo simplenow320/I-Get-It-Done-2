@@ -9,6 +9,9 @@ import {
   requestNotificationPermissions,
   getExpoPushToken,
   savePushToken,
+  isWebPushSupported,
+  enableWebPush,
+  disableWebPush,
 } from "@/lib/notifications";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { getStoredAuthToken } from "@/contexts/AuthContext";
@@ -26,8 +29,10 @@ export function NotificationSettings({ userId, onEnabled }: NotificationSettings
   const [isToggling, setIsToggling] = useState(false);
   const isWeb = Platform.OS === "web";
 
+  const webPushAvailable = isWeb && isWebPushSupported();
+
   useEffect(() => {
-    if (!userId || isWeb) {
+    if (!userId || (isWeb && !webPushAvailable)) {
       setIsLoading(false);
       return;
     }
@@ -47,7 +52,10 @@ export function NotificationSettings({ userId, onEnabled }: NotificationSettings
       );
       if (response.ok) {
         const data = await response.json();
-        setIsEnabled(data.notificationsEnabled && data.hasPushToken);
+        setIsEnabled(
+          data.notificationsEnabled &&
+            (isWeb ? data.hasWebPushSubscription : data.hasPushToken)
+        );
       }
     } catch (error) {
       console.error("Failed to load notification settings:", error);
@@ -57,7 +65,27 @@ export function NotificationSettings({ userId, onEnabled }: NotificationSettings
   };
 
   const handleToggle = async () => {
-    if (isWeb) return;
+    if (isWeb) {
+      if (!webPushAvailable) return;
+      setIsToggling(true);
+      try {
+        if (!isEnabled) {
+          const ok = await enableWebPush(userId);
+          if (ok) {
+            setIsEnabled(true);
+            onEnabled?.();
+          }
+        } else {
+          await disableWebPush(userId);
+          setIsEnabled(false);
+        }
+      } catch (error) {
+        console.error("Failed to toggle web notifications:", error);
+      } finally {
+        setIsToggling(false);
+      }
+      return;
+    }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsToggling(true);
@@ -99,7 +127,7 @@ export function NotificationSettings({ userId, onEnabled }: NotificationSettings
     }
   };
 
-  if (isWeb) {
+  if (isWeb && !webPushAvailable) {
     return (
       <Card style={styles.card}>
         <View style={styles.row}>
@@ -109,7 +137,7 @@ export function NotificationSettings({ userId, onEnabled }: NotificationSettings
           <View style={styles.textContainer}>
             <ThemedText style={styles.title}>Push Notifications</ThemedText>
             <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
-              Run in Expo Go to enable notifications
+              Your browser doesn't support notifications
             </ThemedText>
           </View>
           <Switch

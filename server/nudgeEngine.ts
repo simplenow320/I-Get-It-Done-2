@@ -2,6 +2,41 @@ import { db } from "./db";
 import { users, tasks, userStats } from "@shared/schema";
 import { eq, and, isNotNull, isNull, gte, lt, or, sql } from "drizzle-orm";
 import { sendBulkPushNotifications } from "./pushNotifications";
+import { getUsersWithWebPush, sendWebPushNotifications } from "./webPush";
+
+// Unified fan-out: delivers each message via Expo push (if the user has a mobile
+// token) and/or browser Web Push (if the user has browser subscriptions).
+// Returns the number of users reached on at least one channel.
+async function deliverNudges(
+  messages: {
+    userId: string;
+    pushToken: string | null;
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+    categoryId?: string;
+  }[]
+): Promise<number> {
+  if (messages.length === 0) return 0;
+
+  const expoResult = await sendBulkPushNotifications(
+    messages
+      .filter((m) => m.pushToken)
+      .map((m) => ({
+        token: m.pushToken!,
+        title: m.title,
+        body: m.body,
+        data: m.data,
+        categoryId: m.categoryId,
+      }))
+  );
+
+  const webSent = await sendWebPushNotifications(
+    messages.map((m) => ({ userId: m.userId, title: m.title, body: m.body, data: m.data }))
+  );
+
+  return Math.max(expoResult.sent, 0) + webSent;
+}
 
 // ---- Intensity configuration ----
 // Controls how often escalating nudges repeat for incomplete overdue tasks.
@@ -79,6 +114,7 @@ async function runEscalatingNudges(): Promise<number> {
       title: tasks.title,
       nudgeCount: tasks.nudgeCount,
       lastNudgeAt: tasks.lastNudgeAt,
+      userId: tasks.userId,
       pushToken: users.pushToken,
       intensity: users.notificationIntensity,
       tz: users.timezoneOffsetMinutes,
@@ -89,18 +125,23 @@ async function runEscalatingNudges(): Promise<number> {
       and(
         eq(tasks.isOverdue, true),
         isNull(tasks.completedAt),
-        isNotNull(users.pushToken),
         eq(users.notificationsEnabled, true),
         eq(users.escalatingRemindersEnabled, true)
       )
     )
     .limit(SCAN_LIMIT);
 
-  const toSend: { taskId: string; token: string; title: string; body: string; nudgeCount: number }[] = [];
+  const webUsers = await getUsersWithWebPush(
+    Array.from(new Set(rows.map((r) => r.userId).filter((id): id is string => !!id)))
+  );
+
+  const toSend: { taskId: string; userId: string; token: string | null; title: string; body: string; nudgeCount: number }[] = [];
   const nudgedUsers = new Set<string>();
 
   for (const row of rows) {
-    if (!row.pushToken) continue;
+    if (!row.userId) continue;
+    // Skip users with no delivery channel at all.
+    if (!row.pushToken && !webUsers.has(row.userId)) continue;
     const intensity = normalizeIntensity(row.intensity);
     const local = toLocal(now, row.tz);
     if (isQuietHours(local)) continue;
@@ -112,8 +153,8 @@ async function runEscalatingNudges(): Promise<number> {
     if (now.getTime() - last < NUDGE_INTERVAL_MS[intensity]) continue;
 
     // At most one escalating nudge per user per pass — avoid notification storms.
-    if (nudgedUsers.has(row.pushToken)) continue;
-    nudgedUsers.add(row.pushToken);
+    if (nudgedUsers.has(row.userId)) continue;
+    nudgedUsers.add(row.userId);
 
     // Atomically claim the nudge BEFORE sending: the eligibility predicate in the
     // UPDATE guarantees only one concurrent run can claim a given task.
@@ -132,22 +173,21 @@ async function runEscalatingNudges(): Promise<number> {
     if (claimed.length === 0) continue;
 
     const msg = escalatingMessage(row.title, count);
-    toSend.push({ taskId: row.taskId, token: row.pushToken, title: msg.title, body: msg.body, nudgeCount: count });
+    toSend.push({ taskId: row.taskId, userId: row.userId, token: row.pushToken, title: msg.title, body: msg.body, nudgeCount: count });
   }
 
   if (toSend.length === 0) return 0;
 
-  const result = await sendBulkPushNotifications(
+  return deliverNudges(
     toSend.map((n) => ({
-      token: n.token,
+      userId: n.userId,
+      pushToken: n.token,
       title: n.title,
       body: n.body,
       data: { type: "escalating_nudge", taskId: n.taskId },
       categoryId: "task_nudge",
     }))
   );
-
-  return result.sent;
 }
 
 // ---- Morning kickoff & evening check-in ----
@@ -158,17 +198,18 @@ export async function sendDailyRhythmNotifications(): Promise<number> {
     .from(users)
     .where(
       and(
-        isNotNull(users.pushToken),
         eq(users.notificationsEnabled, true),
         or(eq(users.morningKickoffEnabled, true), eq(users.eveningCheckinEnabled, true))
       )
     )
     .limit(SCAN_LIMIT);
 
+  const webUsers = await getUsersWithWebPush(candidates.map((c) => c.id));
+
   let sent = 0;
 
   for (const u of candidates) {
-    if (!u.pushToken) continue;
+    if (!u.pushToken && !webUsers.has(u.id)) continue;
     const local = toLocal(now, u.timezoneOffsetMinutes);
     const localHour = local.getUTCHours();
     const today = localDateStr(local);
@@ -189,15 +230,15 @@ export async function sendDailyRhythmNotifications(): Promise<number> {
           open.length === 1
             ? `One thing on your list: "${open[0].title}". Do it early, own the day.`
             : `${open.length} tasks are waiting. Don't scan the list — pick ONE and start. "${open[0].title}"?`;
-        const result = await sendBulkPushNotifications([
+        sent += await deliverNudges([
           {
-            token: u.pushToken,
+            userId: u.id,
+            pushToken: u.pushToken,
             title: "Good morning — what's your ONE thing?",
             body,
             data: { type: "morning_kickoff" },
           },
         ]);
-        sent += result.sent;
       }
       await db.update(users).set({ lastMorningKickoffDate: today }).where(eq(users.id, u.id));
     }
@@ -235,10 +276,9 @@ export async function sendDailyRhythmNotifications(): Promise<number> {
       }
 
       if (open.length > 0 || doneToday.length > 0) {
-        const result = await sendBulkPushNotifications([
-          { token: u.pushToken, title, body, data: { type: "evening_checkin" } },
+        sent += await deliverNudges([
+          { userId: u.id, pushToken: u.pushToken, title, body, data: { type: "evening_checkin" } },
         ]);
-        sent += result.sent;
       }
       await db.update(users).set({ lastEveningCheckinDate: today }).where(eq(users.id, u.id));
     }
@@ -266,32 +306,34 @@ export async function sendStreakSaverNotifications(): Promise<number> {
     .innerJoin(userStats, eq(userStats.userId, users.id))
     .where(
       and(
-        isNotNull(users.pushToken),
         eq(users.notificationsEnabled, true),
         eq(users.streakSaverEnabled, true)
       )
     )
     .limit(SCAN_LIMIT);
 
+  const webUsers = await getUsersWithWebPush(rows.map((r) => r.userId));
+
   let sent = 0;
   for (const u of rows) {
-    if (!u.pushToken || !u.currentStreak || u.currentStreak < 2) continue;
+    if (!u.pushToken && !webUsers.has(u.userId)) continue;
+    if (!u.currentStreak || u.currentStreak < 2) continue;
     const local = toLocal(now, u.tz);
     if (local.getUTCHours() !== STREAK_SAVER_HOUR) continue;
     const today = localDateStr(local);
     if (u.lastStreakSaverDate === today) continue;
     if (u.lastActiveDate === today) continue; // already safe
 
-    const result = await sendBulkPushNotifications([
+    sent += await deliverNudges([
       {
-        token: u.pushToken,
+        userId: u.userId,
+        pushToken: u.pushToken,
         title: `Your ${u.currentStreak}-day streak dies at midnight`,
         body: "You're ONE task away from saving it. Pick the smallest thing on your list and go.",
         data: { type: "streak_saver", streak: u.currentStreak },
         categoryId: "task_nudge",
       },
     ]);
-    sent += result.sent;
     await db.update(users).set({ lastStreakSaverDate: today }).where(eq(users.id, u.userId));
   }
   return sent;

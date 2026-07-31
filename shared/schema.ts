@@ -32,6 +32,28 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Browser (Web Push API) subscriptions — a user may have several browsers registered.
+export const webPushSubscriptions = pgTable("web_push_subscriptions", {
+  id: varchar("id", { length: 255 })
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  userId: varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Single-row table holding the server's VAPID keypair (generated on first use).
+export const vapidConfig = pgTable("vapid_config", {
+  id: integer("id").primaryKey().default(1),
+  publicKey: text("public_key").notNull(),
+  privateKey: text("private_key").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const tasks = pgTable("tasks", {
   id: varchar("id", { length: 255 })
     .primaryKey()

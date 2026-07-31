@@ -7,6 +7,8 @@ import { db } from "./db";
 import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers, voiceUsage } from "@shared/schema";
 import { generateToken, requireAuth, optionalAuth, validateUserAccess, type AuthenticatedRequest } from "./authMiddleware";
 import { sendPushNotification, sendDelegationNotification, startNotificationScheduler } from "./pushNotifications";
+import { getVapidKeys, saveWebPushSubscription, deleteWebPushSubscription, sendWebPushNotifications } from "./webPush";
+import { webPushSubscriptions } from "@shared/schema";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
 const FREE_TASK_LIMIT = 10;
@@ -1108,6 +1110,67 @@ Examples:
     }
   });
 
+  // ---- Web Push (browser notifications) ----
+  app.get("/api/web-push/vapid-public-key", async (_req: Request, res: Response) => {
+    try {
+      const keys = await getVapidKeys();
+      res.json({ publicKey: keys.publicKey });
+    } catch (error) {
+      console.error("VAPID public key error:", error);
+      res.status(500).json({ error: "Failed to get VAPID public key" });
+    }
+  });
+
+  app.post("/api/users/:id/web-push-subscriptions", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      if (!req.user || req.user.userId !== id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { subscription, timezoneOffsetMinutes } = req.body;
+      if (
+        !subscription?.endpoint ||
+        typeof subscription.endpoint !== "string" ||
+        !subscription.keys?.p256dh ||
+        !subscription.keys?.auth
+      ) {
+        return res.status(400).json({ error: "Invalid subscription" });
+      }
+
+      await saveWebPushSubscription(id, subscription);
+
+      const updates: any = { notificationsEnabled: true };
+      if (Number.isInteger(timezoneOffsetMinutes) && Math.abs(timezoneOffsetMinutes) <= 14 * 60) {
+        updates.timezoneOffsetMinutes = timezoneOffsetMinutes;
+      }
+      await db.update(users).set(updates).where(eq(users.id, id));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Save web push subscription error:", error);
+      res.status(500).json({ error: "Failed to save subscription" });
+    }
+  });
+
+  app.delete("/api/users/:id/web-push-subscriptions", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      if (!req.user || req.user.userId !== id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const { endpoint } = req.body;
+      if (!endpoint || typeof endpoint !== "string") {
+        return res.status(400).json({ error: "endpoint is required" });
+      }
+      await deleteWebPushSubscription(id, endpoint);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete web push subscription error:", error);
+      res.status(500).json({ error: "Failed to delete subscription" });
+    }
+  });
+
   app.get("/api/users/:id/notification-prefs", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
@@ -1928,9 +1991,16 @@ Examples:
         return res.status(404).json({ error: "User not found" });
       }
 
+      const webSubs = await db
+        .select({ id: webPushSubscriptions.id })
+        .from(webPushSubscriptions)
+        .where(eq(webPushSubscriptions.userId, id))
+        .limit(1);
+
       res.json({
         notificationsEnabled: user.notificationsEnabled || false,
         hasPushToken: !!user.pushToken,
+        hasWebPushSubscription: webSubs.length > 0,
       });
     } catch (error) {
       console.error("Get notification settings error:", error);
@@ -1946,18 +2016,30 @@ Examples:
 
       const [user] = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
 
-      if (!user?.pushToken) {
+      const webSent = await sendWebPushNotifications([
+        {
+          userId: req.user.userId,
+          title: "I GET IT DONE",
+          body: "Browser notifications are working! You'll receive task reminders here.",
+          data: { type: "test" },
+        },
+      ]);
+
+      let mobileSent = false;
+      if (user?.pushToken) {
+        mobileSent = await sendPushNotification(
+          user.pushToken,
+          "I GET IT DONE",
+          "Push notifications are working! You'll receive task reminders here.",
+          { type: "test" }
+        );
+      }
+
+      if (!user?.pushToken && webSent === 0) {
         return res.status(400).json({ error: "No push token registered. Enable notifications first." });
       }
 
-      const sent = await sendPushNotification(
-        user.pushToken,
-        "I GET IT DONE",
-        "Push notifications are working! You'll receive task reminders here.",
-        { type: "test" }
-      );
-
-      res.json({ success: sent });
+      res.json({ success: mobileSent || webSent > 0 });
     } catch (error) {
       console.error("Test notification error:", error);
       res.status(500).json({ error: "Failed to send test notification" });
