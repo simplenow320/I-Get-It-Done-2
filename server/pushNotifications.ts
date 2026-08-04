@@ -2,6 +2,7 @@ import { Expo, ExpoPushMessage, ExpoPushTicket } from "expo-server-sdk";
 import { db } from "./db";
 import { users, tasks, userStats } from "@shared/schema";
 import { eq, and, isNotNull, lt, isNull } from "drizzle-orm";
+import { getUsersWithWebPush, sendWebPushNotifications, type WebPushMessage } from "./webPush";
 
 const expo = new Expo();
 
@@ -124,38 +125,48 @@ export async function sendOverdueTaskNotifications(): Promise<PushResult> {
         and(
           eq(tasks.isOverdue, true),
           isNull(tasks.completedAt),
-          isNotNull(users.pushToken),
           eq(users.notificationsEnabled, true)
         )
       );
 
-    const userTaskMap = new Map<string, { token: string; tasks: { id: string; title: string }[] }>();
+    const webUsers = await getUsersWithWebPush(
+      Array.from(new Set(overdueResults.map((r) => r.userId).filter((id): id is string => !!id)))
+    );
+
+    const userTaskMap = new Map<string, { token: string | null; tasks: { id: string; title: string }[] }>();
 
     for (const row of overdueResults) {
-      if (!row.pushToken || !row.userId) continue;
+      if (!row.userId) continue;
+      if (!row.pushToken && !webUsers.has(row.userId)) continue;
       if (!userTaskMap.has(row.userId)) {
         userTaskMap.set(row.userId, { token: row.pushToken, tasks: [] });
       }
       userTaskMap.get(row.userId)!.tasks.push({ id: row.taskId, title: row.taskTitle });
     }
 
-    const notifications = Array.from(userTaskMap.entries()).map(([userId, data]) => {
+    const expoNotifications: { token: string; title: string; body: string; data?: Record<string, unknown> }[] = [];
+    const webMessages: WebPushMessage[] = [];
+
+    for (const [userId, data] of Array.from(userTaskMap.entries())) {
       const count = data.tasks.length;
       const title = count === 1 ? "Task Needs Attention" : `${count} Tasks Need Attention`;
       const body =
         count === 1
           ? `"${data.tasks[0].title}" is overdue. Time to tackle it!`
           : `You have ${count} overdue tasks. "${data.tasks[0].title}" and ${count - 1} more.`;
+      const payload = { type: "overdue", userId, taskId: data.tasks[0].id };
 
-      return {
-        token: data.token,
-        title,
-        body,
-        data: { type: "overdue", userId, taskId: data.tasks[0].id },
-      };
-    });
+      if (data.token) {
+        expoNotifications.push({ token: data.token, title, body, data: payload });
+      }
+      if (webUsers.has(userId)) {
+        webMessages.push({ userId, title, body, data: payload });
+      }
+    }
 
-    return sendBulkPushNotifications(notifications);
+    const result = await sendBulkPushNotifications(expoNotifications);
+    result.sent += await sendWebPushNotifications(webMessages);
+    return result;
   } catch (error) {
     console.error("Failed to send overdue notifications:", error);
     return { sent: 0, failed: 0, errors: [(error as Error).message] };
@@ -176,27 +187,36 @@ export async function sendStreakReminderNotifications(): Promise<PushResult> {
       })
       .from(userStats)
       .innerJoin(users, eq(userStats.userId, users.id))
-      .where(
-        and(
-          isNotNull(users.pushToken),
-          eq(users.notificationsEnabled, true)
-        )
-      );
+      .where(eq(users.notificationsEnabled, true));
 
-    const notifications = streakUsers
-      .filter((u) => {
-        if (!u.pushToken || !u.currentStreak || u.currentStreak < 2) return false;
-        if (u.lastActiveDate === today) return false;
-        return true;
-      })
-      .map((u) => ({
-        token: u.pushToken!,
-        title: "Keep Your Streak Alive!",
-        body: `You're on a ${u.currentStreak}-day streak! Complete a task today to keep it going.`,
-        data: { type: "streak", userId: u.userId, streak: u.currentStreak },
-      }));
+    const eligible = streakUsers.filter((u): u is typeof u & { userId: string } => {
+      if (!u.userId) return false;
+      if (!u.currentStreak || u.currentStreak < 2) return false;
+      if (u.lastActiveDate === today) return false;
+      return true;
+    });
 
-    return sendBulkPushNotifications(notifications);
+    const webUsers = await getUsersWithWebPush(eligible.map((u) => u.userId));
+
+    const expoNotifications: { token: string; title: string; body: string; data?: Record<string, unknown> }[] = [];
+    const webMessages: WebPushMessage[] = [];
+
+    for (const u of eligible) {
+      const title = "Keep Your Streak Alive!";
+      const body = `You're on a ${u.currentStreak}-day streak! Complete a task today to keep it going.`;
+      const payload = { type: "streak", userId: u.userId, streak: u.currentStreak };
+
+      if (u.pushToken) {
+        expoNotifications.push({ token: u.pushToken, title, body, data: payload });
+      }
+      if (webUsers.has(u.userId)) {
+        webMessages.push({ userId: u.userId, title, body, data: payload });
+      }
+    }
+
+    const result = await sendBulkPushNotifications(expoNotifications);
+    result.sent += await sendWebPushNotifications(webMessages);
+    return result;
   } catch (error) {
     console.error("Failed to send streak notifications:", error);
     return { sent: 0, failed: 0, errors: [(error as Error).message] };
@@ -224,22 +244,38 @@ export async function sendDueSoonNotifications(): Promise<PushResult> {
           isNull(tasks.completedAt),
           isNotNull(tasks.dueDate),
           lt(tasks.dueDate, twoHoursFromNow),
-          isNotNull(users.pushToken),
           eq(users.notificationsEnabled, true),
           eq(tasks.isOverdue, false)
         )
       );
 
-    const notifications = dueSoonResults
-      .filter((r) => r.pushToken && r.dueDate && r.dueDate > now)
-      .map((r) => ({
-        token: r.pushToken!,
-        title: "Task Due Soon",
-        body: `"${r.taskTitle}" is due in less than 2 hours.`,
-        data: { type: "due_soon", taskId: r.taskId, userId: r.userId },
-      }));
+    const eligible = dueSoonResults.filter(
+      (r): r is typeof r & { userId: string } => !!r.userId && !!r.dueDate && r.dueDate > now
+    );
 
-    return sendBulkPushNotifications(notifications);
+    const webUsers = await getUsersWithWebPush(
+      Array.from(new Set(eligible.map((r) => r.userId)))
+    );
+
+    const expoNotifications: { token: string; title: string; body: string; data?: Record<string, unknown> }[] = [];
+    const webMessages: WebPushMessage[] = [];
+
+    for (const r of eligible) {
+      const title = "Task Due Soon";
+      const body = `"${r.taskTitle}" is due in less than 2 hours.`;
+      const payload = { type: "due_soon", taskId: r.taskId, userId: r.userId };
+
+      if (r.pushToken) {
+        expoNotifications.push({ token: r.pushToken, title, body, data: payload });
+      }
+      if (webUsers.has(r.userId)) {
+        webMessages.push({ userId: r.userId, title, body, data: payload });
+      }
+    }
+
+    const result = await sendBulkPushNotifications(expoNotifications);
+    result.sent += await sendWebPushNotifications(webMessages);
+    return result;
   } catch (error) {
     console.error("Failed to send due-soon notifications:", error);
     return { sent: 0, failed: 0, errors: [(error as Error).message] };
@@ -258,14 +294,23 @@ export async function sendDelegationNotification(
       .where(eq(users.id, delegatedToUserId))
       .limit(1);
 
-    if (!user?.pushToken || !user.notificationsEnabled) return false;
+    if (!user || !user.notificationsEnabled) return false;
 
-    return sendPushNotification(
-      user.pushToken,
-      "New Task Assigned",
-      `${delegatorName} assigned you: "${taskTitle}"`,
-      { type: "delegation", taskTitle }
-    );
+    const title = "New Task Assigned";
+    const body = `${delegatorName} assigned you: "${taskTitle}"`;
+    const payload = { type: "delegation", taskTitle };
+
+    let delivered = false;
+
+    if (user.pushToken) {
+      delivered = await sendPushNotification(user.pushToken, title, body, payload);
+    }
+
+    const webSent = await sendWebPushNotifications([
+      { userId: delegatedToUserId, title, body, data: payload },
+    ]);
+
+    return delivered || webSent > 0;
   } catch (error) {
     console.error("Failed to send delegation notification:", error);
     return false;
