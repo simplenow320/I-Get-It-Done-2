@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "@/lib/api-url";
+import { clearAllNotificationsOnLogout } from "@/lib/notifications";
 
 interface AuthUser {
   id: string;
@@ -46,6 +47,7 @@ export async function handleExpiredSession(): Promise<void> {
   try {
     await AsyncStorage.multiRemove([AUTH_STORAGE_KEY, AUTH_TOKEN_KEY]);
   } catch {}
+  await clearAllNotificationsOnLogout();
   if (forceLogoutCallback) {
     await forceLogoutCallback();
   }
@@ -202,6 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       await AsyncStorage.multiRemove([AUTH_STORAGE_KEY, AUTH_TOKEN_KEY]);
       cachedToken = null;
+      await clearAllNotificationsOnLogout();
       setUser(null);
     } catch (error) {
       console.error("Logout error:", error);

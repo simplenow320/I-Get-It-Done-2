@@ -334,6 +334,29 @@ export async function cancelAllNotifications(): Promise<void> {
   }
 }
 
+// Called on logout/account switch: cancels every scheduled notification,
+// dismisses anything already in the tray, and clears the last tap response
+// so a stale nudge can't act on another account's task.
+export async function clearAllNotificationsOnLogout(): Promise<void> {
+  if (Platform.OS === "web") return;
+
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch (error) {
+    console.log("Failed to cancel scheduled notifications on logout:", error);
+  }
+  try {
+    await Notifications.dismissAllNotificationsAsync();
+  } catch (error) {
+    console.log("Failed to dismiss delivered notifications on logout:", error);
+  }
+  try {
+    await Notifications.clearLastNotificationResponseAsync();
+  } catch (error) {
+    console.log("Failed to clear last notification response on logout:", error);
+  }
+}
+
 export function addNotificationReceivedListener(
   callback: (notification: Notifications.Notification) => void
 ): Notifications.EventSubscription {
