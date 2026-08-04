@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, View, Pressable, Switch, ActivityIndicator } from "react-native";
+import { StyleSheet, View, Pressable, Switch, ActivityIndicator, Alert, Platform, Linking } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +25,14 @@ const INTENSITY_OPTIONS: { value: Intensity; label: string; description: string 
 const MORNING_HOURS = [6, 7, 8, 9, 10];
 const EVENING_HOURS = [17, 18, 19, 20, 21];
 
+function showMessage(title: string, message: string) {
+  if (Platform.OS === "web") {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
 function formatHour(h: number): string {
   if (h === 12) return "12pm";
   return h < 12 ? `${h}am` : `${h - 12}pm`;
@@ -48,6 +56,31 @@ export default function NotificationSettingsScreen() {
   const [streakSaver, setStreakSaver] = useState(true);
   const [morningHour, setMorningHour] = useState(8);
   const [eveningHour, setEveningHour] = useState(19);
+
+  const [deliveryActive, setDeliveryActive] = useState<boolean | null>(null);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiRequest("GET", `/api/users/${user.id}/notification-settings`);
+        const data = await res.json();
+        if (cancelled) return;
+        const active =
+          Platform.OS === "web"
+            ? !!data.hasWebPushSubscription
+            : !!data.hasPushToken && !!data.notificationsEnabled;
+        setDeliveryActive(active);
+      } catch {
+        if (!cancelled) setDeliveryActive(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -75,6 +108,43 @@ export default function NotificationSettingsScreen() {
       cancelled = true;
     };
   }, [user?.id]);
+
+  const handleSendTest = async () => {
+    setIsSendingTest(true);
+    try {
+      await apiRequest("POST", "/api/notifications/test");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showMessage("Test sent", "A test notification is on its way. You should see it in a moment.");
+    } catch (err) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const message = err instanceof Error ? err.message : "";
+      if (message.includes("No push token")) {
+        showEnablePrompt();
+      } else {
+        showMessage("Couldn't send test", "Something went wrong sending the test notification. Please try again.");
+      }
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
+  const showEnablePrompt = () => {
+    if (Platform.OS === "web") {
+      showMessage(
+        "Notifications not set up",
+        "Enable browser notifications from your profile to receive reminders on this device."
+      );
+      return;
+    }
+    Alert.alert(
+      "Notifications not set up",
+      "This device isn't registered for push notifications. Open Settings and allow notifications for this app, then return here.",
+      [
+        { text: "Not now", style: "cancel" },
+        { text: "Open Settings", onPress: () => Linking.openSettings() },
+      ]
+    );
+  };
 
   const handleSave = async () => {
     if (!user?.id) return;
@@ -174,6 +244,70 @@ export default function NotificationSettingsScreen() {
             Couldn't load saved settings — showing defaults.
           </ThemedText>
         ) : null}
+
+        <View style={styles.section}>
+          <ThemedText type="h4">Delivery status</ThemedText>
+          <View style={[styles.toggleRow, { backgroundColor: theme.backgroundDefault }]}>
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: deliveryActive ? "#34C759" : "#FF3B30" },
+              ]}
+            />
+            <View style={styles.rowContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                {deliveryActive ? "Notifications active" : "Not receiving notifications"}
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                {deliveryActive
+                  ? "This device is registered for push notifications"
+                  : "This device isn't set up to receive notifications"}
+              </ThemedText>
+            </View>
+          </View>
+          {deliveryActive === false ? (
+            <Pressable
+              onPress={showEnablePrompt}
+              style={[styles.toggleRow, { backgroundColor: theme.backgroundDefault }]}
+            >
+              <View style={[styles.rowIcon, { backgroundColor: "#FF3B30" }]}>
+                <Feather name="alert-circle" size={18} color="#FFFFFF" />
+              </View>
+              <View style={styles.rowContent}>
+                <ThemedText type="body" style={{ fontWeight: "500" }}>
+                  Fix notifications
+                </ThemedText>
+                <ThemedText type="small" secondary>
+                  {Platform.OS === "web"
+                    ? "Enable browser notifications to get reminders"
+                    : "Re-enable notifications in Settings"}
+                </ThemedText>
+              </View>
+              <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={handleSendTest}
+            disabled={isSendingTest}
+            style={[
+              styles.toggleRow,
+              { backgroundColor: theme.backgroundDefault, opacity: isSendingTest ? 0.6 : 1 },
+            ]}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: LaneColors.soon.primary }]}>
+              <Feather name="send" size={18} color="#FFFFFF" />
+            </View>
+            <View style={styles.rowContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                {isSendingTest ? "Sending..." : "Send test notification"}
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                Check that notifications reach this device
+              </ThemedText>
+            </View>
+            {isSendingTest ? <ActivityIndicator size="small" color={theme.text} /> : null}
+          </Pressable>
+        </View>
 
         <View style={styles.section}>
           <ThemedText type="h4">Reminder intensity</ThemedText>
@@ -304,6 +438,12 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     gap: Spacing.sm,
+  },
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginHorizontal: Spacing.sm,
   },
   rowIcon: {
     width: 34,
