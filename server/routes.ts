@@ -6,13 +6,13 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers, voiceUsage } from "@shared/schema";
 import { generateToken, requireAuth, optionalAuth, validateUserAccess, type AuthenticatedRequest } from "./authMiddleware";
-import { sendPushNotification, sendDelegationNotification, startNotificationScheduler } from "./pushNotifications";
 import { getVapidKeys, saveWebPushSubscription, deleteWebPushSubscription, sendWebPushNotifications } from "./webPush";
 import { webPushSubscriptions } from "@shared/schema";
+import { sendPushNotification, sendDelegationNotification, startNotificationScheduler, sendBulkPushNotifications } from "./pushNotifications";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
 const FREE_TASK_LIMIT = 10;
-import { eq, and, inArray, or, sql } from "drizzle-orm";
+import { eq, and, inArray, or, sql, isNull, isNotNull } from "drizzle-orm";
 
 const upload = multer({ 
   dest: "/tmp/audio-uploads/",
@@ -809,7 +809,6 @@ Examples:
       const isTrialing = subscriptionStatus === "trialing" && trialEndsAt && new Date(trialEndsAt) > new Date();
       const isPro = subscriptionStatus === "active" || subscriptionStatus === "pro" || isTrialing;
 
-      
       
       const taskValues: any = {
         userId,
@@ -2045,6 +2044,91 @@ Examples:
       res.status(500).json({ error: "Failed to send test notification" });
     }
   });
+
+  // ---- Dev-only: fire each nudge type on demand for the authenticated user ----
+  if (process.env.NODE_ENV !== "production") {
+    // POST /api/notifications/test/escalating
+    // Sends an escalating nudge for the caller's first incomplete task (with action buttons).
+    app.post("/api/notifications/test/escalating", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+      try {
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        const [user] = await db.select({ pushToken: users.pushToken }).from(users).where(eq(users.id, req.user.userId)).limit(1);
+        if (!user?.pushToken) return res.status(400).json({ error: "No push token registered" });
+        const [task] = await db.select({ id: tasks.id, title: tasks.title })
+          .from(tasks)
+          .where(and(eq(tasks.userId, req.user.userId), isNull(tasks.completedAt)))
+          .limit(1);
+        const taskId = task?.id ?? "test-task";
+        const taskTitle = task?.title ?? "Your first task";
+        const t = taskTitle.length > 60 ? taskTitle.slice(0, 57) + "..." : taskTitle;
+        const result = await sendBulkPushNotifications([{
+          token: user.pushToken,
+          title: "Still on your plate",
+          body: `"${t}" hasn't moved. Want to knock it out right now? Tap to start a focus timer.`,
+          data: { type: "escalating_nudge", taskId },
+          categoryId: "task_nudge",
+        }]);
+        res.json({ success: result.sent > 0, taskId, taskTitle });
+      } catch (err) {
+        console.error("Dev escalating nudge error:", err);
+        res.status(500).json({ error: "Failed to send test escalating nudge" });
+      }
+    });
+
+    // POST /api/notifications/test/morning-kickoff
+    // Sends a morning kickoff notification for the caller.
+    app.post("/api/notifications/test/morning-kickoff", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+      try {
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        const [user] = await db.select({ pushToken: users.pushToken }).from(users).where(eq(users.id, req.user.userId)).limit(1);
+        if (!user?.pushToken) return res.status(400).json({ error: "No push token registered" });
+        const open = await db.select({ id: tasks.id, title: tasks.title })
+          .from(tasks)
+          .where(and(eq(tasks.userId, req.user.userId), isNull(tasks.completedAt)));
+        const body = open.length === 0
+          ? "Nothing on your list. Add something worth doing today."
+          : open.length === 1
+            ? `One thing on your list: "${open[0].title}". Do it early, own the day.`
+            : `${open.length} tasks are waiting. Don't scan the list — pick ONE and start. "${open[0].title}"?`;
+        const result = await sendBulkPushNotifications([{
+          token: user.pushToken,
+          title: "Good morning — what's your ONE thing?",
+          body,
+          data: { type: "morning_kickoff" },
+        }]);
+        res.json({ success: result.sent > 0, openTaskCount: open.length });
+      } catch (err) {
+        console.error("Dev morning kickoff error:", err);
+        res.status(500).json({ error: "Failed to send test morning kickoff" });
+      }
+    });
+
+    // POST /api/notifications/test/streak-saver
+    // Sends a streak saver notification for the caller (with action buttons).
+    app.post("/api/notifications/test/streak-saver", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+      try {
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        const [user] = await db.select({ pushToken: users.pushToken }).from(users).where(eq(users.id, req.user.userId)).limit(1);
+        if (!user?.pushToken) return res.status(400).json({ error: "No push token registered" });
+        const [stats] = await db.select({ currentStreak: userStats.currentStreak })
+          .from(userStats)
+          .where(eq(userStats.userId, req.user.userId))
+          .limit(1);
+        const streak = stats?.currentStreak ?? 3;
+        const result = await sendBulkPushNotifications([{
+          token: user.pushToken,
+          title: `Your ${streak}-day streak dies at midnight`,
+          body: "You're ONE task away from saving it. Pick the smallest thing on your list and go.",
+          data: { type: "streak_saver", streak },
+          categoryId: "task_nudge",
+        }]);
+        res.json({ success: result.sent > 0, streak });
+      } catch (err) {
+        console.error("Dev streak saver error:", err);
+        res.status(500).json({ error: "Failed to send test streak saver" });
+      }
+    });
+  }
 
   startNotificationScheduler();
 
