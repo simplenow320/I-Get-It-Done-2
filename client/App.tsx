@@ -23,6 +23,7 @@ import {
   registerWebPushIfNeeded,
   setupNotificationCategories,
   addNotificationResponseListener,
+  getInitialNotificationResponse,
   ACTION_MARK_DONE,
   ACTION_START_FOCUS,
   ACTION_SNOOZE,
@@ -43,10 +44,21 @@ function AppContent() {
     return () => subscription.remove();
   }, []);
 
+  const handledResponseIds = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     setupNotificationCategories();
 
-    const subscription = addNotificationResponseListener(async (response) => {
+    const handleResponse = async (response: {
+      notification: { request: { identifier: string; content: { data: unknown } } };
+      actionIdentifier: string;
+    }) => {
+      // Dedupe: on iOS cold start the same tap can surface both via
+      // getLastNotificationResponseAsync and the response listener.
+      const responseKey = `${response.notification.request.identifier}:${response.actionIdentifier}`;
+      if (handledResponseIds.current.has(responseKey)) return;
+      handledResponseIds.current.add(responseKey);
+
       const data = response.notification.request.content.data as {
         taskId?: string;
         type?: string;
@@ -76,6 +88,7 @@ function AppContent() {
 
       if (action === ACTION_START_FOCUS && data?.taskId) {
         // App is foregrounded by this action; navigate once ready.
+        let attempts = 0;
         const target = () => {
           if (navigationRef.isReady()) {
             try {
@@ -86,13 +99,28 @@ function AppContent() {
             } catch (error) {
               console.log("Focus navigation failed:", error);
             }
-          } else {
+          } else if (attempts < 40) {
+            attempts += 1;
             setTimeout(target, 500);
+          } else {
+            console.log("Focus navigation gave up: navigation never became ready");
           }
         };
         target();
       }
-    });
+    };
+
+    const subscription = addNotificationResponseListener(handleResponse);
+
+    // Cold-start path: when the app was fully quit, the tap that launched it
+    // is delivered *before* the listener above exists. Fetch it explicitly.
+    getInitialNotificationResponse()
+      .then((response) => {
+        if (response) handleResponse(response);
+      })
+      .catch((error) => {
+        console.log("Failed to read initial notification response:", error);
+      });
 
     return () => subscription.remove();
   }, []);

@@ -340,6 +340,25 @@ export function addNotificationReceivedListener(
   return Notifications.addNotificationReceivedListener(callback);
 }
 
+// Returns the notification response that launched the app from a fully-quit
+// state (or null). On iOS cold launches, the tap response is available before
+// any listener can be registered — callers should process it explicitly.
+export async function getInitialNotificationResponse(): Promise<Notifications.NotificationResponse | null> {
+  if (Platform.OS === "web") return null;
+  try {
+    const response = await Notifications.getLastNotificationResponseAsync();
+    if (response) {
+      // Clear it so a later JS reload in the same OS process doesn't
+      // re-handle the same tap (e.g. re-marking a task done).
+      await Notifications.clearLastNotificationResponseAsync().catch(() => {});
+    }
+    return response;
+  } catch (error) {
+    console.log("Failed to get last notification response:", error);
+    return null;
+  }
+}
+
 export function addNotificationResponseListener(
   callback: (response: Notifications.NotificationResponse) => void
 ): Notifications.EventSubscription {
