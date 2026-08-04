@@ -149,6 +149,23 @@ export const userStats = pgTable("user_stats", {
   streakProtectionUsed: boolean("streak_protection_used").default(false),
 });
 
+// Personal connector keys for the MCP endpoint (Claude & other AI chats).
+// Only a SHA-256 hash of the key is stored; the plaintext is shown once at creation.
+export const connectorKeys = pgTable("connector_keys", {
+  id: varchar("id", { length: 255 })
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  userId: varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  keyHash: varchar("key_hash", { length: 64 }).notNull().unique(),
+  keyPrefix: varchar("key_prefix", { length: 16 }).notNull(),
+  label: varchar("label", { length: 100 }),
+  lastUsedAt: timestamp("last_used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const voiceUsage = pgTable("voice_usage", {
   id: varchar("id", { length: 255 })
     .primaryKey()
@@ -195,6 +212,8 @@ export type TeamInvite = typeof teamInvites.$inferSelect;
 export const insertTeamMemberSchema = createInsertSchema(teamMembers);
 export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
 export type TeamMember = typeof teamMembers.$inferSelect;
+
+export type ConnectorKey = typeof connectorKeys.$inferSelect;
 
 export const insertVoiceUsageSchema = createInsertSchema(voiceUsage);
 export type InsertVoiceUsage = z.infer<typeof insertVoiceUsageSchema>;

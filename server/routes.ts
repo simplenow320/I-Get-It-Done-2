@@ -9,6 +9,8 @@ import { generateToken, requireAuth, optionalAuth, validateUserAccess, type Auth
 import { getVapidKeys, saveWebPushSubscription, deleteWebPushSubscription, sendWebPushNotifications } from "./webPush";
 import { webPushSubscriptions } from "@shared/schema";
 import { sendPushNotification, sendDelegationNotification, startNotificationScheduler, sendBulkPushNotifications } from "./pushNotifications";
+import { applyCompletionStats } from "./taskActions";
+import { registerMcpRoutes, registerConnectorKeyRoutes } from "./mcp";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
 const FREE_TASK_LIMIT = 10;
@@ -20,6 +22,8 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerMcpRoutes(app);
+  registerConnectorKeyRoutes(app);
   
   app.get("/api/debug/voice-check", async (req: Request, res: Response) => {
     const hasDeepgram = !!process.env.DEEPGRAM_API_KEY;
@@ -866,57 +870,7 @@ Examples:
       }
       
       if (isBeingCompleted && existingTask[0].userId) {
-        const userId = existingTask[0].userId;
-        const existingStats = await db.select().from(userStats).where(eq(userStats.userId, userId));
-        
-        const today = new Date().toISOString().split('T')[0];
-        
-        if (existingStats.length > 0) {
-          const stats = existingStats[0];
-          const lastActive = stats.lastActiveDate ? new Date(stats.lastActiveDate).toISOString().split('T')[0] : null;
-          
-          let newStreak = stats.currentStreak || 0;
-          if (lastActive !== today) {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split('T')[0];
-            
-            if (lastActive === yesterdayStr) {
-              newStreak = (stats.currentStreak || 0) + 1;
-            } else {
-              newStreak = 1;
-            }
-          }
-          
-          const newPoints = (stats.points || 0) + 10;
-          const newTotalCompleted = (stats.totalTasksCompleted || 0) + 1;
-          const newLongestStreak = Math.max(stats.longestStreak || 0, newStreak);
-          
-          let newLevel = 'starter';
-          if (newPoints >= 1000) newLevel = 'master';
-          else if (newPoints >= 500) newLevel = 'expert';
-          else if (newPoints >= 200) newLevel = 'focused';
-          else if (newPoints >= 100) newLevel = 'achiever';
-          
-          await db.update(userStats).set({
-            points: newPoints,
-            totalTasksCompleted: newTotalCompleted,
-            currentStreak: newStreak,
-            longestStreak: newLongestStreak,
-            level: newLevel,
-            lastActiveDate: today,
-          }).where(eq(userStats.userId, userId));
-        } else {
-          await db.insert(userStats).values({
-            userId,
-            points: 10,
-            totalTasksCompleted: 1,
-            currentStreak: 1,
-            longestStreak: 1,
-            level: 'starter',
-            lastActiveDate: today,
-          });
-        }
+        await applyCompletionStats(existingTask[0].userId);
       }
       
       res.json({ task: result[0] });

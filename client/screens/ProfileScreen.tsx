@@ -84,6 +84,11 @@ export default function ProfileScreen() {
     navigation.navigate("NotificationSettings");
   };
 
+  const handleConnectorSettings = () => {
+    Haptics.selectionAsync();
+    navigation.navigate("ConnectorSettings");
+  };
+
   const handleLaneTimings = () => {
     Haptics.selectionAsync();
     navigation.navigate("LaneTimingsSettings");
@@ -527,6 +532,27 @@ export default function ProfileScreen() {
               </ThemedText>
               <ThemedText type="small" secondary>
                 Reminders, intensity, daily check-ins
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          </Pressable>
+          <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+          <Pressable
+            onPress={handleConnectorSettings}
+            style={({ pressed }) => [
+              styles.menuItemInGroup,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: LaneColors.soon.primary }]}>
+              <Feather name="message-circle" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.menuContent}>
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                AI Chat Connector
+              </ThemedText>
+              <ThemedText type="small" secondary>
+                Manage tasks from Claude & AI chats
               </ThemedText>
             </View>
             <Feather name="chevron-right" size={20} color={theme.textSecondary} />
