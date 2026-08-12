@@ -128,7 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("[VOICE] Sending audio to Deepgram, size:", audioBuffer.length, "bytes, mimetype:", req.file.mimetype);
 
-      const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&detect_language=true", {
+      const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&detect_language=true", {
         method: "POST",
         headers: {
           "Authorization": `Token ${apiKey}`,
@@ -227,7 +227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "gpt-4.1-mini",
           messages: [
             {
               role: "system",
