@@ -7,6 +7,7 @@ import { db } from "./db";
 import { connectorKeys, tasks, subtasks, users, userStats } from "@shared/schema";
 import { and, eq, isNull, isNotNull, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "./authMiddleware";
+import { authenticateOAuthToken } from "./oauth";
 import { applyCompletionStats } from "./taskActions";
 
 // ---------- Connector key helpers ----------
@@ -21,11 +22,12 @@ function generateKey(): string {
   return KEY_PREFIX + crypto.randomBytes(24).toString("base64url");
 }
 
-async function authenticateConnectorKey(req: Request): Promise<string | null> {
+async function authenticateConnectorRequest(req: Request): Promise<string | null> {
   const header = req.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) return null;
   const key = header.substring(7).trim();
-  if (!key.startsWith(KEY_PREFIX)) return null;
+  // OAuth access tokens (issued via the MCP OAuth flow) are also accepted.
+  if (!key.startsWith(KEY_PREFIX)) return authenticateOAuthToken(key);
 
   const rows = await db
     .select()
@@ -280,14 +282,22 @@ export function registerMcpRoutes(app: Express) {
   app.post("/mcp", async (req: Request, res: Response) => {
     let userId: string | null = null;
     try {
-      userId = await authenticateConnectorKey(req);
+      userId = await authenticateConnectorRequest(req);
     } catch (err) {
       console.error("MCP auth error:", err);
     }
     if (!userId) {
+      // Point OAuth-capable clients (like Claude) at the protected resource
+      // metadata so they can start the authorization flow automatically.
+      const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0] || req.protocol || "https";
+      const host = (req.headers["x-forwarded-host"] as string)?.split(",")[0] || req.headers.host;
+      res.set(
+        "WWW-Authenticate",
+        `Bearer resource_metadata="${proto}://${host}/.well-known/oauth-protected-resource"`
+      );
       return res.status(401).json({
         jsonrpc: "2.0",
-        error: { code: -32001, message: "Unauthorized: provide a valid connector key as a Bearer token" },
+        error: { code: -32001, message: "Unauthorized: sign in via OAuth or provide a valid connector key as a Bearer token" },
         id: null,
       });
     }

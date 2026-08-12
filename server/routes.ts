@@ -11,6 +11,7 @@ import { webPushSubscriptions } from "@shared/schema";
 import { sendPushNotification, sendDelegationNotification, startNotificationScheduler, sendBulkPushNotifications } from "./pushNotifications";
 import { applyCompletionStats } from "./taskActions";
 import { registerMcpRoutes, registerConnectorKeyRoutes } from "./mcp";
+import { registerOAuthRoutes } from "./oauth";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
 const FREE_TASK_LIMIT = 10;
@@ -22,6 +23,7 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerOAuthRoutes(app);
   registerMcpRoutes(app);
   registerConnectorKeyRoutes(app);
   

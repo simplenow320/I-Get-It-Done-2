@@ -54,6 +54,49 @@ export const vapidConfig = pgTable("vapid_config", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ---------- MCP OAuth (dynamic client registration + PKCE) ----------
+
+export const oauthClients = pgTable("oauth_clients", {
+  id: varchar("id", { length: 255 })
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  clientName: varchar("client_name", { length: 255 }),
+  redirectUris: text("redirect_uris").notNull(), // JSON array of allowed redirect URIs
+  tokenEndpointAuthMethod: varchar("token_endpoint_auth_method", { length: 50 }).default("none"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const oauthCodes = pgTable("oauth_codes", {
+  code: varchar("code", { length: 255 }).primaryKey(),
+  clientId: varchar("client_id", { length: 255 }).notNull(),
+  userId: varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: varchar("code_challenge", { length: 255 }),
+  codeChallengeMethod: varchar("code_challenge_method", { length: 10 }),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const oauthTokens = pgTable("oauth_tokens", {
+  id: varchar("id", { length: 255 })
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  clientId: varchar("client_id", { length: 255 }).notNull(),
+  userId: varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accessTokenHash: varchar("access_token_hash", { length: 64 }).notNull().unique(),
+  refreshTokenHash: varchar("refresh_token_hash", { length: 64 }).unique(),
+  accessExpiresAt: timestamp("access_expires_at").notNull(),
+  refreshExpiresAt: timestamp("refresh_expires_at"),
+  revokedAt: timestamp("revoked_at"),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const tasks = pgTable("tasks", {
   id: varchar("id", { length: 255 })
     .primaryKey()

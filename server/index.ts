@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
+import { runMigrations } from "./migrate";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -289,6 +290,10 @@ function setupErrorHandler(app: express.Application) {
   validateEnvironment();
   setupCors(app);
 
+  // Behind Replit's proxy: trust exactly one hop so req.ip is the real
+  // client address (needed for meaningful per-IP rate limiting).
+  app.set("trust proxy", 1);
+
   setupBodyParsing(app);
   app.use(cookieParser());
   
@@ -313,6 +318,8 @@ function setupErrorHandler(app: express.Application) {
   app.use("/api/errors/report", errorReportLimiter);
   
   setupRequestLogging(app);
+
+  await runMigrations();
 
   const server = await registerRoutes(app);
 

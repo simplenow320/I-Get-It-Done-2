@@ -137,7 +137,45 @@ export default function ConnectorSettingsScreen() {
       </View>
 
       <ThemedText type="h4" style={styles.sectionTitle}>
-        1. Your connector key
+        Connect in one click
+      </ThemedText>
+      <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
+        <ThemedText type="small" secondary style={styles.paragraph}>
+          On claude.ai (web) or in Claude Desktop:
+        </ThemedText>
+        <ThemedText type="small" secondary style={styles.step}>
+          1. Open Settings → Connectors → Add custom connector
+        </ThemedText>
+        <ThemedText type="small" secondary style={styles.step}>
+          2. Name it "I Get It Done" and paste this URL:
+        </ThemedText>
+        <View style={[styles.keyRow, { borderColor: theme.border }]}>
+          <ThemedText type="small" style={styles.mono}>
+            {MCP_URL}
+          </ThemedText>
+          <Pressable onPress={() => copyToClipboard(MCP_URL, "url")} hitSlop={8}>
+            <Feather
+              name={copied === "url" ? "check" : "copy"}
+              size={18}
+              color={copied === "url" ? LaneColors.later.primary : theme.textSecondary}
+            />
+          </Pressable>
+        </View>
+        <ThemedText type="small" secondary style={styles.step}>
+          3. Click Connect — Claude opens an I Get It Done sign-in page. Log in, allow access, and
+          you're done. No keys to copy.
+        </ThemedText>
+        <ThemedText type="small" secondary style={styles.step}>
+          4. Try it: "Add 'buy milk' to my task list" or "What should I do right now?"
+        </ThemedText>
+      </View>
+
+      <ThemedText type="h4" style={styles.sectionTitle}>
+        Advanced: connector keys
+      </ThemedText>
+      <ThemedText type="small" secondary style={[styles.paragraph, { marginBottom: Spacing.md }]}>
+        Prefer a manual key (for other AI chats or scripts)? Generate one below and paste it as a
+        Bearer token in the connector's authentication settings. Existing keys keep working.
       </ThemedText>
       <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
         {isLoading ? (
@@ -198,40 +236,6 @@ export default function ConnectorSettingsScreen() {
             </Button>
           </>
         )}
-      </View>
-
-      <ThemedText type="h4" style={styles.sectionTitle}>
-        2. Add the connector in Claude
-      </ThemedText>
-      <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
-        <ThemedText type="small" secondary style={styles.paragraph}>
-          On claude.ai (web) or in Claude Desktop:
-        </ThemedText>
-        <ThemedText type="small" secondary style={styles.step}>
-          1. Open Settings → Connectors → Add custom connector
-        </ThemedText>
-        <ThemedText type="small" secondary style={styles.step}>
-          2. Name it "I Get It Done" and paste this URL:
-        </ThemedText>
-        <View style={[styles.keyRow, { borderColor: theme.border }]}>
-          <ThemedText type="small" style={styles.mono}>
-            {MCP_URL}
-          </ThemedText>
-          <Pressable onPress={() => copyToClipboard(MCP_URL, "url")} hitSlop={8}>
-            <Feather
-              name={copied === "url" ? "check" : "copy"}
-              size={18}
-              color={copied === "url" ? LaneColors.later.primary : theme.textSecondary}
-            />
-          </Pressable>
-        </View>
-        <ThemedText type="small" secondary style={styles.step}>
-          3. Under advanced/authentication, choose Bearer token (API key) and paste your connector
-          key
-        </ThemedText>
-        <ThemedText type="small" secondary style={styles.step}>
-          4. Try it: "Add 'buy milk' to my task list" or "What should I do right now?"
-        </ThemedText>
       </View>
 
       <ThemedText type="small" secondary style={styles.footerNote}>
