@@ -319,8 +319,6 @@ function setupErrorHandler(app: express.Application) {
   
   setupRequestLogging(app);
 
-  await runMigrations();
-
   const server = await registerRoutes(app);
 
   configureExpoAndLanding(app);
@@ -336,6 +334,11 @@ function setupErrorHandler(app: express.Application) {
     },
     () => {
       log(`express server serving on port ${port}`);
+      // Run migrations after the server is listening so deployment health
+      // checks pass even if the database is slow to respond at startup.
+      runMigrations().catch((err) => {
+        console.error("[MIGRATIONS] Startup migration failed:", err);
+      });
     },
   );
 })();
