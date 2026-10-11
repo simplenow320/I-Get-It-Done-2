@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { StyleSheet, View, Pressable, FlatList, Alert, Modal, TextInput } from "react-native";
+import React, { useCallback, useState } from "react";
+import { StyleSheet, View, Pressable, FlatList, Modal, TextInput, RefreshControl, ScrollView } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,7 +12,8 @@ import { ThemedView } from "@/components/ThemedView";
 import ProgressRing from "@/components/ProgressRing";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
-import { useTaskStore, DelegationStatus, DelegatedToMeTask } from "@/stores/TaskStore";
+import { useTaskStore, DelegationStatus, DelegatedToMeTask, RawDelegationNote } from "@/stores/TaskStore";
+import { showMessage } from "@/lib/alerts";
 
 const STATUS_OPTIONS: { status: DelegationStatus; label: string; color: string }[] = [
   { status: "assigned", label: "Assigned", color: "#007AFF" },
@@ -26,28 +28,55 @@ export default function DelegatedToMeScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { delegatedToMeTasks, refreshDelegatedToMe, updateDelegatedTaskStatus } = useTaskStore();
+  const { delegatedToMeTasks, refreshDelegatedToMe, updateDelegatedTaskStatus, userId } = useTaskStore();
 
   const [selectedTask, setSelectedTask] = useState<DelegatedToMeTask | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [statusNote, setStatusNote] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    refreshDelegatedToMe();
-  }, [refreshDelegatedToMe]);
+  useFocusEffect(
+    useCallback(() => {
+      refreshDelegatedToMe();
+      const interval = setInterval(refreshDelegatedToMe, 30 * 1000);
+      return () => clearInterval(interval);
+    }, [refreshDelegatedToMe])
+  );
+
+  const handlePullToRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshDelegatedToMe();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleStatusChange = async (status: DelegationStatus) => {
-    if (!selectedTask) return;
+    if (!selectedTask || isSaving) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
-    const success = await updateDelegatedTaskStatus(selectedTask.id, status, statusNote || undefined);
+    setIsSaving(true);
+    const success = await updateDelegatedTaskStatus(selectedTask.id, status, statusNote.trim() || undefined);
+    setIsSaving(false);
     if (success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowStatusModal(false);
       setSelectedTask(null);
       setStatusNote("");
     } else {
-      Alert.alert("Error", "Failed to update status. Please try again.");
+      showMessage("Error", "Failed to update status. Please try again.");
     }
+  };
+
+  const noteAuthorName = (note: RawDelegationNote, task: DelegatedToMeTask) =>
+    note.authorId && note.authorId === userId ? "You" : task.ownerName;
+
+  const noteTime = (value: string) => {
+    const d = new Date(value);
+    const sameDay = d.toDateString() === new Date().toDateString();
+    return sameDay ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : d.toLocaleDateString();
   };
 
   const openStatusModal = (task: DelegatedToMeTask) => {
@@ -116,6 +145,18 @@ export default function DelegatedToMeScreen() {
           </ThemedText>
         ) : null}
 
+        {item.delegationNotes && item.delegationNotes.length > 0 ? (
+          <View style={[styles.latestNote, { backgroundColor: theme.backgroundSecondary }]}>
+            <Feather name="message-circle" size={14} color={theme.textSecondary} />
+            <ThemedText type="small" style={{ flex: 1 }} numberOfLines={2}>
+              <ThemedText type="small" style={{ fontWeight: "600" }}>
+                {noteAuthorName(item.delegationNotes[item.delegationNotes.length - 1], item)}:{" "}
+              </ThemedText>
+              {item.delegationNotes[item.delegationNotes.length - 1].text || "Update"}
+            </ThemedText>
+          </View>
+        ) : null}
+
         <View style={styles.actionRow}>
           <Pressable
             style={[styles.updateButton, { borderColor: currentStatus.color }]}
@@ -137,6 +178,7 @@ export default function DelegatedToMeScreen() {
         data={delegatedToMeTasks}
         keyExtractor={(item) => item.id}
         renderItem={renderTaskItem}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handlePullToRefresh} />}
         contentContainerStyle={[
           styles.content,
           { paddingTop: headerHeight + Spacing.md, paddingBottom: tabBarHeight + Spacing.xl },
@@ -170,6 +212,19 @@ export default function DelegatedToMeScreen() {
               </ThemedText>
             ) : null}
 
+            {selectedTask?.delegationNotes && selectedTask.delegationNotes.length > 0 ? (
+              <ScrollView style={styles.noteThread} contentContainerStyle={{ gap: Spacing.xs }}>
+                {selectedTask.delegationNotes.map((note) => (
+                  <View key={note.id} style={[styles.threadItem, { backgroundColor: theme.backgroundSecondary }]}>
+                    <ThemedText type="caption" secondary>
+                      {noteAuthorName(note, selectedTask)} · {noteTime(note.createdAt)}
+                    </ThemedText>
+                    <ThemedText type="small">{note.text || "Update"}</ThemedText>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
+
             <View style={styles.statusOptions}>
               {STATUS_OPTIONS.map((option) => (
                 <Pressable
@@ -183,6 +238,7 @@ export default function DelegatedToMeScreen() {
                     },
                   ]}
                   onPress={() => handleStatusChange(option.status)}
+                  disabled={isSaving}
                 >
                   <View style={[styles.statusOptionDot, { backgroundColor: option.color }]} />
                   <ThemedText type="body" style={{ color: option.color, fontWeight: "600" }}>
@@ -272,6 +328,21 @@ const styles = StyleSheet.create({
   },
   notes: {
     marginTop: Spacing.xs,
+  },
+  latestNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.xs,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  noteThread: {
+    maxHeight: 160,
+  },
+  threadItem: {
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: 2,
   },
   actionRow: {
     flexDirection: "row",

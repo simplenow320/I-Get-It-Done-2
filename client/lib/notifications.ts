@@ -218,9 +218,26 @@ export async function registerWebPushIfNeeded(userId: string): Promise<void> {
     await apiRequest("POST", `/api/users/${userId}/web-push-subscriptions`, {
       subscription: subscription.toJSON(),
       timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+      // Refresh only: don't flip the account's notifications back on.
+      resync: true,
     });
   } catch (error) {
     console.log("Web push re-registration skipped:", error);
+  }
+}
+
+// On sign-out, stop this device from receiving the account's reminders, so the
+// next person who signs in here never sees the previous user's task titles.
+// Must run while the auth token is still stored.
+export async function detachDeviceFromAccount(userId: string): Promise<void> {
+  try {
+    if (Platform.OS === "web") {
+      await disableWebPush(userId);
+    } else {
+      await apiRequest("PUT", `/api/users/${userId}/push-token`, { pushToken: null });
+    }
+  } catch (error) {
+    console.log("Failed to detach device on logout:", error);
   }
 }
 

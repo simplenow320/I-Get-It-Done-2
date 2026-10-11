@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { StyleSheet, View, Pressable, FlatList, TextInput, Modal, Alert, Share, Clipboard, Platform } from "react-native";
+import React, { useState, useCallback } from "react";
+import { StyleSheet, View, Pressable, FlatList, TextInput, Modal, Share, RefreshControl } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
@@ -15,6 +16,13 @@ import { useTheme } from "@/hooks/useTheme";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Contact, DelegationStatus, TeamMember, TeamInvite } from "@/stores/TaskStore";
+import { showMessage, confirmAction } from "@/lib/alerts";
+
+const TEAM_REFRESH_INTERVAL_MS = 30 * 1000;
+
+function inviteShareMessage(code: string): string {
+  return `Join my team on I GET IT DONE!\n\nYour invite code: ${code}\n\nHow to join:\n1. Download the app: https://apps.apple.com/app/id6756545884\n2. Create your account\n3. Go to Team Hub and tap "Join Team"\n4. Enter the code above\n\nOnce connected, we can share tasks with each other!`;
+}
 
 const STATUS_LABELS: Record<DelegationStatus, string> = {
   assigned: "Assigned",
@@ -44,7 +52,8 @@ export default function TeamHubScreen() {
   const { 
     contacts, addContact, deleteContact, getDelegatedTasks, getDelegatedTasksByContact,
     teamMembers, teamInvites, createTeamInvite, acceptTeamInvite, declineTeamInvite,
-    cancelSentInvite, resendInvite, regenerateInvite, removeTeamMember, refreshTeamData, delegatedToMeTasks
+    cancelSentInvite, resendInvite, regenerateInvite, removeTeamMember, refreshTeamData, delegatedToMeTasks,
+    refreshDelegatedToMe, refreshTasks
   } = useTaskStore();
 
   const [activeTab, setActiveTab] = useState<TabType>("team");
@@ -58,10 +67,40 @@ export default function TeamHubScreen() {
   const [generatedInvite, setGeneratedInvite] = useState<TeamInvite | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [sentInvitesExpanded, setSentInvitesExpanded] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    refreshTeamData();
-  }, [refreshTeamData]);
+  // Teammates change things from their own phones: pull fresh state every time
+  // this tab comes into view (invites, links, hand-offs and their statuses).
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refreshTeamData(), refreshDelegatedToMe(), refreshTasks()]);
+  }, [refreshTeamData, refreshDelegatedToMe, refreshTasks]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshAll();
+      // Keep it live while the tab is open; teammates update from their phones.
+      const interval = setInterval(refreshAll, TEAM_REFRESH_INTERVAL_MS);
+      return () => clearInterval(interval);
+    }, [refreshAll])
+  );
+
+  const handlePullToRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshAll();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await Clipboard.setStringAsync(text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   if (!hasProFeatures) {
     return (
@@ -88,70 +127,59 @@ export default function TeamHubScreen() {
       ? `${contact.name} has ${taskCount} delegated task${taskCount > 1 ? "s" : ""}. Removing them will unassign these tasks.`
       : `Remove ${contact.name} from your team?`;
     
-    Alert.alert("Remove Team Member", message, [
-      { text: "Cancel", style: "cancel" },
-      { 
-        text: "Remove", 
-        style: "destructive", 
-        onPress: () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          deleteContact(contact.id);
-        }
-      },
-    ]);
+    confirmAction("Remove Contact", message, "Remove", () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      deleteContact(contact.id);
+    }, { destructive: true });
   };
 
   const handleRemoveTeamMember = (member: TeamMember) => {
-    Alert.alert(
+    confirmAction(
       "Remove Team Member",
-      `Remove ${member.nickname} from your team? They will no longer be able to see tasks you delegate to them.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            await removeTeamMember(member.id);
-          },
-        },
-      ]
+      `Remove ${member.nickname || member.teammateName} from your team? Open hand-offs between you will be unassigned.`,
+      "Remove",
+      async () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        const removed = await removeTeamMember(member.id);
+        if (removed) {
+          refreshAll();
+        } else {
+          showMessage("Error", "Couldn't remove this team member. Please try again.");
+        }
+      },
+      { destructive: true }
     );
   };
 
   const handleCreateInvite = async () => {
     setIsLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const invite = await createTeamInvite(inviteEmail || undefined);
+    const { invite, error } = await createTeamInvite(inviteEmail || undefined);
     setIsLoading(false);
     if (invite) {
       setGeneratedInvite(invite);
       setInviteEmail("");
     } else {
-      Alert.alert("Error", "Failed to create invite. Please try again.");
+      showMessage("Couldn't create invite", error || "Please try again.");
     }
   };
 
   const handleShareInvite = async () => {
     if (!generatedInvite) return;
     try {
-      await Share.share({
-        message: `Join my team on I GET IT DONE!\n\nYour invite code: ${generatedInvite.inviteCode}\n\nHow to join:\n1. Download the app: https://apps.apple.com/app/id6756545884\n2. Create your account\n3. Go to Team Hub and tap "Join Team"\n4. Enter the code above\n\nOnce connected, we can share tasks with each other!`,
-      });
-    } catch (error) {
-      console.error("Share error:", error);
+      await Share.share({ message: inviteShareMessage(generatedInvite.inviteCode) });
+    } catch {
+      // Browsers without the share sheet: fall back to copying the message.
+      const copied = await copyToClipboard(inviteShareMessage(generatedInvite.inviteCode));
+      showMessage(copied ? "Invite copied" : "Invite code", copied ? "Paste it into a text or email." : generatedInvite.inviteCode);
     }
   };
 
-  const handleCopyCode = () => {
+  const handleCopyCode = async () => {
     if (!generatedInvite) return;
-    if (Platform.OS === "web") {
-      navigator.clipboard?.writeText(generatedInvite.inviteCode);
-    } else {
-      Clipboard.setString(generatedInvite.inviteCode);
-    }
+    const copied = await copyToClipboard(generatedInvite.inviteCode);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("Copied!", "Invite code copied to clipboard");
+    showMessage(copied ? "Copied!" : "Invite code", copied ? "Invite code copied to clipboard" : generatedInvite.inviteCode);
   };
 
   const handleAcceptInvite = async (inviteCode: string) => {
@@ -160,32 +188,30 @@ export default function TeamHubScreen() {
     const result = await acceptTeamInvite(inviteCode);
     setIsLoading(false);
     if (result.success) {
-      Alert.alert("Success!", "You've joined the team.");
+      refreshAll();
+      showMessage("Success!", "You've joined the team.");
     } else {
-      Alert.alert("Error", result.error || "Failed to join team.");
+      showMessage("Couldn't join", result.error || "Failed to join team.");
     }
   };
 
   const handleDeclineInvite = async (inviteId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await declineTeamInvite(inviteId);
+    const declined = await declineTeamInvite(inviteId);
+    if (!declined) showMessage("Error", "Couldn't decline this invite. Please try again.");
   };
 
   const handleCancelSentInvite = (inviteId: string, email: string | undefined) => {
-    Alert.alert(
+    confirmAction(
       "Cancel Invite",
       `Cancel the invite to ${email || "this person"}?`,
-      [
-        { text: "Keep", style: "cancel" },
-        {
-          text: "Cancel Invite",
-          style: "destructive",
-          onPress: async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            await cancelSentInvite(inviteId);
-          },
-        },
-      ]
+      "Cancel Invite",
+      async () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        const cancelled = await cancelSentInvite(inviteId);
+        if (!cancelled) showMessage("Error", "Couldn't cancel this invite. Please try again.");
+      },
+      { destructive: true, cancelText: "Keep" }
     );
   };
 
@@ -194,17 +220,13 @@ export default function TeamHubScreen() {
     const invite = await resendInvite(inviteId);
     if (invite) {
       try {
-        await Share.share({
-          message: `Join my team on I GET IT DONE!\n\nYour invite code: ${invite.inviteCode}\n\nHow to join:\n1. Download the app: https://apps.apple.com/app/id6756545884\n2. Create your account\n3. Go to Team Hub and tap "Join Team"\n4. Enter the code above\n\nOnce connected, we can share tasks with each other!`,
-        });
-      } catch (error) {
-        if (Platform.OS === "web") {
-          navigator.clipboard?.writeText(invite.inviteCode);
-        } else {
-          Clipboard.setString(invite.inviteCode);
-        }
-        Alert.alert("Code Copied", `Invite code: ${invite.inviteCode}`);
+        await Share.share({ message: inviteShareMessage(invite.inviteCode) });
+      } catch {
+        await copyToClipboard(inviteShareMessage(invite.inviteCode));
+        showMessage("Invite copied", `Invite code: ${invite.inviteCode}`);
       }
+    } else {
+      showMessage("Error", "Couldn't resend this invite. Please try again.");
     }
   };
 
@@ -212,29 +234,26 @@ export default function TeamHubScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newInvite = await regenerateInvite(inviteId);
     if (newInvite) {
-      Alert.alert("New Code Generated", `New code: ${newInvite.inviteCode}`, [
-        { text: "Copy", onPress: () => {
-          if (Platform.OS === "web") {
-            navigator.clipboard?.writeText(newInvite.inviteCode);
-          } else {
-            Clipboard.setString(newInvite.inviteCode);
-          }
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }},
-        { text: "OK" }
-      ]);
+      const copied = await copyToClipboard(newInvite.inviteCode);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showMessage("New Code Generated", `New code: ${newInvite.inviteCode}${copied ? " (copied)" : ""}`);
+    } else {
+      showMessage("Error", "Couldn't generate a new code. Please try again.");
     }
   };
 
   const handleJoinWithCode = async () => {
-    if (!joinCode.trim()) return;
+    if (!joinCode.trim() || isLoading) return;
+    setIsLoading(true);
     const result = await acceptTeamInvite(joinCode.trim().toUpperCase());
+    setIsLoading(false);
     if (result.success) {
       setShowJoinModal(false);
       setJoinCode("");
-      Alert.alert("Success!", "You've joined the team.");
+      refreshAll();
+      showMessage("Success!", "You've joined the team.");
     } else {
-      Alert.alert("Error", result.error || "Failed to join team.");
+      showMessage("Couldn't join", result.error || "Failed to join team.");
     }
   };
 
@@ -251,6 +270,7 @@ export default function TeamHubScreen() {
   const statusSummary = getStatusSummary();
 
   const renderTeamMemberItem = ({ item }: { item: TeamMember }) => {
+    const handedOffCount = delegatedTasks.filter((t) => t.delegatedToUserId === item.teammateId).length;
     return (
       <Pressable 
         style={[styles.contactCard, { backgroundColor: theme.backgroundDefault }]}
@@ -271,6 +291,16 @@ export default function TeamHubScreen() {
             </ThemedText>
           ) : null}
         </View>
+        {handedOffCount > 0 ? (
+          <View style={[styles.taskCount, { marginRight: Spacing.sm }]}>
+            <ThemedText type="h4" style={{ color: item.color }}>
+              {handedOffCount}
+            </ThemedText>
+            <ThemedText type="caption" secondary>
+              {handedOffCount === 1 ? "task" : "tasks"}
+            </ThemedText>
+          </View>
+        ) : null}
         <View style={[styles.linkedBadge, { backgroundColor: "#34C759" + "20" }]}>
           <Feather name="link" size={12} color="#34C759" />
           <ThemedText type="caption" style={{ color: "#34C759", marginLeft: 4 }}>
@@ -351,6 +381,7 @@ export default function TeamHubScreen() {
         data={activeTab === "team" ? (teamMembers as any[]) : (contacts as any[])}
         keyExtractor={(item) => item.id}
         renderItem={activeTab === "team" ? (renderTeamMemberItem as any) : (renderContactItem as any)}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handlePullToRefresh} />}
         contentContainerStyle={[
           styles.content,
           { paddingTop: headerHeight + Spacing.md, paddingBottom: tabBarHeight + Spacing.xl },

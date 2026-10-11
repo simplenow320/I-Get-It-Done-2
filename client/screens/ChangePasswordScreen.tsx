@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, TextInput, Pressable, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, View, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -13,6 +13,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore } from "@/stores/TaskStore";
 import { apiRequest } from "@/lib/query-client";
+import { apiErrorMessage, showMessage } from "@/lib/alerts";
+import { passwordPolicyError } from "@/lib/password-policy";
 
 export default function ChangePasswordScreen() {
   const insets = useSafeAreaInsets();
@@ -38,8 +40,9 @@ export default function ChangePasswordScreen() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError("New password must be at least 6 characters");
+    const policyError = passwordPolicyError(newPassword);
+    if (policyError) {
+      setError(policyError);
       return;
     }
 
@@ -73,11 +76,10 @@ export default function ChangePasswordScreen() {
 
       setIsLoading(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Success", "Your password has been changed successfully", [
-        { text: "OK", onPress: () => navigation.goBack() },
-      ]);
+      showMessage("Success", "Your password has been changed successfully", () => navigation.goBack());
     } catch (err) {
-      setError("Failed to change password");
+      // apiRequest throws on any non-2xx; show the server's reason.
+      setError(apiErrorMessage(err, "Failed to change password"));
       setIsLoading(false);
     }
   };
@@ -151,7 +153,7 @@ export default function ChangePasswordScreen() {
             <View style={styles.inputWrapper}>
               <TextInput
                 style={inputStyle}
-                placeholder="Enter new password (min 6 characters)"
+                placeholder="8+ chars, upper, lower, number, symbol"
                 placeholderTextColor={theme.textSecondary}
                 secureTextEntry={!showNewPassword}
                 value={newPassword}

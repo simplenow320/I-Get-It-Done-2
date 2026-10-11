@@ -108,7 +108,7 @@ export default function DashboardScreen() {
         {!hasProFeatures ? (
           <Animated.View entering={FadeInUp.delay(30).duration(400)}>
             <Pressable
-              onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
+              onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription", initial: false })}
               style={[styles.proBanner, { backgroundColor: theme.backgroundSecondary }]}
             >
               <View style={styles.proBannerHeader}>
@@ -148,7 +148,7 @@ export default function DashboardScreen() {
         ) : freeTrialActive && lifetimeTasksCreated >= SOFT_NUDGE_THRESHOLD ? (
           <Animated.View entering={FadeInUp.delay(30).duration(400)}>
             <Pressable
-              onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription" })}
+              onPress={() => (navigation as any).navigate("ProfileTab", { screen: "Subscription", initial: false })}
               style={[styles.proBanner, { backgroundColor: theme.backgroundSecondary }]}
             >
               <View style={styles.proBannerHeader}>

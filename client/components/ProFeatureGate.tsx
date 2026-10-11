@@ -38,7 +38,7 @@ export function ProFeatureGate({ children, feature, showUpgradePrompt = true }: 
 
   const handleUpgrade = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    (navigation as any).navigate("ProfileTab", { screen: "Subscription" });
+    (navigation as any).navigate("ProfileTab", { screen: "Subscription", initial: false });
   };
 
   const trialAvailable = lifetimeTasksCreated < 10;
@@ -61,7 +61,7 @@ export function ProFeatureGate({ children, feature, showUpgradePrompt = true }: 
         {PRO_BENEFITS.map((benefit) => (
           <View key={benefit.label} style={styles.benefitRow}>
             <Feather name={benefit.icon} size={14} color={LaneColors.later.primary} />
-            <ThemedText type="small" style={{ marginLeft: Spacing.sm, color: theme.textPrimary }}>
+            <ThemedText type="small" style={{ marginLeft: Spacing.sm, color: theme.text }}>
               {benefit.label}
             </ThemedText>
           </View>

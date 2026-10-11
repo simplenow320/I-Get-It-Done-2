@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from "react";
-import { StyleSheet, View, TextInput, Pressable, Alert } from "react-native";
+import React, { useState, useCallback, useRef } from "react";
+import { StyleSheet, View, TextInput, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
@@ -16,6 +16,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Lane, DelegationStatus } from "@/stores/TaskStore";
 import { useGamification } from "@/stores/GamificationStore";
+import { confirmAction } from "@/lib/alerts";
 
 type RouteParams = {
   TaskDetail: { taskId: string };
@@ -52,7 +53,7 @@ export default function TaskDetailScreen() {
   const { 
     tasks, updateTask, deleteTask, moveTask, completeTask, 
     addSubtask, toggleSubtask, deleteSubtask, 
-    getContactById, undelegateTask, settings
+    getContactById, undelegateTask, settings, teamMembers
   } = useTaskStore();
   const { recordSubtaskComplete, recordTaskComplete } = useGamification();
 
@@ -64,6 +65,9 @@ export default function TaskDetailScreen() {
   const [showSubtaskInput, setShowSubtaskInput] = useState(false);
   const [showDelegateModal, setShowDelegateModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
+  // Subtasks already rewarded on this screen: toggling off and on again
+  // shouldn't pay out twice.
+  const rewardedSubtasksRef = useRef<Set<string>>(new Set());
 
   const handleSave = () => {
     if (!task) return;
@@ -88,7 +92,7 @@ export default function TaskDetailScreen() {
   }, [task, moveTask]);
 
   const handleComplete = () => {
-    if (!task) return;
+    if (!task || task.completedAt) return;
     const hasSubtasks = (task.subtasks?.length || 0) > 0;
     const subtaskCount = task.subtasks?.length || 0;
     
@@ -100,21 +104,16 @@ export default function TaskDetailScreen() {
 
   const handleDelete = () => {
     if (!task) return;
-    Alert.alert(
+    confirmAction(
       "Delete Task",
       "Are you sure you want to delete this task?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            deleteTask(task.id);
-            navigation.goBack();
-          },
-        },
-      ]
+      "Delete",
+      () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        deleteTask(task.id);
+        navigation.goBack();
+      },
+      { destructive: true }
     );
   };
 
@@ -138,7 +137,8 @@ export default function TaskDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleSubtask(task.id, subtaskId);
     
-    if (!wasCompleted) {
+    if (!wasCompleted && !rewardedSubtasksRef.current.has(subtaskId)) {
+      rewardedSubtasksRef.current.add(subtaskId);
       recordSubtaskComplete();
     }
   };
@@ -151,19 +151,16 @@ export default function TaskDetailScreen() {
 
   const handleUndelegate = () => {
     if (!task) return;
-    Alert.alert(
+    confirmAction(
       "Remove Assignment",
-      "Unassign this task from the team member?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Unassign",
-          onPress: () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            undelegateTask(task.id);
-          },
-        },
-      ]
+      task.delegatedToUserId
+        ? "Unassign this task? It will disappear from your teammate's list."
+        : "Unassign this task from the team member?",
+      "Unassign",
+      () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        undelegateTask(task.id);
+      }
     );
   };
 
@@ -181,7 +178,22 @@ export default function TaskDetailScreen() {
   const progress = subtasks.length > 0 ? completedSubtasks / subtasks.length : 0;
   const laneColor = LaneColors[task.lane].primary;
   const assignedContact = task.assignedTo ? getContactById(task.assignedTo) : undefined;
+  // A hand-off goes either to a linked teammate (delegatedToUserId) or to an
+  // offline contact (assignedTo holds the contact id).
+  const assignedTeammate = task.delegatedToUserId
+    ? teamMembers.find((m) => m.teammateId === task.delegatedToUserId)
+    : undefined;
+  const assignee = task.delegatedToUserId
+    ? {
+        name: assignedTeammate?.nickname || assignedTeammate?.teammateName || task.assignedTo || "Teammate",
+        color: assignedTeammate?.color || "#007AFF",
+        linked: true,
+      }
+    : assignedContact
+      ? { name: assignedContact.name, color: assignedContact.color, linked: false }
+      : undefined;
   const isTeamMode = settings.mode === "team";
+  const isCompleted = !!task.completedAt;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -233,21 +245,24 @@ export default function TaskDetailScreen() {
           />
         </View>
 
-        {assignedContact ? (
+        {assignee ? (
           <View style={styles.section}>
             <ThemedText type="h4" style={styles.sectionTitle}>
               Delegated To
             </ThemedText>
             <View style={[styles.delegationCard, { backgroundColor: theme.backgroundDefault }]}>
               <Pressable style={styles.delegationInfo} onPress={() => setShowNotesModal(true)}>
-                <View style={[styles.avatar, { backgroundColor: assignedContact.color }]}>
+                <View style={[styles.avatar, { backgroundColor: assignee.color }]}>
                   <ThemedText type="body" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600" }}>
-                    {assignedContact.name.charAt(0).toUpperCase()}
+                    {assignee.name.charAt(0).toUpperCase()}
                   </ThemedText>
                 </View>
                 <View style={styles.delegationText}>
                   <ThemedText type="body" style={{ fontWeight: "500" }}>
-                    {assignedContact.name}
+                    {assignee.name}
+                    {assignee.linked ? (
+                      <ThemedText type="caption" style={{ color: "#34C759" }}>  Linked</ThemedText>
+                    ) : null}
                   </ThemedText>
                   {task.delegationStatus ? (
                     <View style={styles.statusRow}>
@@ -276,7 +291,7 @@ export default function TaskDetailScreen() {
               </Pressable>
             </View>
           </View>
-        ) : isTeamMode ? (
+        ) : isTeamMode && !isCompleted ? (
           <View style={styles.section}>
             <Pressable
               onPress={() => setShowDelegateModal(true)}
@@ -398,20 +413,29 @@ export default function TaskDetailScreen() {
           <ThemedText type="h4" style={styles.sectionTitle}>
             Actions
           </ThemedText>
-          <Pressable
-            onPress={handleComplete}
-            style={[styles.actionButton, { backgroundColor: theme.success }]}
-          >
-            <Feather name="check" size={20} color="#FFFFFF" />
-            <ThemedText
-              type="body"
-              style={{ fontWeight: "600" }}
-              lightColor="#FFFFFF"
-              darkColor="#FFFFFF"
+          {isCompleted ? (
+            <View style={[styles.actionButton, { backgroundColor: theme.backgroundDefault }]}>
+              <Feather name="check-circle" size={20} color={theme.success} />
+              <ThemedText type="body" style={{ fontWeight: "600", color: theme.success }}>
+                Completed {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : ""}
+              </ThemedText>
+            </View>
+          ) : (
+            <Pressable
+              onPress={handleComplete}
+              style={[styles.actionButton, { backgroundColor: theme.success }]}
             >
-              Mark Complete
-            </ThemedText>
-          </Pressable>
+              <Feather name="check" size={20} color="#FFFFFF" />
+              <ThemedText
+                type="body"
+                style={{ fontWeight: "600" }}
+                lightColor="#FFFFFF"
+                darkColor="#FFFFFF"
+              >
+                Mark Complete
+              </ThemedText>
+            </Pressable>
+          )}
           <Pressable
             onPress={handleDelete}
             style={[styles.actionButton, { backgroundColor: theme.error }]}
@@ -435,10 +459,13 @@ export default function TaskDetailScreen() {
         onClose={() => setShowDelegateModal(false)}
       />
       
-      {assignedContact ? (
+      {assignee ? (
         <DelegationNotesModal
           visible={showNotesModal}
           task={task}
+          assigneeName={assignee.name}
+          assigneeColor={assignee.color}
+          isLinkedTeammate={assignee.linked}
           onClose={() => setShowNotesModal(false)}
         />
       ) : null}

@@ -255,7 +255,7 @@ var init_db = __esm({
 
 // server/webPush.ts
 import webpush from "web-push";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 function getVapidKeys() {
   if (!vapidReady) {
     vapidReady = (async () => {
@@ -341,7 +341,7 @@ async function saveWebPushSubscription(userId, subscription) {
   });
 }
 async function deleteWebPushSubscription(userId, endpoint) {
-  await db.delete(webPushSubscriptions).where(eq(webPushSubscriptions.endpoint, endpoint));
+  await db.delete(webPushSubscriptions).where(and(eq(webPushSubscriptions.endpoint, endpoint), eq(webPushSubscriptions.userId, userId)));
 }
 var vapidReady;
 var init_webPush = __esm({
@@ -360,7 +360,7 @@ __export(nudgeEngine_exports, {
   sendEscalatingNudges: () => sendEscalatingNudges,
   sendStreakSaverNotifications: () => sendStreakSaverNotifications
 });
-import { eq as eq2, and, isNotNull, isNull, gte, lt, or } from "drizzle-orm";
+import { eq as eq2, and as and2, isNotNull, isNull, gte, lt, or } from "drizzle-orm";
 async function deliverNudges(messages) {
   if (messages.length === 0) return 0;
   const expoResult = await sendBulkPushNotifications(
@@ -425,8 +425,10 @@ async function runEscalatingNudges() {
     intensity: users.notificationIntensity,
     tz: users.timezoneOffsetMinutes
   }).from(tasks).innerJoin(users, eq2(tasks.userId, users.id)).where(
-    and(
-      eq2(tasks.isOverdue, true),
+    and2(
+      // The app flags overdue tasks when it's open. A "now" task past its due
+      // time is overdue even if the user hasn't opened the app since.
+      or(eq2(tasks.isOverdue, true), and2(eq2(tasks.lane, "now"), lt(tasks.dueDate, now))),
       isNull(tasks.completedAt),
       eq2(users.notificationsEnabled, true),
       eq2(users.escalatingRemindersEnabled, true)
@@ -437,6 +439,12 @@ async function runEscalatingNudges() {
   );
   const toSend = [];
   const nudgedUsers = /* @__PURE__ */ new Set();
+  const lastNudgeByUser = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    if (!row.userId || !row.lastNudgeAt) continue;
+    const t = row.lastNudgeAt.getTime();
+    if (t > (lastNudgeByUser.get(row.userId) || 0)) lastNudgeByUser.set(row.userId, t);
+  }
   for (const row of rows) {
     if (!row.userId) continue;
     if (!row.pushToken && !webUsers.has(row.userId)) continue;
@@ -447,11 +455,12 @@ async function runEscalatingNudges() {
     if (count >= MAX_NUDGES_PER_TASK[intensity]) continue;
     const last = row.lastNudgeAt ? row.lastNudgeAt.getTime() : 0;
     if (now.getTime() - last < NUDGE_INTERVAL_MS[intensity]) continue;
+    if (now.getTime() - (lastNudgeByUser.get(row.userId) || 0) < NUDGE_INTERVAL_MS[intensity]) continue;
     if (nudgedUsers.has(row.userId)) continue;
     nudgedUsers.add(row.userId);
     const cutoff = new Date(now.getTime() - NUDGE_INTERVAL_MS[intensity]);
     const claimed = await db.update(tasks).set({ nudgeCount: count + 1, lastNudgeAt: now }).where(
-      and(
+      and2(
         eq2(tasks.id, row.taskId),
         isNull(tasks.completedAt),
         or(isNull(tasks.lastNudgeAt), lt(tasks.lastNudgeAt, cutoff))
@@ -476,7 +485,7 @@ async function runEscalatingNudges() {
 async function sendDailyRhythmNotifications() {
   const now = /* @__PURE__ */ new Date();
   const candidates = await db.select().from(users).where(
-    and(
+    and2(
       eq2(users.notificationsEnabled, true),
       or(eq2(users.morningKickoffEnabled, true), eq2(users.eveningCheckinEnabled, true))
     )
@@ -489,7 +498,7 @@ async function sendDailyRhythmNotifications() {
     const localHour = local.getUTCHours();
     const today = localDateStr(local);
     if (u.morningKickoffEnabled && localHour === (u.morningKickoffHour ?? 8) && u.lastMorningKickoffDate !== today) {
-      const open = await db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and(eq2(tasks.userId, u.id), isNull(tasks.completedAt)));
+      const open = await db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and2(eq2(tasks.userId, u.id), isNull(tasks.completedAt)));
       if (open.length > 0) {
         const body = open.length === 1 ? `One thing on your list: "${open[0].title}". Do it early, own the day.` : `${open.length} tasks are waiting. Don't scan the list \u2014 pick ONE and start. "${open[0].title}"?`;
         sent += await deliverNudges([
@@ -508,8 +517,8 @@ async function sendDailyRhythmNotifications() {
       const startOfLocalDayUtc = new Date(
         Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) + (u.timezoneOffsetMinutes || 0) * 60 * 1e3
       );
-      const open = await db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and(eq2(tasks.userId, u.id), isNull(tasks.completedAt)));
-      const doneToday = await db.select({ id: tasks.id }).from(tasks).where(and(eq2(tasks.userId, u.id), isNotNull(tasks.completedAt), gte(tasks.completedAt, startOfLocalDayUtc)));
+      const open = await db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and2(eq2(tasks.userId, u.id), isNull(tasks.completedAt)));
+      const doneToday = await db.select({ id: tasks.id }).from(tasks).where(and2(eq2(tasks.userId, u.id), isNotNull(tasks.completedAt), gte(tasks.completedAt, startOfLocalDayUtc)));
       let title;
       let body;
       if (open.length === 0) {
@@ -540,7 +549,7 @@ async function sendStreakSaverNotifications() {
     currentStreak: userStats.currentStreak,
     lastActiveDate: userStats.lastActiveDate
   }).from(users).innerJoin(userStats, eq2(userStats.userId, users.id)).where(
-    and(
+    and2(
       eq2(users.notificationsEnabled, true),
       eq2(users.streakSaverEnabled, true)
     )
@@ -555,14 +564,15 @@ async function sendStreakSaverNotifications() {
     const today = localDateStr(local);
     if (u.lastStreakSaverDate === today) continue;
     if (u.lastActiveDate === today) continue;
+    const yesterday = localDateStr(new Date(local.getTime() - 24 * 60 * 60 * 1e3));
+    if (u.lastActiveDate !== yesterday) continue;
     sent += await deliverNudges([
       {
         userId: u.userId,
         pushToken: u.pushToken,
         title: `Your ${u.currentStreak}-day streak dies at midnight`,
         body: "You're ONE task away from saving it. Pick the smallest thing on your list and go.",
-        data: { type: "streak_saver", streak: u.currentStreak },
-        categoryId: "task_nudge"
+        data: { type: "streak_saver", streak: u.currentStreak }
       }
     ]);
     await db.update(users).set({ lastStreakSaverDate: today }).where(eq2(users.id, u.userId));
@@ -600,7 +610,7 @@ var init_nudgeEngine = __esm({
 
 // server/pushNotifications.ts
 import { Expo } from "expo-server-sdk";
-import { eq as eq3, and as and2, isNotNull as isNotNull2, lt as lt2, isNull as isNull2 } from "drizzle-orm";
+import { eq as eq3, and as and3, isNotNull as isNotNull2, isNull as isNull2, gt, lte, ne } from "drizzle-orm";
 async function sendPushNotification(pushToken, title, body, data) {
   if (!Expo.isExpoPushToken(pushToken)) {
     console.error(`Invalid Expo push token: ${pushToken}`);
@@ -668,7 +678,7 @@ async function sendBulkPushNotifications(notifications) {
 }
 async function clearInvalidToken(pushToken) {
   try {
-    await db.update(users).set({ pushToken: null, notificationsEnabled: false }).where(eq3(users.pushToken, pushToken));
+    await db.update(users).set({ pushToken: null }).where(eq3(users.pushToken, pushToken));
     console.log(`Cleared invalid push token: ${pushToken}`);
   } catch (error) {
     console.error("Failed to clear invalid token:", error);
@@ -677,40 +687,47 @@ async function clearInvalidToken(pushToken) {
 async function sendDueSoonNotifications() {
   try {
     const now = /* @__PURE__ */ new Date();
-    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1e3);
+    const windowStart = new Date(now.getTime() + DUE_SOON_WINDOW_START_MS);
+    const windowEnd = new Date(now.getTime() + DUE_SOON_WINDOW_END_MS);
     const dueSoonResults = await db.select({
       userId: tasks.userId,
       taskTitle: tasks.title,
       taskId: tasks.id,
       dueDate: tasks.dueDate,
       pushToken: users.pushToken,
-      notificationsEnabled: users.notificationsEnabled
+      tz: users.timezoneOffsetMinutes
     }).from(tasks).innerJoin(users, eq3(tasks.userId, users.id)).where(
-      and2(
+      and3(
         isNull2(tasks.completedAt),
         isNotNull2(tasks.dueDate),
-        lt2(tasks.dueDate, twoHoursFromNow),
+        gt(tasks.dueDate, windowStart),
+        lte(tasks.dueDate, windowEnd),
         eq3(users.notificationsEnabled, true),
-        eq3(tasks.isOverdue, false)
+        eq3(tasks.isOverdue, false),
+        ne(tasks.lane, "park")
       )
     );
-    const eligible = dueSoonResults.filter(
-      (r) => !!r.userId && !!r.dueDate && r.dueDate > now
-    );
-    const webUsers = await getUsersWithWebPush(
-      Array.from(new Set(eligible.map((r) => r.userId)))
-    );
+    const byUser = /* @__PURE__ */ new Map();
+    for (const r of dueSoonResults) {
+      if (!r.userId) continue;
+      const localHour = new Date(now.getTime() - (r.tz || 0) * 60 * 1e3).getUTCHours();
+      if (localHour >= DUE_SOON_QUIET_START || localHour < DUE_SOON_QUIET_END) continue;
+      if (!byUser.has(r.userId)) byUser.set(r.userId, { token: r.pushToken, tasks: [] });
+      byUser.get(r.userId).tasks.push({ id: r.taskId, title: r.taskTitle });
+    }
+    const webUsers = await getUsersWithWebPush(Array.from(byUser.keys()));
     const expoNotifications = [];
     const webMessages = [];
-    for (const r of eligible) {
-      const title = "Task Due Soon";
-      const body = `"${r.taskTitle}" is due in less than 2 hours.`;
-      const payload = { type: "due_soon", taskId: r.taskId, userId: r.userId };
-      if (r.pushToken) {
-        expoNotifications.push({ token: r.pushToken, title, body, data: payload });
+    for (const [userId, entry] of Array.from(byUser.entries())) {
+      const count = entry.tasks.length;
+      const title = count === 1 ? "Task Due Soon" : `${count} Tasks Due Soon`;
+      const body = count === 1 ? `"${entry.tasks[0].title}" is due in less than 2 hours.` : `"${entry.tasks[0].title}" and ${count - 1} more are due in less than 2 hours.`;
+      const payload = { type: "due_soon", taskId: entry.tasks[0].id, userId };
+      if (entry.token) {
+        expoNotifications.push({ token: entry.token, title, body, data: payload });
       }
-      if (webUsers.has(r.userId)) {
-        webMessages.push({ userId: r.userId, title, body, data: payload });
+      if (webUsers.has(userId)) {
+        webMessages.push({ userId, title, body, data: payload });
       }
     }
     const result = await sendBulkPushNotifications(expoNotifications);
@@ -719,6 +736,42 @@ async function sendDueSoonNotifications() {
   } catch (error) {
     console.error("Failed to send due-soon notifications:", error);
     return { sent: 0, failed: 0, errors: [error.message] };
+  }
+}
+async function notifyUser(userId, title, body, data) {
+  const [user] = await db.select({ pushToken: users.pushToken, notificationsEnabled: users.notificationsEnabled }).from(users).where(eq3(users.id, userId)).limit(1);
+  if (!user || !user.notificationsEnabled) return false;
+  let delivered = false;
+  if (user.pushToken) {
+    delivered = await sendPushNotification(user.pushToken, title, body, data);
+  }
+  const webSent = await sendWebPushNotifications([{ userId, title, body, data }]);
+  return delivered || webSent > 0;
+}
+async function sendDelegationNotification(delegatedToUserId, taskTitle, delegatorName, taskId) {
+  try {
+    return await notifyUser(
+      delegatedToUserId,
+      "New Task Assigned",
+      `${delegatorName} assigned you: "${taskTitle}"`,
+      { type: "delegation", taskTitle, ...taskId ? { taskId } : {} }
+    );
+  } catch (error) {
+    console.error("Failed to send delegation notification:", error);
+    return false;
+  }
+}
+async function sendDelegationStatusNotification(ownerId, taskId, taskTitle, delegateName, statusLabel, note) {
+  try {
+    const t = taskTitle.length > 60 ? taskTitle.slice(0, 57) + "..." : taskTitle;
+    const body = note ? `${delegateName} set "${t}" to ${statusLabel}: ${note.length > 80 ? note.slice(0, 77) + "..." : note}` : `${delegateName} set "${t}" to ${statusLabel}.`;
+    return await notifyUser(ownerId, statusLabel === "Done" ? "Hand-off complete" : "Hand-off update", body, {
+      type: "delegation_update",
+      taskId
+    });
+  } catch (error) {
+    console.error("Failed to send delegation status notification:", error);
+    return false;
   }
 }
 function startNotificationScheduler() {
@@ -753,7 +806,7 @@ function startNotificationScheduler() {
     }
   }, 60 * 1e3);
 }
-var expo, schedulerInterval, lastDueSoonCheck, lastNudgeCheck, DUE_SOON_INTERVAL, NUDGE_INTERVAL;
+var expo, DUE_SOON_WINDOW_START_MS, DUE_SOON_WINDOW_END_MS, DUE_SOON_QUIET_START, DUE_SOON_QUIET_END, schedulerInterval, lastDueSoonCheck, lastNudgeCheck, DUE_SOON_INTERVAL, NUDGE_INTERVAL;
 var init_pushNotifications = __esm({
   "server/pushNotifications.ts"() {
     "use strict";
@@ -761,6 +814,10 @@ var init_pushNotifications = __esm({
     init_schema();
     init_webPush();
     expo = new Expo();
+    DUE_SOON_WINDOW_START_MS = 90 * 60 * 1e3;
+    DUE_SOON_WINDOW_END_MS = 120 * 60 * 1e3;
+    DUE_SOON_QUIET_START = 21;
+    DUE_SOON_QUIET_END = 8;
     schedulerInterval = null;
     lastDueSoonCheck = 0;
     lastNudgeCheck = 0;
@@ -780,6 +837,7 @@ init_schema();
 import { createServer } from "node:http";
 import multer from "multer";
 import * as fs from "fs";
+import { randomInt } from "crypto";
 import bcrypt2 from "bcryptjs";
 
 // server/authMiddleware.ts
@@ -850,47 +908,64 @@ init_pushNotifications();
 // server/taskActions.ts
 init_db();
 init_schema();
-import { eq as eq4 } from "drizzle-orm";
-async function applyCompletionStats(userId) {
-  const existingStats = await db.select().from(userStats).where(eq4(userStats.userId, userId));
-  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  if (existingStats.length > 0) {
-    const stats = existingStats[0];
-    const lastActive = stats.lastActiveDate ? new Date(stats.lastActiveDate).toISOString().split("T")[0] : null;
-    let newStreak = stats.currentStreak || 0;
-    if (lastActive !== today) {
-      const yesterday = /* @__PURE__ */ new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
-      newStreak = lastActive === yesterdayStr ? (stats.currentStreak || 0) + 1 : 1;
+import { eq as eq4, sql as sql3 } from "drizzle-orm";
+function localDateString(tzOffsetMinutes, at = /* @__PURE__ */ new Date()) {
+  return new Date(at.getTime() - (tzOffsetMinutes || 0) * 60 * 1e3).toISOString().split("T")[0];
+}
+function defaultDueDate(lane, tzOffsetMinutes) {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1e3;
+  switch (lane) {
+    case "soon":
+      return new Date(now + 3 * day);
+    case "later":
+      return new Date(now + 7 * day);
+    case "park":
+      return new Date(now + 30 * day);
+    default: {
+      const offsetMs = (tzOffsetMinutes || 0) * 60 * 1e3;
+      const local = new Date(now - offsetMs);
+      const endOfLocalDay = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 23, 59, 59, 999);
+      return new Date(endOfLocalDay + offsetMs);
     }
-    const newPoints = (stats.points || 0) + 10;
-    const newTotalCompleted = (stats.totalTasksCompleted || 0) + 1;
-    const newLongestStreak = Math.max(stats.longestStreak || 0, newStreak);
-    let newLevel = "starter";
-    if (newPoints >= 1e3) newLevel = "master";
-    else if (newPoints >= 500) newLevel = "expert";
-    else if (newPoints >= 200) newLevel = "focused";
-    else if (newPoints >= 100) newLevel = "achiever";
-    await db.update(userStats).set({
-      points: newPoints,
-      totalTasksCompleted: newTotalCompleted,
-      currentStreak: newStreak,
-      longestStreak: newLongestStreak,
-      level: newLevel,
-      lastActiveDate: today
-    }).where(eq4(userStats.userId, userId));
-  } else {
-    await db.insert(userStats).values({
-      userId,
-      points: 10,
-      totalTasksCompleted: 1,
-      currentStreak: 1,
-      longestStreak: 1,
-      level: "starter",
-      lastActiveDate: today
-    });
   }
+}
+async function applyCompletionStats(userId) {
+  const [user] = await db.select({ tz: users.timezoneOffsetMinutes }).from(users).where(eq4(users.id, userId)).limit(1);
+  const now = /* @__PURE__ */ new Date();
+  const today = localDateString(user?.tz, now);
+  const yesterday = localDateString(user?.tz, new Date(now.getTime() - 24 * 60 * 60 * 1e3));
+  const newPoints = sql3`COALESCE(${userStats.points}, 0) + 10`;
+  const newStreak = sql3`CASE
+    WHEN ${userStats.lastActiveDate} = ${today}::date THEN GREATEST(COALESCE(${userStats.currentStreak}, 0), 1)
+    WHEN ${userStats.lastActiveDate} = ${yesterday}::date THEN COALESCE(${userStats.currentStreak}, 0) + 1
+    ELSE 1
+  END`;
+  await db.insert(userStats).values({
+    userId,
+    points: 10,
+    totalTasksCompleted: 1,
+    currentStreak: 1,
+    longestStreak: 1,
+    level: "starter",
+    lastActiveDate: today
+  }).onConflictDoUpdate({
+    target: userStats.userId,
+    set: {
+      points: newPoints,
+      totalTasksCompleted: sql3`COALESCE(${userStats.totalTasksCompleted}, 0) + 1`,
+      currentStreak: newStreak,
+      longestStreak: sql3`GREATEST(COALESCE(${userStats.longestStreak}, 0), ${newStreak})`,
+      level: sql3`CASE
+          WHEN ${newPoints} >= 1000 THEN 'master'
+          WHEN ${newPoints} >= 500 THEN 'expert'
+          WHEN ${newPoints} >= 200 THEN 'focused'
+          WHEN ${newPoints} >= 100 THEN 'achiever'
+          ELSE 'starter'
+        END`,
+      lastActiveDate: today
+    }
+  });
 }
 
 // server/mcp.ts
@@ -900,7 +975,7 @@ import crypto3 from "crypto";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { and as and4, eq as eq6, isNull as isNull4, sql as sql3 } from "drizzle-orm";
+import { and as and5, eq as eq6, isNull as isNull4, sql as sql4 } from "drizzle-orm";
 
 // server/oauth.ts
 init_db();
@@ -908,7 +983,7 @@ init_schema();
 import crypto2 from "crypto";
 import bcrypt from "bcryptjs";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { and as and3, eq as eq5, gt, isNull as isNull3 } from "drizzle-orm";
+import { and as and4, eq as eq5, gt as gt2, isNull as isNull3 } from "drizzle-orm";
 var ACCESS_TOKEN_PREFIX = "igat_";
 var REFRESH_TOKEN_PREFIX = "igrt_";
 var ACCESS_TOKEN_TTL_MS = 60 * 60 * 1e3;
@@ -938,10 +1013,10 @@ function isAllowedRedirectUri(uri) {
 async function authenticateOAuthToken(token) {
   if (!token.startsWith(ACCESS_TOKEN_PREFIX)) return null;
   const rows = await db.select().from(oauthTokens).where(
-    and3(
+    and4(
       eq5(oauthTokens.accessTokenHash, sha256(token)),
       isNull3(oauthTokens.revokedAt),
-      gt(oauthTokens.accessExpiresAt, /* @__PURE__ */ new Date())
+      gt2(oauthTokens.accessExpiresAt, /* @__PURE__ */ new Date())
     )
   ).limit(1);
   if (rows.length === 0) return null;
@@ -952,6 +1027,14 @@ async function authenticateOAuthToken(token) {
 }
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function redirectHost(uri) {
+  if (!uri) return null;
+  try {
+    return new URL(uri).host;
+  } catch {
+    return null;
+  }
 }
 function renderAuthorizePage(opts) {
   const hidden = Object.entries(opts.params).map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("\n");
@@ -988,7 +1071,8 @@ function renderAuthorizePage(opts) {
 <body>
   <div class="card">
     <h1>Connect ${escapeHtml(opts.clientName)}</h1>
-    <p><strong>${escapeHtml(opts.clientName)}</strong> wants to manage your tasks on I Get It Done. It will be able to:</p>
+    <p><strong>${escapeHtml(opts.clientName)}</strong> wants to manage your tasks on I Get It Done. It will be able to:</p>${redirectHost(opts.params.redirect_uri) ? `
+    <p>After you allow access you'll be sent to <strong>${escapeHtml(redirectHost(opts.params.redirect_uri))}</strong>. Only continue if you trust that site.</p>` : ""}
     <ul>
       <li>Create and list your tasks</li>
       <li>Complete, snooze, and break down tasks</li>
@@ -1014,6 +1098,20 @@ var oauthSignInLimiter = rateLimit({
     return `${ipKeyGenerator(req.ip ?? "")}|${email}`;
   },
   message: { error: "too_many_attempts", error_description: "Too many attempts, please try again later" }
+});
+var oauthSignInIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1e3,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_attempts", error_description: "Too many attempts, please try again later" }
+});
+var oauthRegisterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1e3,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_requests" }
 });
 var oauthTokenLimiter = rateLimit({
   windowMs: 15 * 60 * 1e3,
@@ -1051,7 +1149,7 @@ function registerOAuthRoutes(app2) {
   };
   app2.get("/.well-known/oauth-protected-resource", prMetadata);
   app2.get("/.well-known/oauth-protected-resource/mcp", prMetadata);
-  app2.post("/oauth/register", async (req, res) => {
+  app2.post("/oauth/register", oauthRegisterLimiter, async (req, res) => {
     try {
       const body = req.body || {};
       const redirectUris = body.redirect_uris;
@@ -1100,7 +1198,7 @@ function registerOAuthRoutes(app2) {
       res.status(500).send("Something went wrong. Please try again.");
     }
   });
-  app2.post("/oauth/authorize", oauthSignInLimiter, async (req, res) => {
+  app2.post("/oauth/authorize", oauthSignInIpLimiter, oauthSignInLimiter, async (req, res) => {
     try {
       const b = req.body;
       const validation = await validateAuthorizeParams(b);
@@ -1161,7 +1259,7 @@ function registerOAuthRoutes(app2) {
         if (!codeVerifier) {
           return res.status(400).json({ error: "invalid_request", error_description: "code_verifier required" });
         }
-        const [row] = await db.update(oauthCodes).set({ usedAt: /* @__PURE__ */ new Date() }).where(and3(eq5(oauthCodes.code, sha256(code)), isNull3(oauthCodes.usedAt), gt(oauthCodes.expiresAt, /* @__PURE__ */ new Date()))).returning();
+        const [row] = await db.update(oauthCodes).set({ usedAt: /* @__PURE__ */ new Date() }).where(and4(eq5(oauthCodes.code, sha256(code)), isNull3(oauthCodes.usedAt), gt2(oauthCodes.expiresAt, /* @__PURE__ */ new Date()))).returning();
         if (!row || row.clientId !== clientId) {
           return res.status(400).json({ error: "invalid_grant" });
         }
@@ -1179,14 +1277,14 @@ function registerOAuthRoutes(app2) {
         if (!refreshToken || !refreshToken.startsWith(REFRESH_TOKEN_PREFIX)) {
           return res.status(400).json({ error: "invalid_grant" });
         }
-        const [row] = await db.select().from(oauthTokens).where(and3(eq5(oauthTokens.refreshTokenHash, sha256(refreshToken)), isNull3(oauthTokens.revokedAt))).limit(1);
+        const [row] = await db.select().from(oauthTokens).where(and4(eq5(oauthTokens.refreshTokenHash, sha256(refreshToken)), isNull3(oauthTokens.revokedAt))).limit(1);
         if (!row || !row.refreshExpiresAt || row.refreshExpiresAt < /* @__PURE__ */ new Date()) {
           return res.status(400).json({ error: "invalid_grant" });
         }
         if (b.client_id && b.client_id !== row.clientId) {
           return res.status(400).json({ error: "invalid_grant" });
         }
-        const [revoked] = await db.update(oauthTokens).set({ revokedAt: /* @__PURE__ */ new Date() }).where(and3(eq5(oauthTokens.id, row.id), isNull3(oauthTokens.revokedAt))).returning();
+        const [revoked] = await db.update(oauthTokens).set({ revokedAt: /* @__PURE__ */ new Date() }).where(and4(eq5(oauthTokens.id, row.id), isNull3(oauthTokens.revokedAt))).returning();
         if (!revoked) return res.status(400).json({ error: "invalid_grant" });
         return res.json(await issueTokens(row.clientId, row.userId));
       }
@@ -1246,7 +1344,7 @@ async function authenticateConnectorRequest(req) {
   if (!header || !header.startsWith("Bearer ")) return null;
   const key = header.substring(7).trim();
   if (!key.startsWith(KEY_PREFIX)) return authenticateOAuthToken(key);
-  const rows = await db.select().from(connectorKeys).where(and4(eq6(connectorKeys.keyHash, hashKey(key)), isNull4(connectorKeys.revokedAt))).limit(1);
+  const rows = await db.select().from(connectorKeys).where(and5(eq6(connectorKeys.keyHash, hashKey(key)), isNull4(connectorKeys.revokedAt))).limit(1);
   if (rows.length === 0) return null;
   db.update(connectorKeys).set({ lastUsedAt: /* @__PURE__ */ new Date() }).where(eq6(connectorKeys.id, rows[0].id)).then(() => {
   }).catch(() => {
@@ -1263,7 +1361,7 @@ function registerConnectorKeyRoutes(app2) {
         lastUsedAt: connectorKeys.lastUsedAt,
         revokedAt: connectorKeys.revokedAt,
         createdAt: connectorKeys.createdAt
-      }).from(connectorKeys).where(and4(eq6(connectorKeys.userId, req.user.userId), isNull4(connectorKeys.revokedAt)));
+      }).from(connectorKeys).where(and5(eq6(connectorKeys.userId, req.user.userId), isNull4(connectorKeys.revokedAt)));
       res.json({ keys: rows });
     } catch (err) {
       console.error("List connector keys error:", err);
@@ -1288,7 +1386,7 @@ function registerConnectorKeyRoutes(app2) {
   });
   app2.delete("/api/connector-keys/:id", requireAuth, async (req, res) => {
     try {
-      const result = await db.update(connectorKeys).set({ revokedAt: /* @__PURE__ */ new Date() }).where(and4(eq6(connectorKeys.id, req.params.id), eq6(connectorKeys.userId, req.user.userId), isNull4(connectorKeys.revokedAt))).returning({ id: connectorKeys.id });
+      const result = await db.update(connectorKeys).set({ revokedAt: /* @__PURE__ */ new Date() }).where(and5(eq6(connectorKeys.id, req.params.id), eq6(connectorKeys.userId, req.user.userId), isNull4(connectorKeys.revokedAt))).returning({ id: connectorKeys.id });
       if (result.length === 0) return res.status(404).json({ error: "Key not found" });
       res.json({ success: true });
     } catch (err) {
@@ -1317,7 +1415,7 @@ function errorResult(message) {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 async function findOwnTask(userId, taskId) {
-  const rows = await db.select().from(tasks).where(and4(eq6(tasks.id, taskId), eq6(tasks.userId, userId))).limit(1);
+  const rows = await db.select().from(tasks).where(and5(eq6(tasks.id, taskId), eq6(tasks.userId, userId))).limit(1);
   return rows[0] ?? null;
 }
 function buildMcpServer(userId) {
@@ -1337,8 +1435,12 @@ function buildMcpServer(userId) {
         due = new Date(dueDate);
         if (isNaN(due.getTime())) return errorResult("Invalid dueDate \u2014 use ISO 8601, e.g. 2026-08-05T17:00:00Z");
       }
+      if (!due) {
+        const [owner] = await db.select({ tz: users.timezoneOffsetMinutes }).from(users).where(eq6(users.id, userId)).limit(1);
+        due = defaultDueDate(lane || "now", owner?.tz);
+      }
       const [task] = await db.insert(tasks).values({ userId, title, notes: notes || null, lane: lane || "now", dueDate: due }).returning();
-      await db.update(users).set({ lifetimeTasksCreated: sql3`COALESCE(${users.lifetimeTasksCreated}, 0) + 1` }).where(eq6(users.id, userId));
+      await db.update(users).set({ lifetimeTasksCreated: sql4`COALESCE(${users.lifetimeTasksCreated}, 0) + 1` }).where(eq6(users.id, userId));
       return textResult({ created: taskSummary(task) });
     }
   );
@@ -1355,7 +1457,7 @@ function buildMcpServer(userId) {
       if (!includeCompleted) conditions.push(isNull4(tasks.completedAt));
       if (lane) conditions.push(eq6(tasks.lane, lane));
       if (overdueOnly) conditions.push(eq6(tasks.isOverdue, true));
-      const rows = await db.select().from(tasks).where(and4(...conditions)).limit(200);
+      const rows = await db.select().from(tasks).where(and5(...conditions)).limit(200);
       return textResult({ count: rows.length, tasks: rows.map(taskSummary) });
     }
   );
@@ -1367,7 +1469,11 @@ function buildMcpServer(userId) {
       const task = await findOwnTask(userId, taskId);
       if (!task) return errorResult("Task not found");
       if (task.completedAt) return textResult({ alreadyCompleted: true, task: taskSummary(task) });
-      const [updated] = await db.update(tasks).set({ completedAt: /* @__PURE__ */ new Date() }).where(and4(eq6(tasks.id, taskId), eq6(tasks.userId, userId))).returning();
+      const [updated] = await db.update(tasks).set({ completedAt: /* @__PURE__ */ new Date() }).where(and5(eq6(tasks.id, taskId), eq6(tasks.userId, userId), isNull4(tasks.completedAt))).returning();
+      if (!updated) {
+        const current = await findOwnTask(userId, taskId);
+        return textResult({ alreadyCompleted: true, task: current ? taskSummary(current) : null });
+      }
       await applyCompletionStats(userId);
       return textResult({ completed: taskSummary(updated) });
     }
@@ -1410,8 +1516,8 @@ function buildMcpServer(userId) {
     {},
     async () => {
       const [stats] = await db.select().from(userStats).where(eq6(userStats.userId, userId)).limit(1);
-      const [openCount] = await db.select({ n: sql3`count(*)::int` }).from(tasks).where(and4(eq6(tasks.userId, userId), isNull4(tasks.completedAt)));
-      const [overdueCount] = await db.select({ n: sql3`count(*)::int` }).from(tasks).where(and4(eq6(tasks.userId, userId), isNull4(tasks.completedAt), eq6(tasks.isOverdue, true)));
+      const [openCount] = await db.select({ n: sql4`count(*)::int` }).from(tasks).where(and5(eq6(tasks.userId, userId), isNull4(tasks.completedAt)));
+      const [overdueCount] = await db.select({ n: sql4`count(*)::int` }).from(tasks).where(and5(eq6(tasks.userId, userId), isNull4(tasks.completedAt), eq6(tasks.isOverdue, true)));
       return textResult({
         currentStreak: stats?.currentStreak ?? 0,
         longestStreak: stats?.longestStreak ?? 0,
@@ -1479,12 +1585,80 @@ function registerMcpRoutes(app2) {
 }
 
 // server/routes.ts
-import { eq as eq7, and as and5, inArray as inArray2, or as or2, sql as sql4, isNull as isNull5 } from "drizzle-orm";
+import { eq as eq7, and as and6, inArray as inArray2, or as or2, sql as sql5, isNull as isNull5 } from "drizzle-orm";
 var DAILY_VOICE_LIMIT_SECONDS = 600;
+var DEEPGRAM_LISTEN_URL = process.env.DEEPGRAM_API_URL || "https://api.deepgram.com/v1/listen";
+var OPENAI_CHAT_URL = process.env.OPENAI_API_URL || "https://api.openai.com/v1/chat/completions";
 var upload = multer({
   dest: "/tmp/audio-uploads/",
   limits: { fileSize: 25 * 1024 * 1024 }
 });
+var LANES = ["now", "soon", "later", "park"];
+var REMINDER_TYPES = ["soft", "strong", "persistent", "none"];
+var DELEGATION_STATUSES = ["assigned", "in_progress", "waiting", "needs_review", "done"];
+var DELEGATION_STATUS_LABELS = {
+  assigned: "Assigned",
+  in_progress: "In Progress",
+  waiting: "Waiting",
+  needs_review: "Needs Review",
+  done: "Done"
+};
+var DELEGATION_NOTE_TYPES = ["update", "blocked", "question", "completed", "custom", "status_update"];
+var INVITE_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+var PASSWORD_RULES = [
+  { test: (p) => p.length >= 8, error: "Password must be at least 8 characters" },
+  { test: (p) => /[A-Z]/.test(p), error: "Password must include at least one uppercase letter" },
+  { test: (p) => /[a-z]/.test(p), error: "Password must include at least one lowercase letter" },
+  { test: (p) => /[0-9]/.test(p), error: "Password must include at least one number" },
+  { test: (p) => /[^A-Za-z0-9]/.test(p), error: "Password must include at least one special character" }
+];
+function passwordPolicyError(password) {
+  if (typeof password !== "string") return "Password is required";
+  const failed = PASSWORD_RULES.find((rule) => !rule.test(password));
+  return failed ? failed.error : null;
+}
+function bodyNamesOtherUser(req, ...fields) {
+  return fields.some((field) => {
+    const value = req.body?.[field];
+    return value !== void 0 && value !== null && value !== "" && value !== req.user?.userId;
+  });
+}
+function normalizeEmail(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
+}
+function parseOptionalDate(value) {
+  if (value === void 0) return void 0;
+  if (value === null) return null;
+  const date2 = new Date(value);
+  return isNaN(date2.getTime()) ? "invalid" : date2;
+}
+function displayNameFor(user) {
+  return user?.displayName || user?.email?.split("@")[0] || "A teammate";
+}
+async function areTeammates(userId, teammateId) {
+  const rows = await db.select({ id: teamMembers.id }).from(teamMembers).where(and6(eq7(teamMembers.userId, userId), eq7(teamMembers.teammateId, teammateId))).limit(1);
+  return rows.length > 0;
+}
+async function generateUniqueInviteCode() {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = "";
+    for (let i = 0; i < 8; i++) code += INVITE_CODE_CHARS[randomInt(INVITE_CODE_CHARS.length)];
+    const existing = await db.select({ id: teamInvites.id }).from(teamInvites).where(eq7(teamInvites.inviteCode, code)).limit(1);
+    if (existing.length === 0) return code;
+  }
+  throw new Error("Could not generate a unique invite code");
+}
+var CLEARED_DELEGATION = {
+  delegatedToUserId: null,
+  delegationStatus: null,
+  assignedTo: null,
+  delegatedAt: null,
+  lastDelegationUpdate: null
+};
+var resetCodeFailures = /* @__PURE__ */ new Map();
+var MAX_RESET_CODE_FAILURES = 5;
 async function registerRoutes(app2) {
   registerOAuthRoutes(app2);
   registerMcpRoutes(app2);
@@ -1505,7 +1679,7 @@ async function registerRoutes(app2) {
         return res.status(403).json({ error: "Access denied" });
       }
       const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-      const existing = await db.select().from(voiceUsage).where(and5(eq7(voiceUsage.userId, userId), eq7(voiceUsage.date, today))).limit(1);
+      const existing = await db.select().from(voiceUsage).where(and6(eq7(voiceUsage.userId, userId), eq7(voiceUsage.date, today))).limit(1);
       const secondsUsed = existing.length > 0 ? existing[0].secondsUsed || 0 : 0;
       const secondsRemaining = Math.max(0, DAILY_VOICE_LIMIT_SECONDS - secondsUsed);
       res.json({
@@ -1520,104 +1694,96 @@ async function registerRoutes(app2) {
     }
   });
   app2.post("/api/transcribe", requireAuth, upload.single("audio"), async (req, res) => {
+    const audioFilePath = req.file?.path;
     try {
-      console.log("[VOICE] === New transcription request ===");
-      console.log("[VOICE] File received:", req.file ? {
-        fieldname: req.file.fieldname,
-        originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        path: req.file.path
-      } : "NO FILE");
-      console.log("[VOICE] Body params:", { userId: req.body.userId, durationSeconds: req.body.durationSeconds });
       if (!req.file) {
-        console.error("[VOICE] ERROR: No audio file in request");
+        console.error("[VOICE] No audio file in request");
         return res.status(400).json({ error: "No audio file provided" });
       }
       const userId = req.user?.userId;
       if (!userId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const durationSeconds = parseInt(req.body.durationSeconds) || 0;
-      if (durationSeconds > 0) {
-        const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-        const existing = await db.select().from(voiceUsage).where(and5(eq7(voiceUsage.userId, userId), eq7(voiceUsage.date, today))).limit(1);
-        const currentUsage = existing.length > 0 ? existing[0].secondsUsed || 0 : 0;
-        const secondsRemaining = DAILY_VOICE_LIMIT_SECONDS - currentUsage;
-        if (currentUsage + durationSeconds > DAILY_VOICE_LIMIT_SECONDS) {
-          if (req.file?.path) {
-            fs.unlink(req.file.path, () => {
-            });
-          }
-          return res.status(429).json({
-            error: secondsRemaining <= 0 ? "Daily voice limit reached" : `Recording would exceed daily limit. You have ${Math.floor(secondsRemaining / 60)} min ${secondsRemaining % 60} sec remaining.`,
-            limitReached: secondsRemaining <= 0,
-            secondsUsed: currentUsage,
-            secondsRemaining,
-            dailyLimitSeconds: DAILY_VOICE_LIMIT_SECONDS
-          });
-        }
+      const clientDurationSeconds = Math.max(0, parseInt(req.body.durationSeconds) || 0);
+      const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const usageRows = await db.select().from(voiceUsage).where(and6(eq7(voiceUsage.userId, userId), eq7(voiceUsage.date, today))).limit(1);
+      const currentUsage = usageRows.length > 0 ? usageRows[0].secondsUsed || 0 : 0;
+      if (currentUsage >= DAILY_VOICE_LIMIT_SECONDS) {
+        return res.status(429).json({
+          error: "Daily voice limit reached",
+          limitReached: true,
+          secondsUsed: currentUsage,
+          secondsRemaining: 0,
+          dailyLimitSeconds: DAILY_VOICE_LIMIT_SECONDS
+        });
       }
       const apiKey = process.env.DEEPGRAM_API_KEY;
       if (!apiKey) {
-        console.error("DEEPGRAM_API_KEY not configured");
-        return res.status(500).json({ error: "Transcription service not configured" });
+        console.error("[VOICE] DEEPGRAM_API_KEY not configured");
+        return res.status(503).json({ error: "Transcription service not configured" });
       }
-      const audioFilePath = req.file.path;
-      const audioBuffer = fs.readFileSync(audioFilePath);
-      console.log("[VOICE] Sending audio to Deepgram, size:", audioBuffer.length, "bytes, mimetype:", req.file.mimetype);
-      const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&detect_language=true", {
-        method: "POST",
-        headers: {
-          "Authorization": `Token ${apiKey}`,
-          "Content-Type": "audio/mp4"
-        },
-        body: audioBuffer
-      });
+      const audioBuffer = await fs.promises.readFile(req.file.path);
+      if (audioBuffer.length === 0) {
+        return res.json({ text: "", debug: { audioDuration: 0, fileSize: 0, confidence: 0 } });
+      }
+      const uploadedType = (req.file.mimetype || "").split(";")[0].trim().toLowerCase();
+      const contentType = /^(audio|video)\//.test(uploadedType) ? uploadedType : "audio/mp4";
+      let response;
+      try {
+        response = await fetch(`${DEEPGRAM_LISTEN_URL}?model=nova-3&smart_format=true&detect_language=true`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Token ${apiKey}`,
+            "Content-Type": contentType
+          },
+          body: audioBuffer,
+          signal: AbortSignal.timeout(6e4)
+        });
+      } catch (fetchError) {
+        console.error("[VOICE] Deepgram request failed:", fetchError?.name, fetchError?.message);
+        return res.status(504).json({ error: "Transcription service timed out. Try again." });
+      }
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("Deepgram error:", response.status, errorText);
-        throw new Error(`Deepgram API error: ${response.status}`);
+        console.error("[VOICE] Deepgram error:", response.status, errorText.substring(0, 300));
+        return res.status(502).json({ error: "Transcription service error. Try again." });
       }
       const result = await response.json();
-      console.log("Deepgram response:", JSON.stringify(result, null, 2));
-      fs.unlink(audioFilePath, (err) => {
-        if (err) console.error("Failed to delete temp file:", err);
-      });
       const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
       const confidence = result.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
       const audioDuration = result.metadata?.duration || 0;
-      console.log("[VOICE] Result - Transcript:", JSON.stringify(transcript), "Confidence:", confidence, "Duration:", audioDuration, "FileSize:", audioBuffer.length);
-      if (durationSeconds > 0) {
-        const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-        const existing = await db.select().from(voiceUsage).where(and5(eq7(voiceUsage.userId, userId), eq7(voiceUsage.date, today))).limit(1);
-        if (existing.length > 0) {
-          await db.update(voiceUsage).set({
-            secondsUsed: (existing[0].secondsUsed || 0) + durationSeconds,
-            updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq7(voiceUsage.id, existing[0].id));
-        } else {
-          await db.insert(voiceUsage).values({
-            userId,
-            date: today,
-            secondsUsed: durationSeconds
-          });
+      console.log("[VOICE] Transcribed", {
+        bytes: audioBuffer.length,
+        contentType,
+        audioDuration,
+        confidence,
+        chars: transcript.length
+      });
+      const billedSeconds = Math.max(clientDurationSeconds, Math.ceil(audioDuration));
+      if (billedSeconds > 0) {
+        const updated = await db.update(voiceUsage).set({
+          secondsUsed: sql5`COALESCE(${voiceUsage.secondsUsed}, 0) + ${billedSeconds}`,
+          updatedAt: /* @__PURE__ */ new Date()
+        }).where(and6(eq7(voiceUsage.userId, userId), eq7(voiceUsage.date, today))).returning({ id: voiceUsage.id });
+        if (updated.length === 0) {
+          await db.insert(voiceUsage).values({ userId, date: today, secondsUsed: billedSeconds });
         }
       }
+      const secondsRemaining = Math.max(0, DAILY_VOICE_LIMIT_SECONDS - currentUsage - billedSeconds);
       res.json({
         text: transcript,
+        secondsRemaining,
+        limitReached: secondsRemaining === 0,
         debug: { audioDuration, fileSize: audioBuffer.length, confidence }
       });
     } catch (error) {
       console.error("[VOICE] ERROR:", error?.message || error);
-      if (req.file?.path) {
-        fs.unlink(req.file.path, () => {
+      res.status(500).json({ error: "Transcription failed. Try again." });
+    } finally {
+      if (audioFilePath) {
+        fs.unlink(audioFilePath, () => {
         });
       }
-      if (error.message?.includes("401")) {
-        return res.status(401).json({ error: "Invalid API key" });
-      }
-      res.status(500).json({ error: "Transcription failed: " + (error?.message || "Unknown error") });
     }
   });
   app2.post("/api/tasks/extract", requireAuth, async (req, res) => {
@@ -1635,9 +1801,10 @@ async function registerRoutes(app2) {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         console.error("OPENAI_API_KEY not configured");
-        return res.status(500).json({ error: "AI service not configured" });
+        return res.status(503).json({ error: "AI service not configured" });
       }
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await fetch(OPENAI_CHAT_URL, {
+        signal: AbortSignal.timeout(3e4),
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
@@ -1678,7 +1845,7 @@ Examples:
             },
             {
               role: "user",
-              content: transcript
+              content: transcript.slice(0, 8e3)
             }
           ],
           temperature: 0.3,
@@ -1699,7 +1866,9 @@ Examples:
       try {
         const parsed = JSON.parse(content);
         const tasks2 = Array.isArray(parsed.tasks) ? parsed.tasks : [];
-        res.json({ tasks: tasks2.filter((t) => t.title && typeof t.title === "string") });
+        res.json({
+          tasks: tasks2.filter((t) => t && typeof t.title === "string" && t.title.trim().length > 0).map((t) => ({ title: t.title.trim().slice(0, 500) }))
+        });
       } catch (parseError) {
         console.error("Failed to parse OpenAI response:", content);
         res.json({ tasks: [] });
@@ -1882,14 +2051,19 @@ Examples:
       res.status(500).json({ error: "Failed to get user" });
     }
   });
-  app2.post("/api/auth/change-password", async (req, res) => {
+  app2.post("/api/auth/change-password", requireAuth, async (req, res) => {
     try {
-      const { userId, currentPassword, newPassword } = req.body;
-      if (!userId || !currentPassword || !newPassword) {
+      const { currentPassword, newPassword } = req.body;
+      const userId = req.user.userId;
+      if (bodyNamesOtherUser(req, "userId")) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      if (!currentPassword || !newPassword) {
         return res.status(400).json({ error: "All fields are required" });
       }
-      if (newPassword.length < 6) {
-        return res.status(400).json({ error: "New password must be at least 6 characters" });
+      const policyError = passwordPolicyError(newPassword);
+      if (policyError) {
+        return res.status(400).json({ error: policyError });
       }
       const existing = await db.select().from(users).where(eq7(users.id, userId)).limit(1);
       if (existing.length === 0) {
@@ -1901,7 +2075,7 @@ Examples:
       }
       const validPassword = await bcrypt2.compare(currentPassword, user.passwordHash);
       if (!validPassword) {
-        return res.status(401).json({ error: "Current password is incorrect" });
+        return res.status(400).json({ error: "Current password is incorrect" });
       }
       const newPasswordHash = await bcrypt2.hash(newPassword, 10);
       await db.update(users).set({ passwordHash: newPasswordHash }).where(eq7(users.id, userId));
@@ -1923,12 +2097,13 @@ Examples:
         return res.json({ success: true, message: "If an account exists with this email, you will receive a reset code" });
       }
       const user = existing[0];
-      const resetCode = Math.floor(1e5 + Math.random() * 9e5).toString();
+      const resetCode = randomInt(1e5, 1e6).toString();
       const resetExpiry = new Date(Date.now() + 15 * 60 * 1e3);
       await db.update(users).set({
         resetToken: resetCode,
         resetTokenExpiry: resetExpiry
       }).where(eq7(users.id, user.id));
+      resetCodeFailures.delete(normalizedEmail);
       const apiKey = process.env.SENDGRID_API_KEY;
       if (!apiKey) {
         console.error("SENDGRID_API_KEY not configured");
@@ -1987,24 +2162,29 @@ If you did not request this reset, please ignore this email.`
       if (!email || !code || !newPassword) {
         return res.status(400).json({ error: "All fields are required" });
       }
-      if (newPassword.length < 6) {
-        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      const policyError = passwordPolicyError(newPassword);
+      if (policyError) {
+        return res.status(400).json({ error: policyError });
       }
       const normalizedEmail = email.toLowerCase().trim();
       const normalizedCode = code.toString().trim();
-      console.log("Reset password attempt:", { email: normalizedEmail, codeProvided: normalizedCode });
       const existing = await db.select().from(users).where(eq7(users.email, normalizedEmail)).limit(1);
       if (existing.length === 0) {
-        console.log("Reset password: User not found for email:", normalizedEmail);
         return res.status(400).json({ error: "Invalid reset code" });
       }
       const user = existing[0];
-      console.log("Reset password: DB token:", user.resetToken, "Provided:", normalizedCode, "Match:", user.resetToken === normalizedCode);
       if (!user.resetToken || user.resetToken !== normalizedCode) {
+        const failures = (resetCodeFailures.get(normalizedEmail) || 0) + 1;
+        if (user.resetToken && failures >= MAX_RESET_CODE_FAILURES) {
+          resetCodeFailures.delete(normalizedEmail);
+          await db.update(users).set({ resetToken: null, resetTokenExpiry: null }).where(eq7(users.id, user.id));
+          return res.status(400).json({ error: "Too many wrong codes. Please request a new code." });
+        }
+        resetCodeFailures.set(normalizedEmail, failures);
         return res.status(400).json({ error: "Invalid reset code" });
       }
+      resetCodeFailures.delete(normalizedEmail);
       if (!user.resetTokenExpiry || new Date(user.resetTokenExpiry) < /* @__PURE__ */ new Date()) {
-        console.log("Reset password: Token expired. Expiry:", user.resetTokenExpiry, "Now:", /* @__PURE__ */ new Date());
         return res.status(400).json({ error: "Reset code has expired. Please request a new code." });
       }
       const newPasswordHash = await bcrypt2.hash(newPassword, 10);
@@ -2096,7 +2276,7 @@ ${message}`
           userId: user.id
         });
       }
-      res.json({ user });
+      res.json({ user: { id: user.id, deviceId: user.deviceId, createdAt: user.createdAt } });
     } catch (error) {
       console.error("User init error:", error);
       res.status(500).json({ error: "Failed to initialize user" });
@@ -2133,25 +2313,39 @@ ${message}`
       if (!req.user || req.user.userId !== userId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const userRecord = await db.select().from(users).where(eq7(users.id, userId)).limit(1);
-      const subscriptionStatus = userRecord[0]?.subscriptionStatus || "none";
-      const trialEndsAt = userRecord[0]?.trialEndsAt;
-      const isTrialing = subscriptionStatus === "trialing" && trialEndsAt && new Date(trialEndsAt) > /* @__PURE__ */ new Date();
-      const isPro = subscriptionStatus === "active" || subscriptionStatus === "pro" || isTrialing;
+      if (typeof title !== "string" || !title.trim()) {
+        return res.status(400).json({ error: "Title is required" });
+      }
+      if (lane !== void 0 && !LANES.includes(lane)) {
+        return res.status(400).json({ error: "Invalid lane" });
+      }
+      const parsedDueDate = parseOptionalDate(dueDate);
+      if (parsedDueDate === "invalid") {
+        return res.status(400).json({ error: "Invalid dueDate" });
+      }
+      if (typeof id === "string" && id) {
+        const [existing] = await db.select().from(tasks).where(eq7(tasks.id, id)).limit(1);
+        if (existing) {
+          if (existing.userId !== userId) {
+            return res.status(409).json({ error: "Task id already in use" });
+          }
+          return res.json({ task: { ...existing, subtasks: [], delegationNotes: [] } });
+        }
+      }
       const taskValues = {
         userId,
-        title,
-        notes: notes || null,
+        title: title.trim().slice(0, 500),
+        notes: typeof notes === "string" && notes.trim() ? notes : null,
         lane: lane || "now",
-        reminderType: reminderType || "soft",
-        dueDate: dueDate ? new Date(dueDate) : null,
-        assignedTo: assignedTo || null
+        reminderType: REMINDER_TYPES.includes(reminderType) ? reminderType : "soft",
+        dueDate: parsedDueDate ?? null,
+        assignedTo: typeof assignedTo === "string" && assignedTo ? assignedTo.slice(0, 255) : null
       };
-      if (id) {
-        taskValues.id = id;
+      if (typeof id === "string" && id) {
+        taskValues.id = id.slice(0, 255);
       }
       const result = await db.insert(tasks).values(taskValues).returning();
-      await db.update(users).set({ lifetimeTasksCreated: sql4`COALESCE(${users.lifetimeTasksCreated}, 0) + 1` }).where(eq7(users.id, userId));
+      await db.update(users).set({ lifetimeTasksCreated: sql5`COALESCE(${users.lifetimeTasksCreated}, 0) + 1` }).where(eq7(users.id, userId));
       res.json({ task: { ...result[0], subtasks: [], delegationNotes: [] } });
     } catch (error) {
       console.error("Create task error:", error);
@@ -2161,26 +2355,95 @@ ${message}`
   app2.put("/api/tasks/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const updates = req.body;
+      const me = req.user.userId;
+      const body = req.body || {};
       const existingTask = await db.select().from(tasks).where(eq7(tasks.id, id));
-      if (existingTask.length > 0 && existingTask[0].userId !== req.user?.userId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-      const wasCompleted = existingTask.length > 0 && existingTask[0].completedAt !== null;
-      const isBeingCompleted = updates.completedAt && !wasCompleted;
-      if (updates.dueDate) updates.dueDate = new Date(updates.dueDate);
-      if (updates.completedAt) updates.completedAt = new Date(updates.completedAt);
-      if (updates.delegatedAt) updates.delegatedAt = new Date(updates.delegatedAt);
-      if (updates.lastDelegationUpdate) updates.lastDelegationUpdate = new Date(updates.lastDelegationUpdate);
-      delete updates.subtasks;
-      delete updates.delegationNotes;
-      delete updates.createdAt;
-      const result = await db.update(tasks).set(updates).where(eq7(tasks.id, id)).returning();
-      if (result.length === 0) {
+      if (existingTask.length === 0) {
         return res.status(404).json({ error: "Task not found" });
       }
-      if (isBeingCompleted && existingTask[0].userId) {
-        await applyCompletionStats(existingTask[0].userId);
+      if (existingTask[0].userId !== me) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const current = existingTask[0];
+      const updates = {};
+      if (body.title !== void 0) {
+        if (typeof body.title !== "string" || !body.title.trim()) {
+          return res.status(400).json({ error: "Title can't be empty" });
+        }
+        updates.title = body.title.trim().slice(0, 500);
+      }
+      if (body.notes !== void 0) {
+        updates.notes = typeof body.notes === "string" && body.notes.trim() ? body.notes : null;
+      }
+      if (body.lane !== void 0) {
+        if (!LANES.includes(body.lane)) return res.status(400).json({ error: "Invalid lane" });
+        updates.lane = body.lane;
+      }
+      if (body.reminderType !== void 0) {
+        if (!REMINDER_TYPES.includes(body.reminderType)) return res.status(400).json({ error: "Invalid reminder type" });
+        updates.reminderType = body.reminderType;
+      }
+      if (body.isOverdue !== void 0) updates.isOverdue = !!body.isOverdue;
+      if (body.focusTimeMinutes !== void 0) {
+        const minutes = Number(body.focusTimeMinutes);
+        if (!Number.isFinite(minutes) || minutes < 0) return res.status(400).json({ error: "Invalid focus time" });
+        updates.focusTimeMinutes = Math.round(minutes);
+      }
+      if (body.assignedTo !== void 0) {
+        updates.assignedTo = typeof body.assignedTo === "string" && body.assignedTo ? body.assignedTo.slice(0, 255) : null;
+      }
+      if (body.delegationStatus !== void 0) {
+        if (body.delegationStatus !== null && !DELEGATION_STATUSES.includes(body.delegationStatus)) {
+          return res.status(400).json({ error: "Invalid delegation status" });
+        }
+        updates.delegationStatus = body.delegationStatus;
+      }
+      for (const field of ["dueDate", "completedAt", "delegatedAt", "lastDelegationUpdate"]) {
+        const parsed = parseOptionalDate(body[field]);
+        if (parsed === "invalid") return res.status(400).json({ error: `Invalid ${field}` });
+        if (parsed !== void 0) updates[field] = parsed;
+      }
+      let newDelegateId = null;
+      if (body.delegatedToUserId !== void 0) {
+        const target = body.delegatedToUserId || null;
+        let validTarget = true;
+        if (target && target !== current.delegatedToUserId) {
+          validTarget = target !== me && await areTeammates(me, target);
+          if (validTarget) {
+            newDelegateId = target;
+            if (!updates.delegatedAt) updates.delegatedAt = /* @__PURE__ */ new Date();
+            if (updates.delegationStatus === void 0) updates.delegationStatus = "assigned";
+          }
+        }
+        if (validTarget) {
+          updates.delegatedToUserId = target;
+        } else {
+          const otherFields = Object.keys(body).filter(
+            (k) => !["delegatedToUserId", "delegationStatus", "assignedTo", "delegatedAt", "lastDelegationUpdate"].includes(k)
+          );
+          if (otherFields.length === 0) {
+            return res.status(400).json({ error: "You can only hand off tasks to linked team members" });
+          }
+          delete updates.delegationStatus;
+          delete updates.assignedTo;
+          delete updates.delegatedAt;
+          delete updates.lastDelegationUpdate;
+        }
+      }
+      const isBeingCompleted = !!updates.completedAt && current.completedAt === null;
+      if (Object.keys(updates).length === 0) {
+        return res.json({ task: current });
+      }
+      let result = await db.update(tasks).set(updates).where(isBeingCompleted ? and6(eq7(tasks.id, id), isNull5(tasks.completedAt)) : eq7(tasks.id, id)).returning();
+      if (result.length === 0) {
+        delete updates.completedAt;
+        result = Object.keys(updates).length > 0 ? await db.update(tasks).set(updates).where(eq7(tasks.id, id)).returning() : await db.select().from(tasks).where(eq7(tasks.id, id));
+      } else if (isBeingCompleted) {
+        await applyCompletionStats(me);
+      }
+      if (newDelegateId) {
+        const [owner] = await db.select({ displayName: users.displayName, email: users.email }).from(users).where(eq7(users.id, me)).limit(1);
+        sendDelegationNotification(newDelegateId, result[0].title, displayNameFor(owner), result[0].id).catch((err) => console.error("Delegation notification failed:", err));
       }
       res.json({ task: result[0] });
     } catch (error) {
@@ -2220,16 +2483,38 @@ ${message}`
       res.status(500).json({ error: "Failed to delete task" });
     }
   });
-  app2.post("/api/subtasks", async (req, res) => {
+  async function ownsTask(userId, taskId) {
+    if (typeof taskId !== "string" || !taskId) return "missing";
+    const [task] = await db.select({ userId: tasks.userId }).from(tasks).where(eq7(tasks.id, taskId)).limit(1);
+    if (!task) return "missing";
+    return task.userId === userId ? "ok" : "forbidden";
+  }
+  async function findOwnSubtask(req) {
+    const [row] = await db.select({ subtask: subtasks, ownerId: tasks.userId }).from(subtasks).innerJoin(tasks, eq7(tasks.id, subtasks.taskId)).where(eq7(subtasks.id, req.params.id)).limit(1);
+    if (!row || row.ownerId !== req.user.userId) return null;
+    return row.subtask;
+  }
+  app2.post("/api/subtasks", requireAuth, async (req, res) => {
     try {
       const { id, taskId, title } = req.body;
+      if (typeof title !== "string" || !title.trim()) {
+        return res.status(400).json({ error: "Title is required" });
+      }
+      const ownership = await ownsTask(req.user.userId, taskId);
+      if (ownership === "missing") return res.status(404).json({ error: "Task not found" });
+      if (ownership === "forbidden") return res.status(403).json({ error: "Access denied" });
       const subtaskValues = {
         taskId,
-        title,
+        title: title.trim().slice(0, 500),
         completed: false
       };
-      if (id) {
-        subtaskValues.id = id;
+      if (typeof id === "string" && id) {
+        const [existing] = await db.select().from(subtasks).where(eq7(subtasks.id, id)).limit(1);
+        if (existing) {
+          if (existing.taskId !== taskId) return res.status(409).json({ error: "Subtask id already in use" });
+          return res.json({ subtask: existing });
+        }
+        subtaskValues.id = id.slice(0, 255);
       }
       const result = await db.insert(subtasks).values(subtaskValues).returning();
       res.json({ subtask: result[0] });
@@ -2238,24 +2523,38 @@ ${message}`
       res.status(500).json({ error: "Failed to create subtask" });
     }
   });
-  app2.put("/api/subtasks/:id", async (req, res) => {
+  app2.put("/api/subtasks/:id", requireAuth, async (req, res) => {
     try {
-      const { id } = req.params;
+      const subtask = await findOwnSubtask(req);
+      if (!subtask) {
+        return res.status(404).json({ error: "Subtask not found" });
+      }
       const { completed, title } = req.body;
       const updates = {};
-      if (completed !== void 0) updates.completed = completed;
-      if (title !== void 0) updates.title = title;
-      const result = await db.update(subtasks).set(updates).where(eq7(subtasks.id, id)).returning();
+      if (completed !== void 0) updates.completed = !!completed;
+      if (title !== void 0) {
+        if (typeof title !== "string" || !title.trim()) {
+          return res.status(400).json({ error: "Title can't be empty" });
+        }
+        updates.title = title.trim().slice(0, 500);
+      }
+      if (Object.keys(updates).length === 0) {
+        return res.json({ subtask });
+      }
+      const result = await db.update(subtasks).set(updates).where(eq7(subtasks.id, subtask.id)).returning();
       res.json({ subtask: result[0] });
     } catch (error) {
       console.error("Update subtask error:", error);
       res.status(500).json({ error: "Failed to update subtask" });
     }
   });
-  app2.delete("/api/subtasks/:id", async (req, res) => {
+  app2.delete("/api/subtasks/:id", requireAuth, async (req, res) => {
     try {
-      const { id } = req.params;
-      await db.delete(subtasks).where(eq7(subtasks.id, id));
+      const subtask = await findOwnSubtask(req);
+      if (!subtask) {
+        return res.status(404).json({ error: "Subtask not found" });
+      }
+      await db.delete(subtasks).where(eq7(subtasks.id, subtask.id));
       res.json({ success: true });
     } catch (error) {
       console.error("Delete subtask error:", error);
@@ -2281,14 +2580,25 @@ ${message}`
       if (!req.user || req.user.userId !== userId) {
         return res.status(403).json({ error: "Access denied" });
       }
+      if (typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "Name is required" });
+      }
       const contactValues = {
         userId,
-        name,
-        role: role || null,
-        color: color || "#007AFF"
+        name: name.trim().slice(0, 255),
+        role: typeof role === "string" && role.trim() ? role.trim().slice(0, 255) : null,
+        color: typeof color === "string" && color ? color.slice(0, 20) : "#007AFF"
       };
-      if (id) {
-        contactValues.id = id;
+      if (typeof id === "string" && id) {
+        const [existing] = await db.select().from(contacts).where(eq7(contacts.id, id)).limit(1);
+        if (existing) {
+          if (existing.userId !== userId) {
+            return res.status(403).json({ error: "Access denied" });
+          }
+          const [updated] = await db.update(contacts).set({ name: contactValues.name, role: contactValues.role, color: contactValues.color }).where(eq7(contacts.id, id)).returning();
+          return res.json({ contact: updated });
+        }
+        contactValues.id = id.slice(0, 255);
       }
       const result = await db.insert(contacts).values(contactValues).returning();
       res.json({ contact: result[0] });
@@ -2297,10 +2607,18 @@ ${message}`
       res.status(500).json({ error: "Failed to create contact" });
     }
   });
-  app2.delete("/api/contacts/:id", async (req, res) => {
+  app2.delete("/api/contacts/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      await db.delete(contacts).where(eq7(contacts.id, id));
+      const me = req.user.userId;
+      const [contact] = await db.select({ userId: contacts.userId }).from(contacts).where(eq7(contacts.id, id)).limit(1);
+      if (!contact || contact.userId !== me) {
+        return res.status(404).json({ error: "Contact not found" });
+      }
+      await db.transaction(async (tx) => {
+        await tx.update(tasks).set({ assignedTo: null, delegationStatus: null, delegatedAt: null, lastDelegationUpdate: null }).where(and6(eq7(tasks.userId, me), eq7(tasks.assignedTo, id)));
+        await tx.delete(contacts).where(eq7(contacts.id, id));
+      });
       res.json({ success: true });
     } catch (error) {
       console.error("Delete contact error:", error);
@@ -2315,12 +2633,28 @@ ${message}`
       }
       const { pushToken, notificationsEnabled, timezoneOffsetMinutes } = req.body;
       const updates = {};
-      if (pushToken !== void 0) updates.pushToken = pushToken;
+      if (pushToken !== void 0) {
+        if (pushToken !== null && typeof pushToken !== "string") {
+          return res.status(400).json({ error: "Invalid push token" });
+        }
+        updates.pushToken = pushToken || null;
+        if (pushToken) {
+          await db.update(users).set({ pushToken: null }).where(and6(eq7(users.pushToken, pushToken), sql5`${users.id} <> ${id}`));
+        }
+      }
       if (notificationsEnabled !== void 0) updates.notificationsEnabled = notificationsEnabled;
       if (Number.isInteger(timezoneOffsetMinutes) && Math.abs(timezoneOffsetMinutes) <= 14 * 60) {
         updates.timezoneOffsetMinutes = timezoneOffsetMinutes;
       }
-      const result = await db.update(users).set(updates).where(eq7(users.id, id)).returning();
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "Nothing to update" });
+      }
+      const result = await db.update(users).set(updates).where(eq7(users.id, id)).returning({
+        id: users.id,
+        pushToken: users.pushToken,
+        notificationsEnabled: users.notificationsEnabled,
+        timezoneOffsetMinutes: users.timezoneOffsetMinutes
+      });
       if (result.length === 0) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -2345,16 +2679,18 @@ ${message}`
       if (!req.user || req.user.userId !== id) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const { subscription, timezoneOffsetMinutes } = req.body;
+      const { subscription, timezoneOffsetMinutes, resync } = req.body;
       if (!subscription?.endpoint || typeof subscription.endpoint !== "string" || !subscription.keys?.p256dh || !subscription.keys?.auth) {
         return res.status(400).json({ error: "Invalid subscription" });
       }
       await saveWebPushSubscription(id, subscription);
-      const updates = { notificationsEnabled: true };
+      const updates = resync === true ? {} : { notificationsEnabled: true };
       if (Number.isInteger(timezoneOffsetMinutes) && Math.abs(timezoneOffsetMinutes) <= 14 * 60) {
         updates.timezoneOffsetMinutes = timezoneOffsetMinutes;
       }
-      await db.update(users).set(updates).where(eq7(users.id, id));
+      if (Object.keys(updates).length > 0) {
+        await db.update(users).set(updates).where(eq7(users.id, id));
+      }
       res.json({ success: true });
     } catch (error) {
       console.error("Save web push subscription error:", error);
@@ -2549,6 +2885,8 @@ ${message}`
         }
       }
       if (clientStats) {
+        delete clientStats.id;
+        delete clientStats.userId;
         await db.insert(userStats).values({
           userId,
           ...clientStats,
@@ -2564,19 +2902,18 @@ ${message}`
       res.status(500).json({ error: "Failed to sync data" });
     }
   });
-  function generateInviteCode() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let code = "";
-    for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  }
-  app2.put("/api/users/:id/display-name", async (req, res) => {
+  app2.put("/api/users/:id/display-name", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      if (!req.user || req.user.userId !== id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const { displayName } = req.body;
-      const result = await db.update(users).set({ displayName }).where(eq7(users.id, id)).returning();
+      if (displayName !== null && typeof displayName !== "string") {
+        return res.status(400).json({ error: "displayName must be a string" });
+      }
+      const cleaned = typeof displayName === "string" ? displayName.trim().slice(0, 100) || null : null;
+      const result = await db.update(users).set({ displayName: cleaned }).where(eq7(users.id, id)).returning();
       if (result.length === 0) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -2586,23 +2923,26 @@ ${message}`
       res.status(500).json({ error: "Failed to update display name" });
     }
   });
-  app2.post("/api/team/invite", async (req, res) => {
+  app2.post("/api/team/invite", requireAuth, async (req, res) => {
     try {
-      const { inviterId, inviteeEmail } = req.body;
-      let inviteCode = generateInviteCode();
-      let attempts = 0;
-      while (attempts < 5) {
-        const existing = await db.select().from(teamInvites).where(eq7(teamInvites.inviteCode, inviteCode)).limit(1);
-        if (existing.length === 0) break;
-        inviteCode = generateInviteCode();
-        attempts++;
+      if (bodyNamesOtherUser(req, "inviterId")) {
+        return res.status(403).json({ error: "Access denied" });
       }
+      const inviterId = req.user.userId;
+      const inviteeEmail = normalizeEmail(req.body.inviteeEmail);
+      if (inviteeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeEmail)) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
+      }
+      if (inviteeEmail && inviteeEmail === req.user.email?.toLowerCase()) {
+        return res.status(400).json({ error: "You can't invite yourself" });
+      }
+      const inviteCode = await generateUniqueInviteCode();
       const expiresAt = /* @__PURE__ */ new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
       const result = await db.insert(teamInvites).values({
         inviteCode,
         inviterId,
-        inviteeEmail: inviteeEmail || null,
+        inviteeEmail,
         status: "pending",
         expiresAt
       }).returning();
@@ -2612,27 +2952,25 @@ ${message}`
       res.status(500).json({ error: "Failed to create invite" });
     }
   });
-  app2.get("/api/team/invites/:userId", async (req, res) => {
+  app2.get("/api/team/invites/:userId", requireAuth, async (req, res) => {
     try {
       const { userId } = req.params;
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const now = /* @__PURE__ */ new Date();
       const sentInvites = await db.select().from(teamInvites).where(
-        and5(eq7(teamInvites.inviterId, userId), eq7(teamInvites.status, "pending"))
+        and6(eq7(teamInvites.inviterId, userId), eq7(teamInvites.status, "pending"))
       );
-      const userRecord = await db.select().from(users).where(eq7(users.id, userId)).limit(1);
-      const userEmail = userRecord[0]?.email;
+      const userRecord = await db.select({ email: users.email }).from(users).where(eq7(users.id, userId)).limit(1);
+      const userEmail = userRecord[0]?.email?.toLowerCase();
       let receivedInvites = [];
       if (userEmail) {
-        const invites = await db.select().from(teamInvites).where(
-          and5(eq7(teamInvites.inviteeEmail, userEmail), eq7(teamInvites.status, "pending"))
-        );
-        for (const invite of invites) {
-          const inviter = await db.select().from(users).where(eq7(users.id, invite.inviterId)).limit(1);
-          receivedInvites.push({
-            ...invite,
-            inviterEmail: inviter[0]?.email,
-            inviterName: inviter[0]?.displayName
-          });
-        }
+        const rows = await db.select({ invite: teamInvites, inviterEmail: users.email, inviterName: users.displayName }).from(teamInvites).innerJoin(users, eq7(users.id, teamInvites.inviterId)).where(and6(
+          sql5`lower(${teamInvites.inviteeEmail}) = ${userEmail}`,
+          eq7(teamInvites.status, "pending")
+        ));
+        receivedInvites = rows.filter((row) => !row.invite.expiresAt || row.invite.expiresAt > now).map((row) => ({ ...row.invite, inviterEmail: row.inviterEmail, inviterName: row.inviterName }));
       }
       res.json({ sentInvites, receivedInvites });
     } catch (error) {
@@ -2640,60 +2978,86 @@ ${message}`
       res.status(500).json({ error: "Failed to get invites" });
     }
   });
-  app2.post("/api/team/invite/accept", async (req, res) => {
+  app2.post("/api/team/invite/accept", requireAuth, async (req, res) => {
     try {
-      const { inviteCode, userId } = req.body;
+      if (bodyNamesOtherUser(req, "userId")) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const userId = req.user.userId;
+      const inviteCode = typeof req.body.inviteCode === "string" ? req.body.inviteCode.trim().toUpperCase() : "";
+      if (!inviteCode) {
+        return res.status(400).json({ error: "Invite code is required" });
+      }
       const inviteResult = await db.select().from(teamInvites).where(eq7(teamInvites.inviteCode, inviteCode)).limit(1);
       if (inviteResult.length === 0) {
-        return res.status(404).json({ error: "Invite not found" });
+        return res.status(404).json({ error: "Invite not found. Check the code and try again." });
       }
       const invite = inviteResult[0];
       if (invite.status !== "pending") {
         return res.status(400).json({ error: "Invite is no longer valid" });
       }
       if (invite.expiresAt && new Date(invite.expiresAt) < /* @__PURE__ */ new Date()) {
-        return res.status(400).json({ error: "Invite has expired" });
+        return res.status(400).json({ error: "Invite has expired. Ask for a new code." });
       }
-      if (invite.inviterId === userId) {
+      if (!invite.inviterId) {
+        return res.status(400).json({ error: "Invite is no longer valid" });
+      }
+      const inviterId = invite.inviterId;
+      if (inviterId === userId) {
         return res.status(400).json({ error: "Can't join your own team" });
       }
-      const existingRelation = await db.select().from(teamMembers).where(
-        or2(
-          and5(eq7(teamMembers.userId, invite.inviterId), eq7(teamMembers.teammateId, userId)),
-          and5(eq7(teamMembers.userId, userId), eq7(teamMembers.teammateId, invite.inviterId))
-        )
-      ).limit(1);
-      if (existingRelation.length > 0) {
-        await db.update(teamInvites).set({ status: "accepted" }).where(eq7(teamInvites.id, invite.id));
-        return res.json({ message: "Already team members", teamMember: existingRelation[0] });
-      }
       const colors = ["#FF3B30", "#FF9500", "#007AFF", "#AF52DE", "#34C759", "#5856D6"];
-      const randomColor = colors[Math.floor(Math.random() * colors.length)];
-      const inviterUser = await db.select().from(users).where(eq7(users.id, invite.inviterId)).limit(1);
-      const acceptingUser = await db.select().from(users).where(eq7(users.id, userId)).limit(1);
-      await db.insert(teamMembers).values({
-        userId: invite.inviterId,
-        teammateId: userId,
-        nickname: acceptingUser[0]?.displayName || acceptingUser[0]?.email?.split("@")[0] || "Teammate",
-        color: randomColor
+      const pickColor = () => colors[randomInt(colors.length)];
+      const [inviterUser] = await db.select().from(users).where(eq7(users.id, inviterId)).limit(1);
+      const [acceptingUser] = await db.select().from(users).where(eq7(users.id, userId)).limit(1);
+      if (!inviterUser || !acceptingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      const teamMember = await db.transaction(async (tx) => {
+        const existing = await tx.select().from(teamMembers).where(
+          or2(
+            and6(eq7(teamMembers.userId, inviterId), eq7(teamMembers.teammateId, userId)),
+            and6(eq7(teamMembers.userId, userId), eq7(teamMembers.teammateId, inviterId))
+          )
+        );
+        const inviterSide = existing.find((m) => m.userId === inviterId);
+        let mySide = existing.find((m) => m.userId === userId);
+        if (!inviterSide) {
+          await tx.insert(teamMembers).values({
+            userId: inviterId,
+            teammateId: userId,
+            nickname: displayNameFor(acceptingUser),
+            color: pickColor()
+          });
+        }
+        if (!mySide) {
+          [mySide] = await tx.insert(teamMembers).values({
+            userId,
+            teammateId: inviterId,
+            nickname: displayNameFor(inviterUser),
+            color: pickColor()
+          }).returning();
+        }
+        await tx.update(teamInvites).set({ status: "accepted" }).where(eq7(teamInvites.id, invite.id));
+        return mySide;
       });
-      const randomColor2 = colors[Math.floor(Math.random() * colors.length)];
-      const result = await db.insert(teamMembers).values({
-        userId,
-        teammateId: invite.inviterId,
-        nickname: inviterUser[0]?.displayName || inviterUser[0]?.email?.split("@")[0] || "Teammate",
-        color: randomColor2
-      }).returning();
-      await db.update(teamInvites).set({ status: "accepted" }).where(eq7(teamInvites.id, invite.id));
-      res.json({ teamMember: result[0] });
+      res.json({ teamMember });
     } catch (error) {
       console.error("Accept invite error:", error);
       res.status(500).json({ error: "Failed to accept invite" });
     }
   });
-  app2.post("/api/team/invite/decline", async (req, res) => {
+  app2.post("/api/team/invite/decline", requireAuth, async (req, res) => {
     try {
       const { inviteId } = req.body;
+      if (typeof inviteId !== "string" || !inviteId) {
+        return res.status(400).json({ error: "inviteId is required" });
+      }
+      const myEmail = req.user.email?.toLowerCase();
+      const [invite] = await db.select().from(teamInvites).where(eq7(teamInvites.id, inviteId)).limit(1);
+      if (!invite || !myEmail || invite.inviteeEmail?.toLowerCase() !== myEmail) {
+        return res.status(404).json({ error: "Invite not found" });
+      }
       await db.update(teamInvites).set({ status: "declined" }).where(eq7(teamInvites.id, inviteId));
       res.json({ success: true });
     } catch (error) {
@@ -2701,117 +3065,129 @@ ${message}`
       res.status(500).json({ error: "Failed to decline invite" });
     }
   });
-  app2.delete("/api/team/invite/:id", async (req, res) => {
+  async function findOwnInvite(req) {
+    const [invite] = await db.select().from(teamInvites).where(eq7(teamInvites.id, req.params.id)).limit(1);
+    if (!invite || invite.inviterId !== req.user.userId) return null;
+    return invite;
+  }
+  app2.delete("/api/team/invite/:id", requireAuth, async (req, res) => {
     try {
-      const { id } = req.params;
-      await db.delete(teamInvites).where(eq7(teamInvites.id, id));
+      const invite = await findOwnInvite(req);
+      if (!invite) {
+        return res.status(404).json({ error: "Invite not found" });
+      }
+      await db.delete(teamInvites).where(eq7(teamInvites.id, invite.id));
       res.json({ success: true });
     } catch (error) {
       console.error("Cancel invite error:", error);
       res.status(500).json({ error: "Failed to cancel invite" });
     }
   });
-  app2.post("/api/team/invite/:id/resend", async (req, res) => {
+  app2.post("/api/team/invite/:id/resend", requireAuth, async (req, res) => {
     try {
-      const { id } = req.params;
-      const invite = await db.select().from(teamInvites).where(eq7(teamInvites.id, id)).limit(1);
-      if (invite.length === 0) {
+      const invite = await findOwnInvite(req);
+      if (!invite) {
         return res.status(404).json({ error: "Invite not found" });
       }
-      res.json({ invite: invite[0] });
+      const newExpiry = /* @__PURE__ */ new Date();
+      newExpiry.setDate(newExpiry.getDate() + 7);
+      const [updated] = await db.update(teamInvites).set({ expiresAt: newExpiry, status: "pending" }).where(eq7(teamInvites.id, invite.id)).returning();
+      res.json({ invite: updated });
     } catch (error) {
       console.error("Resend invite error:", error);
       res.status(500).json({ error: "Failed to resend invite" });
     }
   });
-  app2.post("/api/team/invite/:id/regenerate", async (req, res) => {
+  app2.post("/api/team/invite/:id/regenerate", requireAuth, async (req, res) => {
     try {
-      const { id } = req.params;
-      const invite = await db.select().from(teamInvites).where(eq7(teamInvites.id, id)).limit(1);
-      if (invite.length === 0) {
+      const invite = await findOwnInvite(req);
+      if (!invite) {
         return res.status(404).json({ error: "Invite not found" });
       }
-      const newCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const newCode = await generateUniqueInviteCode();
       const newExpiry = /* @__PURE__ */ new Date();
       newExpiry.setDate(newExpiry.getDate() + 7);
       const updated = await db.update(teamInvites).set({
         inviteCode: newCode,
         expiresAt: newExpiry,
         status: "pending"
-      }).where(eq7(teamInvites.id, id)).returning();
+      }).where(eq7(teamInvites.id, invite.id)).returning();
       res.json({ invite: updated[0] });
     } catch (error) {
       console.error("Regenerate invite error:", error);
       res.status(500).json({ error: "Failed to regenerate invite" });
     }
   });
-  app2.get("/api/team/members/:userId", async (req, res) => {
+  app2.get("/api/team/members/:userId", requireAuth, async (req, res) => {
     try {
       const { userId } = req.params;
-      const members = await db.select().from(teamMembers).where(eq7(teamMembers.userId, userId));
-      const membersWithDetails = [];
-      for (const member of members) {
-        const teammate = await db.select().from(users).where(eq7(users.id, member.teammateId)).limit(1);
-        if (teammate[0]) {
-          membersWithDetails.push({
-            ...member,
-            teammateEmail: teammate[0].email,
-            teammateName: teammate[0].displayName || teammate[0].email?.split("@")[0]
-          });
-        }
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
+      const rows = await db.select({ member: teamMembers, email: users.email, displayName: users.displayName }).from(teamMembers).innerJoin(users, eq7(users.id, teamMembers.teammateId)).where(eq7(teamMembers.userId, userId));
+      const membersWithDetails = rows.map((row) => ({
+        ...row.member,
+        teammateEmail: row.email,
+        teammateName: row.displayName || row.email?.split("@")[0]
+      }));
       res.json({ members: membersWithDetails });
     } catch (error) {
       console.error("Get team members error:", error);
       res.status(500).json({ error: "Failed to get team members" });
     }
   });
-  app2.delete("/api/team/members/:id", async (req, res) => {
+  app2.delete("/api/team/members/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const { userId } = req.body;
-      const member = await db.select().from(teamMembers).where(eq7(teamMembers.id, id)).limit(1);
-      if (member.length === 0) {
+      const me = req.user.userId;
+      const [member] = await db.select().from(teamMembers).where(eq7(teamMembers.id, id)).limit(1);
+      if (!member || member.userId !== me || !member.teammateId) {
         return res.status(404).json({ error: "Team member not found" });
       }
-      await db.delete(teamMembers).where(eq7(teamMembers.id, id));
-      await db.delete(teamMembers).where(
-        and5(
-          eq7(teamMembers.userId, member[0].teammateId),
-          eq7(teamMembers.teammateId, userId)
-        )
-      );
+      const them = member.teammateId;
+      await db.transaction(async (tx) => {
+        await tx.delete(teamMembers).where(
+          or2(
+            and6(eq7(teamMembers.userId, me), eq7(teamMembers.teammateId, them)),
+            and6(eq7(teamMembers.userId, them), eq7(teamMembers.teammateId, me))
+          )
+        );
+        await tx.update(tasks).set(CLEARED_DELEGATION).where(
+          and6(
+            isNull5(tasks.completedAt),
+            or2(
+              and6(eq7(tasks.userId, me), eq7(tasks.delegatedToUserId, them)),
+              and6(eq7(tasks.userId, them), eq7(tasks.delegatedToUserId, me))
+            )
+          )
+        );
+      });
       res.json({ success: true });
     } catch (error) {
       console.error("Remove team member error:", error);
       res.status(500).json({ error: "Failed to remove team member" });
     }
   });
-  app2.get("/api/delegated-to-me/:userId", async (req, res) => {
+  app2.get("/api/delegated-to-me/:userId", requireAuth, async (req, res) => {
     try {
       const { userId } = req.params;
-      const delegatedTasks = await db.select().from(tasks).where(
-        and5(
-          eq7(tasks.delegatedToUserId, userId),
-          eq7(tasks.completedAt, null)
-        )
-      );
-      const taskIds = delegatedTasks.map((t) => t.id);
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const rows = await db.select({ task: tasks, ownerEmail: users.email, ownerDisplayName: users.displayName }).from(tasks).innerJoin(users, eq7(users.id, tasks.userId)).where(and6(eq7(tasks.delegatedToUserId, userId), isNull5(tasks.completedAt)));
+      const taskIds = rows.map((row) => row.task.id);
       let taskSubtasks = [];
       let taskNotes = [];
       if (taskIds.length > 0) {
         taskSubtasks = await db.select().from(subtasks).where(inArray2(subtasks.taskId, taskIds));
         taskNotes = await db.select().from(delegationNotes).where(inArray2(delegationNotes.taskId, taskIds));
       }
-      const tasksWithDetails = await Promise.all(delegatedTasks.map(async (task) => {
-        const owner = await db.select().from(users).where(eq7(users.id, task.userId)).limit(1);
-        return {
-          ...task,
-          subtasks: taskSubtasks.filter((s) => s.taskId === task.id),
-          delegationNotes: taskNotes.filter((n) => n.taskId === task.id),
-          ownerName: owner[0]?.displayName || owner[0]?.email?.split("@")[0] || "Unknown",
-          ownerEmail: owner[0]?.email
-        };
+      const tasksWithDetails = rows.map(({ task, ownerEmail, ownerDisplayName }) => ({
+        ...task,
+        subtasks: taskSubtasks.filter((s) => s.taskId === task.id),
+        delegationNotes: taskNotes.filter((n) => n.taskId === task.id).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+        ownerName: ownerDisplayName || ownerEmail?.split("@")[0] || "Unknown",
+        ownerEmail
       }));
       res.json({ tasks: tasksWithDetails });
     } catch (error) {
@@ -2819,45 +3195,84 @@ ${message}`
       res.status(500).json({ error: "Failed to get delegated tasks" });
     }
   });
-  app2.put("/api/delegation-status/:taskId", async (req, res) => {
+  app2.put("/api/delegation-status/:taskId", requireAuth, async (req, res) => {
     try {
       const { taskId } = req.params;
-      const { userId, status, note } = req.body;
+      const { status, note } = req.body;
+      const me = req.user.userId;
+      if (bodyNamesOtherUser(req, "userId")) {
+        return res.status(403).json({ error: "Not authorized to update this task" });
+      }
+      if (!DELEGATION_STATUSES.includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
       const task = await db.select().from(tasks).where(eq7(tasks.id, taskId)).limit(1);
       if (task.length === 0) {
         return res.status(404).json({ error: "Task not found" });
       }
-      if (task[0].delegatedToUserId !== userId) {
+      if (task[0].delegatedToUserId !== me) {
         return res.status(403).json({ error: "Not authorized to update this task" });
       }
       const result = await db.update(tasks).set({
         delegationStatus: status,
         lastDelegationUpdate: /* @__PURE__ */ new Date()
       }).where(eq7(tasks.id, taskId)).returning();
-      if (note) {
-        await db.insert(delegationNotes).values({
+      const noteText = typeof note === "string" ? note.trim().slice(0, 2e3) : "";
+      let savedNote = null;
+      if (noteText) {
+        [savedNote] = await db.insert(delegationNotes).values({
           taskId,
-          authorId: userId,
+          authorId: me,
           type: "status_update",
-          text: note
-        });
+          text: noteText
+        }).returning();
       }
-      res.json({ task: result[0] });
+      if (task[0].userId && task[0].delegationStatus !== status) {
+        const [delegate] = await db.select({ displayName: users.displayName, email: users.email }).from(users).where(eq7(users.id, me)).limit(1);
+        sendDelegationStatusNotification(
+          task[0].userId,
+          task[0].id,
+          task[0].title,
+          displayNameFor(delegate),
+          DELEGATION_STATUS_LABELS[status],
+          noteText || void 0
+        ).catch((err) => console.error("Delegation status notification failed:", err));
+      }
+      res.json({ task: result[0], note: savedNote });
     } catch (error) {
       console.error("Update delegation status error:", error);
       res.status(500).json({ error: "Failed to update delegation status" });
     }
   });
-  app2.post("/api/delegation-notes", async (req, res) => {
+  app2.post("/api/delegation-notes", requireAuth, async (req, res) => {
     try {
-      const { taskId, authorId, type, text: text2 } = req.body;
-      const result = await db.insert(delegationNotes).values({
+      const { id, taskId, type, text: text2 } = req.body;
+      const me = req.user.userId;
+      if (bodyNamesOtherUser(req, "authorId")) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      if (typeof taskId !== "string" || !DELEGATION_NOTE_TYPES.includes(type)) {
+        return res.status(400).json({ error: "taskId and a valid type are required" });
+      }
+      const [task] = await db.select({ userId: tasks.userId, delegatedToUserId: tasks.delegatedToUserId }).from(tasks).where(eq7(tasks.id, taskId)).limit(1);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      if (task.userId !== me && task.delegatedToUserId !== me) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const values = {
         taskId,
-        authorId: authorId || null,
+        authorId: me,
         type,
-        text: text2 || null
-      }).returning();
-      res.json({ note: result[0] });
+        text: typeof text2 === "string" ? text2.trim().slice(0, 2e3) || null : null
+      };
+      if (typeof id === "string" && id.length > 0 && id.length <= 255) {
+        values.id = id;
+      }
+      const result = await db.insert(delegationNotes).values(values).onConflictDoNothing().returning();
+      await db.update(tasks).set({ lastDelegationUpdate: /* @__PURE__ */ new Date() }).where(eq7(tasks.id, taskId));
+      res.json({ note: result[0] ?? null });
     } catch (error) {
       console.error("Create delegation note error:", error);
       res.status(500).json({ error: "Failed to create delegation note" });
@@ -2883,21 +3298,24 @@ ${message}`
       } else if (user.passwordHash && !password) {
         return res.status(400).json({ error: "Password is required to delete account" });
       }
-      await db.delete(delegationNotes).where(eq7(delegationNotes.authorId, userId));
-      await db.delete(subtasks).where(
-        inArray2(
-          subtasks.taskId,
-          db.select({ id: tasks.id }).from(tasks).where(eq7(tasks.userId, userId))
-        )
-      );
-      await db.delete(tasks).where(eq7(tasks.userId, userId));
-      await db.delete(contacts).where(eq7(contacts.userId, userId));
-      await db.delete(teamMembers).where(
-        or2(eq7(teamMembers.userId, userId), eq7(teamMembers.teammateId, userId))
-      );
-      await db.delete(teamInvites).where(eq7(teamInvites.inviterId, userId));
-      await db.delete(userStats).where(eq7(userStats.userId, userId));
-      await db.delete(users).where(eq7(users.id, userId));
+      await db.transaction(async (tx) => {
+        await tx.update(tasks).set(CLEARED_DELEGATION).where(eq7(tasks.delegatedToUserId, userId));
+        await tx.delete(delegationNotes).where(eq7(delegationNotes.authorId, userId));
+        await tx.delete(subtasks).where(
+          inArray2(
+            subtasks.taskId,
+            tx.select({ id: tasks.id }).from(tasks).where(eq7(tasks.userId, userId))
+          )
+        );
+        await tx.delete(tasks).where(eq7(tasks.userId, userId));
+        await tx.delete(contacts).where(eq7(contacts.userId, userId));
+        await tx.delete(teamMembers).where(
+          or2(eq7(teamMembers.userId, userId), eq7(teamMembers.teammateId, userId))
+        );
+        await tx.delete(teamInvites).where(eq7(teamInvites.inviterId, userId));
+        await tx.delete(userStats).where(eq7(userStats.userId, userId));
+        await tx.delete(users).where(eq7(users.id, userId));
+      });
       res.json({ success: true, message: "Account deleted successfully" });
     } catch (error) {
       console.error("Delete account error:", error);
@@ -2951,12 +3369,14 @@ ${message}`
           console.error("[RevenueCat Webhook] Auth failed");
           return res.status(401).json({ error: "Unauthorized" });
         }
+      } else if (process.env.NODE_ENV === "production") {
+        console.error("[RevenueCat Webhook] REVENUECAT_WEBHOOK_SECRET is not set; rejecting webhook");
+        return res.status(503).json({ error: "Webhook not configured" });
       }
-      res.status(200).json({ received: true });
       const { event } = req.body;
       if (!event) {
         console.error("[RevenueCat Webhook] No event in payload");
-        return;
+        return res.status(200).json({ received: true });
       }
       const {
         type,
@@ -2965,14 +3385,30 @@ ${message}`
         period_type
       } = event;
       console.log(`[RevenueCat Webhook] Event: ${type}, User: ${app_user_id}`);
+      if (type === "TEST") {
+        console.log(`[RevenueCat Webhook] Test event received successfully`);
+        return res.status(200).json({ received: true });
+      }
+      if (type === "TRANSFER") {
+        const fromIds = Array.isArray(event.transferred_from) ? event.transferred_from : [];
+        const toIds = Array.isArray(event.transferred_to) ? event.transferred_to : [];
+        if (fromIds.length > 0) {
+          await db.update(users).set({ subscriptionStatus: "none", trialEndsAt: null }).where(inArray2(users.id, fromIds));
+        }
+        if (toIds.length > 0) {
+          await db.update(users).set({ subscriptionStatus: "active" }).where(inArray2(users.id, toIds));
+        }
+        console.log(`[RevenueCat Webhook] Transfer from ${fromIds.length} to ${toIds.length} account(s)`);
+        return res.status(200).json({ received: true });
+      }
       if (!app_user_id) {
         console.error("[RevenueCat Webhook] No app_user_id in event");
-        return;
+        return res.status(200).json({ received: true });
       }
       const userRecord = await db.select().from(users).where(eq7(users.id, app_user_id)).limit(1);
       if (userRecord.length === 0) {
         console.error(`[RevenueCat Webhook] User not found: ${app_user_id}`);
-        return;
+        return res.status(200).json({ received: true });
       }
       let newStatus = userRecord[0].subscriptionStatus || "none";
       let trialEndsAt = userRecord[0].trialEndsAt || null;
@@ -2991,8 +3427,8 @@ ${message}`
           }
           break;
         case "CANCELLATION":
-          newStatus = "canceled";
-          break;
+          console.log(`[RevenueCat Webhook] Cancellation noted for ${app_user_id}; access continues until expiration`);
+          return res.status(200).json({ received: true });
         case "EXPIRATION":
           newStatus = "none";
           trialEndsAt = null;
@@ -3001,25 +3437,22 @@ ${message}`
           newStatus = "past_due";
           break;
         case "PRODUCT_CHANGE":
-          newStatus = "active";
-          break;
         case "NON_RENEWING_PURCHASE":
           newStatus = "active";
           break;
-        case "TEST":
-          console.log(`[RevenueCat Webhook] Test event received successfully`);
-          return;
         default:
           console.log(`[RevenueCat Webhook] Unhandled event type: ${type}`);
-          return;
+          return res.status(200).json({ received: true });
       }
       await db.update(users).set({
         subscriptionStatus: newStatus,
         trialEndsAt
       }).where(eq7(users.id, app_user_id));
       console.log(`[RevenueCat Webhook] Updated user ${app_user_id}: status=${newStatus}`);
+      res.status(200).json({ received: true });
     } catch (error) {
       console.error("[RevenueCat Webhook] Processing error:", error);
+      if (!res.headersSent) res.status(500).json({ error: "Processing failed" });
     }
   });
   app2.post("/api/errors/report", optionalAuth, async (req, res) => {
@@ -3102,7 +3535,7 @@ ${message}`
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
         const [user] = await db.select({ pushToken: users.pushToken }).from(users).where(eq7(users.id, req.user.userId)).limit(1);
         if (!user?.pushToken) return res.status(400).json({ error: "No push token registered" });
-        const [task] = await db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and5(eq7(tasks.userId, req.user.userId), isNull5(tasks.completedAt))).limit(1);
+        const [task] = await db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and6(eq7(tasks.userId, req.user.userId), isNull5(tasks.completedAt))).limit(1);
         const taskId = task?.id ?? "test-task";
         const taskTitle = task?.title ?? "Your first task";
         const t = taskTitle.length > 60 ? taskTitle.slice(0, 57) + "..." : taskTitle;
@@ -3124,7 +3557,7 @@ ${message}`
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
         const [user] = await db.select({ pushToken: users.pushToken }).from(users).where(eq7(users.id, req.user.userId)).limit(1);
         if (!user?.pushToken) return res.status(400).json({ error: "No push token registered" });
-        const open = await db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and5(eq7(tasks.userId, req.user.userId), isNull5(tasks.completedAt)));
+        const open = await db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and6(eq7(tasks.userId, req.user.userId), isNull5(tasks.completedAt)));
         const body = open.length === 0 ? "Nothing on your list. Add something worth doing today." : open.length === 1 ? `One thing on your list: "${open[0].title}". Do it early, own the day.` : `${open.length} tasks are waiting. Don't scan the list \u2014 pick ONE and start. "${open[0].title}"?`;
         const result = await sendBulkPushNotifications([{
           token: user.pushToken,
@@ -3184,11 +3617,11 @@ async function runMigrations() {
     for (const file of files) {
       const { rows } = await client.query("SELECT 1 FROM schema_migrations WHERE name = $1", [file]);
       if (rows.length > 0) continue;
-      const sql5 = fs2.readFileSync(path.join(dir, file), "utf-8");
+      const sql6 = fs2.readFileSync(path.join(dir, file), "utf-8");
       console.log(`Applying migration: ${file}`);
       await client.query("BEGIN");
       try {
-        await client.query(sql5);
+        await client.query(sql6);
         await client.query("INSERT INTO schema_migrations (name) VALUES ($1)", [file]);
         await client.query("COMMIT");
       } catch (err) {
@@ -3406,8 +3839,9 @@ function setupErrorHandler(app2) {
     const error = err;
     const status = error.status || error.statusCode || 500;
     const message = error.message || "Internal Server Error";
-    res.status(status).json({ message });
-    throw err;
+    console.error("Unhandled request error:", err);
+    if (res.headersSent) return;
+    res.status(status).json({ message, error: message });
   });
 }
 (async () => {
@@ -3426,6 +3860,16 @@ function setupErrorHandler(app2) {
   app.use("/api/auth/login", authLimiter);
   app.use("/api/auth/register", authLimiter);
   app.use("/api/auth/forgot-password", authLimiter);
+  app.use("/api/auth/reset-password", authLimiter);
+  app.use("/api/auth/change-password", authLimiter);
+  const teamJoinLimiter = rateLimit2({
+    windowMs: 15 * 60 * 1e3,
+    max: 30,
+    message: { error: "Too many attempts, please try again later" },
+    standardHeaders: true,
+    legacyHeaders: false
+  });
+  app.use("/api/team/invite/accept", teamJoinLimiter);
   const errorReportLimiter = rateLimit2({
     windowMs: 60 * 1e3,
     max: 10,

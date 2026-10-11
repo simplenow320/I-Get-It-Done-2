@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/contexts/AuthContext";
 
 export type Level = "starter" | "focused" | "productive" | "unstoppable" | "legendary";
 
@@ -82,7 +83,10 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
   { id: "level_unstoppable", title: "Unstoppable Force", description: "Reach Unstoppable level", icon: "shield" },
 ];
 
-const STORAGE_KEY = "@gamification_state";
+// Progress is per account. The old device-wide key is adopted once by the
+// first account that loads on this device, then removed.
+const LEGACY_STORAGE_KEY = "@gamification_state";
+const STORAGE_KEY_PREFIX = "@gamification_state_";
 
 const defaultState: GamificationState = {
   currentStreak: 0,
@@ -100,8 +104,12 @@ const defaultState: GamificationState = {
 
 const GamificationContext = createContext<GamificationContextType | null>(null);
 
+// Local calendar day, so streaks and "today" roll over at the user's midnight.
 function getTodayString(): string {
-  return new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 function getDaysDiff(date1: string, date2: string): number {
@@ -111,39 +119,72 @@ function getDaysDiff(date1: string, date2: string): number {
   return Math.floor(diffTime / (1000 * 60 * 60 * 24));
 }
 
+// A streak shown on screen must already account for missed days, not wait
+// for the next completion to reset it.
+function withCurrentStreak(state: GamificationState): GamificationState {
+  if (!state.lastActiveDate || state.currentStreak === 0) return state;
+  const daysDiff = getDaysDiff(state.lastActiveDate, getTodayString());
+  const broken = daysDiff > 2 || (daysDiff === 2 && state.streakProtectionUsed);
+  return broken ? { ...state, currentStreak: 0, streakProtectionUsed: false } : state;
+}
+
 export function GamificationProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const userIdRef = useRef<string | null>(userId);
+  userIdRef.current = userId;
   const [state, setState] = useState<GamificationState>(defaultState);
   const [isLoaded, setIsLoaded] = useState(false);
   const [pendingUnlock, setPendingUnlock] = useState<Achievement | null>(null);
   const [unlockQueue, setUnlockQueue] = useState<Achievement[]>([]);
+  // The key the in-memory state belongs to; saves never cross accounts.
+  const loadedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    loadState();
-  }, []);
+    loadedKeyRef.current = null;
+    setIsLoaded(false);
+    setState(defaultState);
+    if (userId) {
+      loadState(userId);
+    }
+  }, [userId]);
 
   useEffect(() => {
-    if (isLoaded) {
-      saveState();
+    if (isLoaded && loadedKeyRef.current) {
+      saveState(loadedKeyRef.current, state);
     }
   }, [state, isLoaded]);
 
-  const loadState = async () => {
+  const loadState = async (forUserId: string) => {
+    const key = `${STORAGE_KEY_PREFIX}${forUserId}`;
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      let stored = await AsyncStorage.getItem(key);
+      if (!stored) {
+        const legacy = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
+        if (legacy) {
+          stored = legacy;
+          await AsyncStorage.setItem(key, legacy);
+          await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+        }
+      }
+      if (forUserId !== userIdRef.current) return;
       if (stored) {
         const parsed = JSON.parse(stored);
-        setState({ ...defaultState, ...parsed });
+        setState(withCurrentStreak({ ...defaultState, ...parsed }));
       }
-      setIsLoaded(true);
     } catch (error) {
       console.error("Failed to load gamification state:", error);
-      setIsLoaded(true);
+    } finally {
+      if (forUserId === userIdRef.current) {
+        loadedKeyRef.current = key;
+        setIsLoaded(true);
+      }
     }
   };
 
-  const saveState = async () => {
+  const saveState = async (key: string, value: GamificationState) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      await AsyncStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
       console.error("Failed to save gamification state:", error);
     }

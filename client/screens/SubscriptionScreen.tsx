@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, ActivityIndicator, Alert, Platform, Linking } from "react-native";
+import { StyleSheet, View, Pressable, ActivityIndicator, Platform, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRevenueCat } from "@/contexts/RevenueCatContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { openSubscriptionManagement } from "@/lib/billing";
+import { showMessage } from "@/lib/alerts";
 
 type PricingPlan = "monthly" | "annual";
 
@@ -44,10 +45,22 @@ export default function SubscriptionScreen() {
   const [selectedPlan, setSelectedPlan] = useState<PricingPlan>("annual");
   const [isLoading, setIsLoading] = useState(false);
 
-  const monthlyPrice = monthlyPackage?.product.priceString.replace("$", "") || "6.99";
-  const annualPrice = annualPackage?.product.priceString.replace("$", "") || "49.99";
-  const annualMonthly = (parseFloat(annualPrice) / 12).toFixed(2);
-  const savings = Math.round((1 - (parseFloat(annualMonthly) / parseFloat(monthlyPrice))) * 100);
+  // Store prices come localized ("£49.99", "49,99 €"). Use the store's own
+  // strings and numbers instead of stripping "$" and re-adding it.
+  const currencyCode = annualPackage?.product.currencyCode || monthlyPackage?.product.currencyCode || "USD";
+  const formatMoney = (amount: number) => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode }).format(amount);
+    } catch {
+      return currencyCode === "USD" ? `$${amount.toFixed(2)}` : `${amount.toFixed(2)} ${currencyCode}`;
+    }
+  };
+  const monthlyValue = monthlyPackage?.product.price ?? 6.99;
+  const annualValue = annualPackage?.product.price ?? 49.99;
+  const monthlyPrice = monthlyPackage?.product.priceString || formatMoney(monthlyValue);
+  const annualPrice = annualPackage?.product.priceString || formatMoney(annualValue);
+  const annualMonthly = formatMoney(annualValue / 12);
+  const savings = monthlyValue > 0 ? Math.max(0, Math.round((1 - annualValue / 12 / monthlyValue) * 100)) : 0;
 
   const handleSelectPlan = (plan: PricingPlan) => {
     Haptics.selectionAsync();
@@ -56,7 +69,7 @@ export default function SubscriptionScreen() {
 
   const handleSubscribe = async () => {
     if (!user) {
-      Alert.alert("Sign In Required", "Please sign in to subscribe.");
+      showMessage("Sign In Required", "Please sign in to subscribe.");
       return;
     }
 
@@ -66,7 +79,7 @@ export default function SubscriptionScreen() {
     try {
       const pkg = selectedPlan === "monthly" ? monthlyPackage : annualPackage;
       if (!pkg) {
-        Alert.alert("Not Available", "Pricing not available yet. Please try again in a moment.");
+        showMessage("Not Available", "Pricing not available yet. Please try again in a moment.");
         return;
       }
       await purchasePackage(pkg);
@@ -295,10 +308,10 @@ export default function SubscriptionScreen() {
                 </View>
                 <View style={styles.planPricing}>
                   <ThemedText type="largeTitle" style={styles.priceAmount}>
-                    ${annualPrice}
+                    {annualPrice}
                   </ThemedText>
                   <ThemedText type="small" secondary>
-                    /year (${annualMonthly}/mo)
+                    /year ({annualMonthly}/mo)
                   </ThemedText>
                 </View>
               </Pressable>
@@ -333,7 +346,7 @@ export default function SubscriptionScreen() {
                 </View>
                 <View style={styles.planPricing}>
                   <ThemedText type="largeTitle" style={styles.priceAmount}>
-                    ${monthlyPrice}
+                    {monthlyPrice}
                   </ThemedText>
                   <ThemedText type="small" secondary>
                     /month
@@ -389,7 +402,7 @@ export default function SubscriptionScreen() {
                 </LinearGradient>
               </Pressable>
               <ThemedText type="caption" secondary style={styles.trialNote}>
-                {selectedPlan === "annual" ? `$${annualPrice}/year ($${annualMonthly}/mo)` : `$${monthlyPrice}/month`}
+                {selectedPlan === "annual" ? `${annualPrice}/year (${annualMonthly}/mo)` : `${monthlyPrice}/month`}
               </ThemedText>
               <ThemedText type="caption" secondary style={styles.cancelNote}>
                 Cancel anytime. No commitment.

@@ -72,9 +72,16 @@ export default function QuickDumpScreen() {
           addUnsortedTask(task.title);
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        // Nothing list-worthy was found. Don't throw away what was said:
+        // put it in the box so it can be edited or added as-is.
+        setInputValue(text.trim());
+        setVoiceError("No clear task heard. Edit it below and tap + to add it.");
       }
     } catch (error) {
       console.error("Task extraction error:", error);
+      setInputValue(text.trim());
+      setVoiceError("Couldn't split that into tasks. Edit it below and tap + to add it.");
     } finally {
       setIsExtracting(false);
     }
@@ -89,6 +96,7 @@ export default function QuickDumpScreen() {
     if (inputValue.trim()) {
       addUnsortedTask(inputValue.trim());
       setInputValue("");
+      setVoiceError(null);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -312,7 +320,7 @@ export default function QuickDumpScreen() {
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                (navigation as any).navigate("ProfileTab", { screen: "Subscription" });
+                (navigation as any).navigate("ProfileTab", { screen: "Subscription", initial: false });
               }}
               style={({ pressed }) => [
                 {

@@ -2,25 +2,114 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import multer from "multer";
 import * as fs from "fs";
+import { randomInt } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { users, tasks, subtasks, contacts, delegationNotes, userStats, teamInvites, teamMembers, voiceUsage } from "@shared/schema";
 import { generateToken, requireAuth, optionalAuth, validateUserAccess, type AuthenticatedRequest } from "./authMiddleware";
 import { getVapidKeys, saveWebPushSubscription, deleteWebPushSubscription, sendWebPushNotifications } from "./webPush";
 import { webPushSubscriptions } from "@shared/schema";
-import { sendPushNotification, sendDelegationNotification, startNotificationScheduler, sendBulkPushNotifications } from "./pushNotifications";
+import { sendPushNotification, sendDelegationNotification, sendDelegationStatusNotification, startNotificationScheduler, sendBulkPushNotifications } from "./pushNotifications";
 import { applyCompletionStats } from "./taskActions";
 import { registerMcpRoutes, registerConnectorKeyRoutes } from "./mcp";
 import { registerOAuthRoutes } from "./oauth";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
+// Overridable so integration tests can point at a local stub.
+const DEEPGRAM_LISTEN_URL = process.env.DEEPGRAM_API_URL || "https://api.deepgram.com/v1/listen";
+const OPENAI_CHAT_URL = process.env.OPENAI_API_URL || "https://api.openai.com/v1/chat/completions";
 const FREE_TASK_LIMIT = 10;
 import { eq, and, inArray, or, sql, isNull, isNotNull } from "drizzle-orm";
 
-const upload = multer({ 
+const upload = multer({
   dest: "/tmp/audio-uploads/",
   limits: { fileSize: 25 * 1024 * 1024 }
 });
+
+const LANES = ["now", "soon", "later", "park"];
+const REMINDER_TYPES = ["soft", "strong", "persistent", "none"];
+const DELEGATION_STATUSES = ["assigned", "in_progress", "waiting", "needs_review", "done"];
+const DELEGATION_STATUS_LABELS: Record<string, string> = {
+  assigned: "Assigned",
+  in_progress: "In Progress",
+  waiting: "Waiting",
+  needs_review: "Needs Review",
+  done: "Done",
+};
+const DELEGATION_NOTE_TYPES = ["update", "blocked", "question", "completed", "custom", "status_update"];
+const INVITE_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const PASSWORD_RULES: { test: (p: string) => boolean; error: string }[] = [
+  { test: (p) => p.length >= 8, error: "Password must be at least 8 characters" },
+  { test: (p) => /[A-Z]/.test(p), error: "Password must include at least one uppercase letter" },
+  { test: (p) => /[a-z]/.test(p), error: "Password must include at least one lowercase letter" },
+  { test: (p) => /[0-9]/.test(p), error: "Password must include at least one number" },
+  { test: (p) => /[^A-Za-z0-9]/.test(p), error: "Password must include at least one special character" },
+];
+
+function passwordPolicyError(password: unknown): string | null {
+  if (typeof password !== "string") return "Password is required";
+  const failed = PASSWORD_RULES.find((rule) => !rule.test(password));
+  return failed ? failed.error : null;
+}
+
+// Older app builds still put the acting user's id in request bodies. The JWT is
+// the source of truth; a body id that names someone else is rejected.
+function bodyNamesOtherUser(req: AuthenticatedRequest, ...fields: string[]): boolean {
+  return fields.some((field) => {
+    const value = req.body?.[field];
+    return value !== undefined && value !== null && value !== "" && value !== req.user?.userId;
+  });
+}
+
+function normalizeEmail(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseOptionalDate(value: unknown): Date | null | undefined | "invalid" {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const date = new Date(value as string);
+  return isNaN(date.getTime()) ? "invalid" : date;
+}
+
+function displayNameFor(user: { displayName: string | null; email: string | null } | undefined): string {
+  return user?.displayName || user?.email?.split("@")[0] || "A teammate";
+}
+
+async function areTeammates(userId: string, teammateId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: teamMembers.id })
+    .from(teamMembers)
+    .where(and(eq(teamMembers.userId, userId), eq(teamMembers.teammateId, teammateId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+async function generateUniqueInviteCode(): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = "";
+    for (let i = 0; i < 8; i++) code += INVITE_CODE_CHARS[randomInt(INVITE_CODE_CHARS.length)];
+    const existing = await db.select({ id: teamInvites.id }).from(teamInvites).where(eq(teamInvites.inviteCode, code)).limit(1);
+    if (existing.length === 0) return code;
+  }
+  throw new Error("Could not generate a unique invite code");
+}
+
+// Clears an in-flight hand-off on a task so it no longer shows for the delegate.
+const CLEARED_DELEGATION = {
+  delegatedToUserId: null,
+  delegationStatus: null,
+  assignedTo: null,
+  delegatedAt: null,
+  lastDelegationUpdate: null,
+};
+
+// Failed reset-code guesses per email. Five misses burn the code, so a 6-digit
+// code can't be brute-forced within its 15-minute life.
+const resetCodeFailures = new Map<string, number>();
+const MAX_RESET_CODE_FAILURES = 5;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   registerOAuthRoutes(app);
@@ -67,19 +156,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/transcribe", requireAuth, upload.single("audio"), async (req: AuthenticatedRequest, res: Response) => {
+    const audioFilePath = req.file?.path;
     try {
-      console.log("[VOICE] === New transcription request ===");
-      console.log("[VOICE] File received:", req.file ? { 
-        fieldname: req.file.fieldname,
-        originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        path: req.file.path
-      } : "NO FILE");
-      console.log("[VOICE] Body params:", { userId: req.body.userId, durationSeconds: req.body.durationSeconds });
-      
       if (!req.file) {
-        console.error("[VOICE] ERROR: No audio file in request");
+        console.error("[VOICE] No audio file in request");
         return res.status(400).json({ error: "No audio file provided" });
       }
 
@@ -87,114 +167,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      
-      const durationSeconds = parseInt(req.body.durationSeconds) || 0;
-      
-      if (durationSeconds > 0) {
-        const today = new Date().toISOString().split('T')[0];
-        
-        const existing = await db.select().from(voiceUsage)
-          .where(and(eq(voiceUsage.userId, userId), eq(voiceUsage.date, today)))
-          .limit(1);
-        
-        const currentUsage = existing.length > 0 ? existing[0].secondsUsed || 0 : 0;
-        
-        const secondsRemaining = DAILY_VOICE_LIMIT_SECONDS - currentUsage;
-        
-        if (currentUsage + durationSeconds > DAILY_VOICE_LIMIT_SECONDS) {
-          if (req.file?.path) {
-            fs.unlink(req.file.path, () => {});
-          }
-          return res.status(429).json({ 
-            error: secondsRemaining <= 0 
-              ? "Daily voice limit reached" 
-              : `Recording would exceed daily limit. You have ${Math.floor(secondsRemaining / 60)} min ${secondsRemaining % 60} sec remaining.`,
-            limitReached: secondsRemaining <= 0,
-            secondsUsed: currentUsage,
-            secondsRemaining,
-            dailyLimitSeconds: DAILY_VOICE_LIMIT_SECONDS,
-          });
-        }
+
+      const clientDurationSeconds = Math.max(0, parseInt(req.body.durationSeconds) || 0);
+      const today = new Date().toISOString().split('T')[0];
+
+      const usageRows = await db.select().from(voiceUsage)
+        .where(and(eq(voiceUsage.userId, userId), eq(voiceUsage.date, today)))
+        .limit(1);
+      const currentUsage = usageRows.length > 0 ? usageRows[0].secondsUsed || 0 : 0;
+
+      // The client stops recording when the remaining quota runs out, so a
+      // recording that starts with time left is always transcribed. Rejecting
+      // it after the fact would throw away what the user just said.
+      if (currentUsage >= DAILY_VOICE_LIMIT_SECONDS) {
+        return res.status(429).json({
+          error: "Daily voice limit reached",
+          limitReached: true,
+          secondsUsed: currentUsage,
+          secondsRemaining: 0,
+          dailyLimitSeconds: DAILY_VOICE_LIMIT_SECONDS,
+        });
       }
 
       const apiKey = process.env.DEEPGRAM_API_KEY;
       if (!apiKey) {
-        console.error("DEEPGRAM_API_KEY not configured");
-        return res.status(500).json({ error: "Transcription service not configured" });
+        console.error("[VOICE] DEEPGRAM_API_KEY not configured");
+        return res.status(503).json({ error: "Transcription service not configured" });
       }
 
-      const audioFilePath = req.file.path;
-      const audioBuffer = fs.readFileSync(audioFilePath);
-      
-      console.log("[VOICE] Sending audio to Deepgram, size:", audioBuffer.length, "bytes, mimetype:", req.file.mimetype);
+      const audioBuffer = await fs.promises.readFile(req.file.path);
+      if (audioBuffer.length === 0) {
+        return res.json({ text: "", debug: { audioDuration: 0, fileSize: 0, confidence: 0 } });
+      }
 
-      const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&detect_language=true", {
-        method: "POST",
-        headers: {
-          "Authorization": `Token ${apiKey}`,
-          "Content-Type": "audio/mp4",
-        },
-        body: audioBuffer,
-      });
+      // iOS/Android upload AAC in an MP4 container; browsers upload WebM/Opus
+      // (Chrome, Firefox) or MP4 (Safari). Deepgram needs the real container type.
+      const uploadedType = (req.file.mimetype || "").split(";")[0].trim().toLowerCase();
+      const contentType = /^(audio|video)\//.test(uploadedType) ? uploadedType : "audio/mp4";
+
+      let response: globalThis.Response;
+      try {
+        response = await fetch(`${DEEPGRAM_LISTEN_URL}?model=nova-3&smart_format=true&detect_language=true`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Token ${apiKey}`,
+            "Content-Type": contentType,
+          },
+          body: audioBuffer,
+          signal: AbortSignal.timeout(60_000),
+        });
+      } catch (fetchError: any) {
+        console.error("[VOICE] Deepgram request failed:", fetchError?.name, fetchError?.message);
+        return res.status(504).json({ error: "Transcription service timed out. Try again." });
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("Deepgram error:", response.status, errorText);
-        throw new Error(`Deepgram API error: ${response.status}`);
+        console.error("[VOICE] Deepgram error:", response.status, errorText.substring(0, 300));
+        // Never surface Deepgram auth failures as 401: the app treats 401 as an
+        // expired login and would tell the user to sign in again.
+        return res.status(502).json({ error: "Transcription service error. Try again." });
       }
 
       const result = await response.json();
-      console.log("Deepgram response:", JSON.stringify(result, null, 2));
-
-      fs.unlink(audioFilePath, (err) => {
-        if (err) console.error("Failed to delete temp file:", err);
-      });
-
       const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
       const confidence = result.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
       const audioDuration = result.metadata?.duration || 0;
-      
-      console.log("[VOICE] Result - Transcript:", JSON.stringify(transcript), "Confidence:", confidence, "Duration:", audioDuration, "FileSize:", audioBuffer.length);
-      
-      if (durationSeconds > 0) {
-        const today = new Date().toISOString().split('T')[0];
-        
-        const existing = await db.select().from(voiceUsage)
+
+      console.log("[VOICE] Transcribed", {
+        bytes: audioBuffer.length,
+        contentType,
+        audioDuration,
+        confidence,
+        chars: transcript.length,
+      });
+
+      // Bill the longer of what the client measured and what Deepgram heard, so
+      // the daily quota can't be skipped by under-reporting the duration.
+      const billedSeconds = Math.max(clientDurationSeconds, Math.ceil(audioDuration));
+      if (billedSeconds > 0) {
+        const updated = await db.update(voiceUsage)
+          .set({
+            secondsUsed: sql`COALESCE(${voiceUsage.secondsUsed}, 0) + ${billedSeconds}`,
+            updatedAt: new Date(),
+          })
           .where(and(eq(voiceUsage.userId, userId), eq(voiceUsage.date, today)))
-          .limit(1);
-        
-        if (existing.length > 0) {
-          await db.update(voiceUsage)
-            .set({ 
-              secondsUsed: (existing[0].secondsUsed || 0) + durationSeconds,
-              updatedAt: new Date(),
-            })
-            .where(eq(voiceUsage.id, existing[0].id));
-        } else {
-          await db.insert(voiceUsage).values({
-            userId,
-            date: today,
-            secondsUsed: durationSeconds,
-          });
+          .returning({ id: voiceUsage.id });
+        if (updated.length === 0) {
+          await db.insert(voiceUsage).values({ userId, date: today, secondsUsed: billedSeconds });
         }
       }
-      
-      res.json({ 
+
+      const secondsRemaining = Math.max(0, DAILY_VOICE_LIMIT_SECONDS - currentUsage - billedSeconds);
+
+      res.json({
         text: transcript,
+        secondsRemaining,
+        limitReached: secondsRemaining === 0,
         debug: { audioDuration, fileSize: audioBuffer.length, confidence }
       });
     } catch (error: any) {
       console.error("[VOICE] ERROR:", error?.message || error);
-      
-      if (req.file?.path) {
-        fs.unlink(req.file.path, () => {});
+      res.status(500).json({ error: "Transcription failed. Try again." });
+    } finally {
+      if (audioFilePath) {
+        fs.unlink(audioFilePath, () => {});
       }
-
-      if (error.message?.includes("401")) {
-        return res.status(401).json({ error: "Invalid API key" });
-      }
-      
-      res.status(500).json({ error: "Transcription failed: " + (error?.message || "Unknown error") });
     }
   });
 
@@ -217,10 +295,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         console.error("OPENAI_API_KEY not configured");
-        return res.status(500).json({ error: "AI service not configured" });
+        return res.status(503).json({ error: "AI service not configured" });
       }
 
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await fetch(OPENAI_CHAT_URL, {
+        signal: AbortSignal.timeout(30_000),
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
@@ -261,7 +340,7 @@ Examples:
             },
             {
               role: "user",
-              content: transcript
+              content: transcript.slice(0, 8000)
             }
           ],
           temperature: 0.3,
@@ -286,7 +365,11 @@ Examples:
       try {
         const parsed = JSON.parse(content);
         const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
-        res.json({ tasks: tasks.filter((t: any) => t.title && typeof t.title === "string") });
+        res.json({
+          tasks: tasks
+            .filter((t: any) => t && typeof t.title === "string" && t.title.trim().length > 0)
+            .map((t: any) => ({ title: t.title.trim().slice(0, 500) })),
+        });
       } catch (parseError) {
         console.error("Failed to parse OpenAI response:", content);
         res.json({ tasks: [] });
@@ -507,16 +590,22 @@ Examples:
     }
   });
 
-  app.post("/api/auth/change-password", async (req: Request, res: Response) => {
+  app.post("/api/auth/change-password", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { userId, currentPassword, newPassword } = req.body;
+      const { currentPassword, newPassword } = req.body;
+      const userId = req.user!.userId;
+
+      if (bodyNamesOtherUser(req, "userId")) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       
-      if (!userId || !currentPassword || !newPassword) {
+      if (!currentPassword || !newPassword) {
         return res.status(400).json({ error: "All fields are required" });
       }
       
-      if (newPassword.length < 6) {
-        return res.status(400).json({ error: "New password must be at least 6 characters" });
+      const policyError = passwordPolicyError(newPassword);
+      if (policyError) {
+        return res.status(400).json({ error: policyError });
       }
       
       const existing = await db.select().from(users).where(eq(users.id, userId)).limit(1);
@@ -534,7 +623,8 @@ Examples:
       const validPassword = await bcrypt.compare(currentPassword, user.passwordHash);
       
       if (!validPassword) {
-        return res.status(401).json({ error: "Current password is incorrect" });
+        // 400, not 401: the app treats any 401 as an expired login and signs out.
+        return res.status(400).json({ error: "Current password is incorrect" });
       }
       
       const newPasswordHash = await bcrypt.hash(newPassword, 10);
@@ -566,13 +656,14 @@ Examples:
       
       const user = existing[0];
       
-      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const resetCode = randomInt(100000, 1000000).toString();
       const resetExpiry = new Date(Date.now() + 15 * 60 * 1000);
       
       await db.update(users).set({
         resetToken: resetCode,
         resetTokenExpiry: resetExpiry,
       }).where(eq(users.id, user.id));
+      resetCodeFailures.delete(normalizedEmail);
       
       const apiKey = process.env.SENDGRID_API_KEY;
       if (!apiKey) {
@@ -634,32 +725,35 @@ Examples:
         return res.status(400).json({ error: "All fields are required" });
       }
       
-      if (newPassword.length < 6) {
-        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      const policyError = passwordPolicyError(newPassword);
+      if (policyError) {
+        return res.status(400).json({ error: policyError });
       }
       
       const normalizedEmail = email.toLowerCase().trim();
       const normalizedCode = code.toString().trim();
       
-      console.log("Reset password attempt:", { email: normalizedEmail, codeProvided: normalizedCode });
-      
       const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
       
       if (existing.length === 0) {
-        console.log("Reset password: User not found for email:", normalizedEmail);
         return res.status(400).json({ error: "Invalid reset code" });
       }
       
       const user = existing[0];
       
-      console.log("Reset password: DB token:", user.resetToken, "Provided:", normalizedCode, "Match:", user.resetToken === normalizedCode);
-      
       if (!user.resetToken || user.resetToken !== normalizedCode) {
+        const failures = (resetCodeFailures.get(normalizedEmail) || 0) + 1;
+        if (user.resetToken && failures >= MAX_RESET_CODE_FAILURES) {
+          resetCodeFailures.delete(normalizedEmail);
+          await db.update(users).set({ resetToken: null, resetTokenExpiry: null }).where(eq(users.id, user.id));
+          return res.status(400).json({ error: "Too many wrong codes. Please request a new code." });
+        }
+        resetCodeFailures.set(normalizedEmail, failures);
         return res.status(400).json({ error: "Invalid reset code" });
       }
+      resetCodeFailures.delete(normalizedEmail);
       
       if (!user.resetTokenExpiry || new Date(user.resetTokenExpiry) < new Date()) {
-        console.log("Reset password: Token expired. Expiry:", user.resetTokenExpiry, "Now:", new Date());
         return res.status(400).json({ error: "Reset code has expired. Please request a new code." });
       }
       
@@ -762,7 +856,7 @@ Examples:
         });
       }
       
-      res.json({ user });
+      res.json({ user: { id: user.id, deviceId: user.deviceId, createdAt: user.createdAt } });
     } catch (error) {
       console.error("User init error:", error);
       res.status(500).json({ error: "Failed to initialize user" });
@@ -808,26 +902,41 @@ Examples:
       if (!req.user || req.user.userId !== userId) {
         return res.status(403).json({ error: "Access denied" });
       }
+      if (typeof title !== "string" || !title.trim()) {
+        return res.status(400).json({ error: "Title is required" });
+      }
+      if (lane !== undefined && !LANES.includes(lane)) {
+        return res.status(400).json({ error: "Invalid lane" });
+      }
+      const parsedDueDate = parseOptionalDate(dueDate);
+      if (parsedDueDate === "invalid") {
+        return res.status(400).json({ error: "Invalid dueDate" });
+      }
 
-      const userRecord = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-      const subscriptionStatus = userRecord[0]?.subscriptionStatus || "none";
-      const trialEndsAt = userRecord[0]?.trialEndsAt;
-      const isTrialing = subscriptionStatus === "trialing" && trialEndsAt && new Date(trialEndsAt) > new Date();
-      const isPro = subscriptionStatus === "active" || subscriptionStatus === "pro" || isTrialing;
-
+      // The app retries creates on network errors, so the same client id can
+      // arrive twice. Treat a repeat as success instead of a key violation.
+      if (typeof id === "string" && id) {
+        const [existing] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+        if (existing) {
+          if (existing.userId !== userId) {
+            return res.status(409).json({ error: "Task id already in use" });
+          }
+          return res.json({ task: { ...existing, subtasks: [], delegationNotes: [] } });
+        }
+      }
       
-      const taskValues: any = {
+      const taskValues: typeof tasks.$inferInsert = {
         userId,
-        title,
-        notes: notes || null,
+        title: title.trim().slice(0, 500),
+        notes: typeof notes === "string" && notes.trim() ? notes : null,
         lane: lane || "now",
-        reminderType: reminderType || "soft",
-        dueDate: dueDate ? new Date(dueDate) : null,
-        assignedTo: assignedTo || null,
+        reminderType: REMINDER_TYPES.includes(reminderType) ? reminderType : "soft",
+        dueDate: parsedDueDate ?? null,
+        assignedTo: typeof assignedTo === "string" && assignedTo ? assignedTo.slice(0, 255) : null,
       };
       
-      if (id) {
-        taskValues.id = id;
+      if (typeof id === "string" && id) {
+        taskValues.id = id.slice(0, 255);
       }
       
       const result = await db.insert(tasks).values(taskValues).returning();
@@ -846,33 +955,118 @@ Examples:
   app.put("/api/tasks/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const updates = req.body;
+      const me = req.user!.userId;
+      const body = req.body || {};
       
       const existingTask = await db.select().from(tasks).where(eq(tasks.id, id));
       
-      if (existingTask.length > 0 && existingTask[0].userId !== req.user?.userId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-      const wasCompleted = existingTask.length > 0 && existingTask[0].completedAt !== null;
-      const isBeingCompleted = updates.completedAt && !wasCompleted;
-      
-      if (updates.dueDate) updates.dueDate = new Date(updates.dueDate);
-      if (updates.completedAt) updates.completedAt = new Date(updates.completedAt);
-      if (updates.delegatedAt) updates.delegatedAt = new Date(updates.delegatedAt);
-      if (updates.lastDelegationUpdate) updates.lastDelegationUpdate = new Date(updates.lastDelegationUpdate);
-      
-      delete updates.subtasks;
-      delete updates.delegationNotes;
-      delete updates.createdAt;
-      
-      const result = await db.update(tasks).set(updates).where(eq(tasks.id, id)).returning();
-      
-      if (result.length === 0) {
+      if (existingTask.length === 0) {
         return res.status(404).json({ error: "Task not found" });
       }
+      if (existingTask[0].userId !== me) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const current = existingTask[0];
+
+      // Only these columns are client-editable. Anything else in the body
+      // (userId, nudge bookkeeping, ids) is ignored.
+      const updates: Partial<typeof tasks.$inferInsert> = {};
+
+      if (body.title !== undefined) {
+        if (typeof body.title !== "string" || !body.title.trim()) {
+          return res.status(400).json({ error: "Title can't be empty" });
+        }
+        updates.title = body.title.trim().slice(0, 500);
+      }
+      if (body.notes !== undefined) {
+        updates.notes = typeof body.notes === "string" && body.notes.trim() ? body.notes : null;
+      }
+      if (body.lane !== undefined) {
+        if (!LANES.includes(body.lane)) return res.status(400).json({ error: "Invalid lane" });
+        updates.lane = body.lane;
+      }
+      if (body.reminderType !== undefined) {
+        if (!REMINDER_TYPES.includes(body.reminderType)) return res.status(400).json({ error: "Invalid reminder type" });
+        updates.reminderType = body.reminderType;
+      }
+      if (body.isOverdue !== undefined) updates.isOverdue = !!body.isOverdue;
+      if (body.focusTimeMinutes !== undefined) {
+        const minutes = Number(body.focusTimeMinutes);
+        if (!Number.isFinite(minutes) || minutes < 0) return res.status(400).json({ error: "Invalid focus time" });
+        updates.focusTimeMinutes = Math.round(minutes);
+      }
+      if (body.assignedTo !== undefined) {
+        updates.assignedTo = typeof body.assignedTo === "string" && body.assignedTo ? body.assignedTo.slice(0, 255) : null;
+      }
+      if (body.delegationStatus !== undefined) {
+        if (body.delegationStatus !== null && !DELEGATION_STATUSES.includes(body.delegationStatus)) {
+          return res.status(400).json({ error: "Invalid delegation status" });
+        }
+        updates.delegationStatus = body.delegationStatus;
+      }
+      for (const field of ["dueDate", "completedAt", "delegatedAt", "lastDelegationUpdate"] as const) {
+        const parsed = parseOptionalDate(body[field]);
+        if (parsed === "invalid") return res.status(400).json({ error: `Invalid ${field}` });
+        if (parsed !== undefined) updates[field] = parsed;
+      }
+
+      let newDelegateId: string | null = null;
+      if (body.delegatedToUserId !== undefined) {
+        const target = body.delegatedToUserId || null;
+        let validTarget = true;
+        if (target && target !== current.delegatedToUserId) {
+          validTarget = target !== me && (await areTeammates(me, target));
+          if (validTarget) {
+            newDelegateId = target;
+            if (!updates.delegatedAt) updates.delegatedAt = new Date();
+            if (updates.delegationStatus === undefined) updates.delegationStatus = "assigned";
+          }
+        }
+        if (validTarget) {
+          updates.delegatedToUserId = target;
+        } else {
+          // App Store builds save the whole task, including a hand-off they
+          // still hold in memory after the teammate was unlinked. Don't lose
+          // that save (e.g. a completion): drop the stale hand-off fields and
+          // keep the rest. A request that is only a hand-off gets an error.
+          const otherFields = Object.keys(body).filter(
+            (k) => !["delegatedToUserId", "delegationStatus", "assignedTo", "delegatedAt", "lastDelegationUpdate"].includes(k)
+          );
+          if (otherFields.length === 0) {
+            return res.status(400).json({ error: "You can only hand off tasks to linked team members" });
+          }
+          delete updates.delegationStatus;
+          delete updates.assignedTo;
+          delete updates.delegatedAt;
+          delete updates.lastDelegationUpdate;
+        }
+      }
+
+      const isBeingCompleted = !!updates.completedAt && current.completedAt === null;
+
+      if (Object.keys(updates).length === 0) {
+        return res.json({ task: current });
+      }
       
-      if (isBeingCompleted && existingTask[0].userId) {
-        await applyCompletionStats(existingTask[0].userId);
+      // When completing, only the request that actually flips completedAt from
+      // null applies points, so a double tap or a notification "Done" racing
+      // the app can't count twice.
+      let result = await db.update(tasks).set(updates)
+        .where(isBeingCompleted ? and(eq(tasks.id, id), isNull(tasks.completedAt)) : eq(tasks.id, id))
+        .returning();
+      if (result.length === 0) {
+        delete updates.completedAt;
+        result = Object.keys(updates).length > 0
+          ? await db.update(tasks).set(updates).where(eq(tasks.id, id)).returning()
+          : await db.select().from(tasks).where(eq(tasks.id, id));
+      } else if (isBeingCompleted) {
+        await applyCompletionStats(me);
+      }
+
+      if (newDelegateId) {
+        const [owner] = await db.select({ displayName: users.displayName, email: users.email }).from(users).where(eq(users.id, me)).limit(1);
+        sendDelegationNotification(newDelegateId, result[0].title, displayNameFor(owner), result[0].id)
+          .catch((err) => console.error("Delegation notification failed:", err));
       }
       
       res.json({ task: result[0] });
@@ -928,18 +1122,49 @@ Examples:
     }
   });
 
-  app.post("/api/subtasks", async (req: Request, res: Response) => {
+  // Subtasks can only be changed by the owner of the parent task.
+  async function ownsTask(userId: string, taskId: unknown): Promise<"ok" | "missing" | "forbidden"> {
+    if (typeof taskId !== "string" || !taskId) return "missing";
+    const [task] = await db.select({ userId: tasks.userId }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+    if (!task) return "missing";
+    return task.userId === userId ? "ok" : "forbidden";
+  }
+
+  async function findOwnSubtask(req: AuthenticatedRequest) {
+    const [row] = await db
+      .select({ subtask: subtasks, ownerId: tasks.userId })
+      .from(subtasks)
+      .innerJoin(tasks, eq(tasks.id, subtasks.taskId))
+      .where(eq(subtasks.id, req.params.id))
+      .limit(1);
+    if (!row || row.ownerId !== req.user!.userId) return null;
+    return row.subtask;
+  }
+
+  app.post("/api/subtasks", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id, taskId, title } = req.body;
+
+      if (typeof title !== "string" || !title.trim()) {
+        return res.status(400).json({ error: "Title is required" });
+      }
+      const ownership = await ownsTask(req.user!.userId, taskId);
+      if (ownership === "missing") return res.status(404).json({ error: "Task not found" });
+      if (ownership === "forbidden") return res.status(403).json({ error: "Access denied" });
       
-      const subtaskValues: any = {
+      const subtaskValues: typeof subtasks.$inferInsert = {
         taskId,
-        title,
+        title: title.trim().slice(0, 500),
         completed: false,
       };
       
-      if (id) {
-        subtaskValues.id = id;
+      if (typeof id === "string" && id) {
+        const [existing] = await db.select().from(subtasks).where(eq(subtasks.id, id)).limit(1);
+        if (existing) {
+          if (existing.taskId !== taskId) return res.status(409).json({ error: "Subtask id already in use" });
+          return res.json({ subtask: existing });
+        }
+        subtaskValues.id = id.slice(0, 255);
       }
       
       const result = await db.insert(subtasks).values(subtaskValues).returning();
@@ -951,16 +1176,27 @@ Examples:
     }
   });
 
-  app.put("/api/subtasks/:id", async (req: Request, res: Response) => {
+  app.put("/api/subtasks/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { id } = req.params;
+      const subtask = await findOwnSubtask(req);
+      if (!subtask) {
+        return res.status(404).json({ error: "Subtask not found" });
+      }
       const { completed, title } = req.body;
       
-      const updates: any = {};
-      if (completed !== undefined) updates.completed = completed;
-      if (title !== undefined) updates.title = title;
+      const updates: Partial<typeof subtasks.$inferInsert> = {};
+      if (completed !== undefined) updates.completed = !!completed;
+      if (title !== undefined) {
+        if (typeof title !== "string" || !title.trim()) {
+          return res.status(400).json({ error: "Title can't be empty" });
+        }
+        updates.title = title.trim().slice(0, 500);
+      }
+      if (Object.keys(updates).length === 0) {
+        return res.json({ subtask });
+      }
       
-      const result = await db.update(subtasks).set(updates).where(eq(subtasks.id, id)).returning();
+      const result = await db.update(subtasks).set(updates).where(eq(subtasks.id, subtask.id)).returning();
       
       res.json({ subtask: result[0] });
     } catch (error) {
@@ -969,10 +1205,13 @@ Examples:
     }
   });
 
-  app.delete("/api/subtasks/:id", async (req: Request, res: Response) => {
+  app.delete("/api/subtasks/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { id } = req.params;
-      await db.delete(subtasks).where(eq(subtasks.id, id));
+      const subtask = await findOwnSubtask(req);
+      if (!subtask) {
+        return res.status(404).json({ error: "Subtask not found" });
+      }
+      await db.delete(subtasks).where(eq(subtasks.id, subtask.id));
       res.json({ success: true });
     } catch (error) {
       console.error("Delete subtask error:", error);
@@ -1003,16 +1242,31 @@ Examples:
       if (!req.user || req.user.userId !== userId) {
         return res.status(403).json({ error: "Access denied" });
       }
+      if (typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "Name is required" });
+      }
       
-      const contactValues: any = {
+      const contactValues: typeof contacts.$inferInsert = {
         userId,
-        name,
-        role: role || null,
-        color: color || "#007AFF",
+        name: name.trim().slice(0, 255),
+        role: typeof role === "string" && role.trim() ? role.trim().slice(0, 255) : null,
+        color: typeof color === "string" && color ? color.slice(0, 20) : "#007AFF",
       };
-      
-      if (id) {
-        contactValues.id = id;
+
+      // The app saves edits by re-posting the same contact id: update in place.
+      if (typeof id === "string" && id) {
+        const [existing] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
+        if (existing) {
+          if (existing.userId !== userId) {
+            return res.status(403).json({ error: "Access denied" });
+          }
+          const [updated] = await db.update(contacts)
+            .set({ name: contactValues.name, role: contactValues.role, color: contactValues.color })
+            .where(eq(contacts.id, id))
+            .returning();
+          return res.json({ contact: updated });
+        }
+        contactValues.id = id.slice(0, 255);
       }
       
       const result = await db.insert(contacts).values(contactValues).returning();
@@ -1024,10 +1278,21 @@ Examples:
     }
   });
 
-  app.delete("/api/contacts/:id", async (req: Request, res: Response) => {
+  app.delete("/api/contacts/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
-      await db.delete(contacts).where(eq(contacts.id, id));
+      const me = req.user!.userId;
+      const [contact] = await db.select({ userId: contacts.userId }).from(contacts).where(eq(contacts.id, id)).limit(1);
+      if (!contact || contact.userId !== me) {
+        return res.status(404).json({ error: "Contact not found" });
+      }
+      await db.transaction(async (tx) => {
+        // Tasks handed to this contact go back to being unassigned.
+        await tx.update(tasks)
+          .set({ assignedTo: null, delegationStatus: null, delegatedAt: null, lastDelegationUpdate: null })
+          .where(and(eq(tasks.userId, me), eq(tasks.assignedTo, id)));
+        await tx.delete(contacts).where(eq(contacts.id, id));
+      });
       res.json({ success: true });
     } catch (error) {
       console.error("Delete contact error:", error);
@@ -1046,13 +1311,33 @@ Examples:
       const { pushToken, notificationsEnabled, timezoneOffsetMinutes } = req.body;
       
       const updates: any = {};
-      if (pushToken !== undefined) updates.pushToken = pushToken;
+      if (pushToken !== undefined) {
+        if (pushToken !== null && typeof pushToken !== "string") {
+          return res.status(400).json({ error: "Invalid push token" });
+        }
+        updates.pushToken = pushToken || null;
+        if (pushToken) {
+          // A phone that switches accounts must stop getting the old account's reminders.
+          await db.update(users)
+            .set({ pushToken: null })
+            .where(and(eq(users.pushToken, pushToken), sql`${users.id} <> ${id}`));
+        }
+      }
       if (notificationsEnabled !== undefined) updates.notificationsEnabled = notificationsEnabled;
       if (Number.isInteger(timezoneOffsetMinutes) && Math.abs(timezoneOffsetMinutes) <= 14 * 60) {
         updates.timezoneOffsetMinutes = timezoneOffsetMinutes;
       }
       
-      const result = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "Nothing to update" });
+      }
+
+      const result = await db.update(users).set(updates).where(eq(users.id, id)).returning({
+        id: users.id,
+        pushToken: users.pushToken,
+        notificationsEnabled: users.notificationsEnabled,
+        timezoneOffsetMinutes: users.timezoneOffsetMinutes,
+      });
       
       if (result.length === 0) {
         return res.status(404).json({ error: "User not found" });
@@ -1083,7 +1368,7 @@ Examples:
         return res.status(403).json({ error: "Access denied" });
       }
 
-      const { subscription, timezoneOffsetMinutes } = req.body;
+      const { subscription, timezoneOffsetMinutes, resync } = req.body;
       if (
         !subscription?.endpoint ||
         typeof subscription.endpoint !== "string" ||
@@ -1095,11 +1380,15 @@ Examples:
 
       await saveWebPushSubscription(id, subscription);
 
-      const updates: any = { notificationsEnabled: true };
+      // An app-start re-sync only refreshes the subscription. Turning the
+      // account's notifications back on is reserved for an explicit opt-in.
+      const updates: any = resync === true ? {} : { notificationsEnabled: true };
       if (Number.isInteger(timezoneOffsetMinutes) && Math.abs(timezoneOffsetMinutes) <= 14 * 60) {
         updates.timezoneOffsetMinutes = timezoneOffsetMinutes;
       }
-      await db.update(users).set(updates).where(eq(users.id, id));
+      if (Object.keys(updates).length > 0) {
+        await db.update(users).set(updates).where(eq(users.id, id));
+      }
 
       res.json({ success: true });
     } catch (error) {
@@ -1327,6 +1616,8 @@ Examples:
       }
       
       if (clientStats) {
+        delete clientStats.id;
+        delete clientStats.userId;
         await db.insert(userStats).values({
           userId,
           ...clientStats,
@@ -1344,26 +1635,25 @@ Examples:
     }
   });
 
-  function generateInviteCode(): string {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let code = "";
-    for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  }
-
-  app.put("/api/users/:id/display-name", async (req: Request, res: Response) => {
+  app.put("/api/users/:id/display-name", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
+      if (!req.user || req.user.userId !== id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
       const { displayName } = req.body;
-      
-      const result = await db.update(users).set({ displayName }).where(eq(users.id, id)).returning();
-      
+      if (displayName !== null && typeof displayName !== "string") {
+        return res.status(400).json({ error: "displayName must be a string" });
+      }
+      const cleaned = typeof displayName === "string" ? displayName.trim().slice(0, 100) || null : null;
+
+      const result = await db.update(users).set({ displayName: cleaned }).where(eq(users.id, id)).returning();
+
       if (result.length === 0) {
         return res.status(404).json({ error: "User not found" });
       }
-      
+
       res.json({ user: { id: result[0].id, email: result[0].email, displayName: result[0].displayName } });
     } catch (error) {
       console.error("Update display name error:", error);
@@ -1371,30 +1661,33 @@ Examples:
     }
   });
 
-  app.post("/api/team/invite", async (req: Request, res: Response) => {
+  app.post("/api/team/invite", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { inviterId, inviteeEmail } = req.body;
-      
-      let inviteCode = generateInviteCode();
-      let attempts = 0;
-      while (attempts < 5) {
-        const existing = await db.select().from(teamInvites).where(eq(teamInvites.inviteCode, inviteCode)).limit(1);
-        if (existing.length === 0) break;
-        inviteCode = generateInviteCode();
-        attempts++;
+      if (bodyNamesOtherUser(req, "inviterId")) {
+        return res.status(403).json({ error: "Access denied" });
       }
-      
+      const inviterId = req.user!.userId;
+
+      const inviteeEmail = normalizeEmail(req.body.inviteeEmail);
+      if (inviteeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeEmail)) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
+      }
+      if (inviteeEmail && inviteeEmail === req.user!.email?.toLowerCase()) {
+        return res.status(400).json({ error: "You can't invite yourself" });
+      }
+
+      const inviteCode = await generateUniqueInviteCode();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
-      
+
       const result = await db.insert(teamInvites).values({
         inviteCode,
         inviterId,
-        inviteeEmail: inviteeEmail || null,
+        inviteeEmail,
         status: "pending",
         expiresAt,
       }).returning();
-      
+
       res.json({ invite: result[0] });
     } catch (error) {
       console.error("Create invite error:", error);
@@ -1402,33 +1695,36 @@ Examples:
     }
   });
 
-  app.get("/api/team/invites/:userId", async (req: Request, res: Response) => {
+  app.get("/api/team/invites/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
-      
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const now = new Date();
+
       const sentInvites = await db.select().from(teamInvites).where(
         and(eq(teamInvites.inviterId, userId), eq(teamInvites.status, "pending"))
       );
-      
-      const userRecord = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-      const userEmail = userRecord[0]?.email;
-      
+
+      const userRecord = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+      const userEmail = userRecord[0]?.email?.toLowerCase();
+
       let receivedInvites: any[] = [];
       if (userEmail) {
-        const invites = await db.select().from(teamInvites).where(
-          and(eq(teamInvites.inviteeEmail, userEmail), eq(teamInvites.status, "pending"))
-        );
-        
-        for (const invite of invites) {
-          const inviter = await db.select().from(users).where(eq(users.id, invite.inviterId!)).limit(1);
-          receivedInvites.push({
-            ...invite,
-            inviterEmail: inviter[0]?.email,
-            inviterName: inviter[0]?.displayName,
-          });
-        }
+        const rows = await db
+          .select({ invite: teamInvites, inviterEmail: users.email, inviterName: users.displayName })
+          .from(teamInvites)
+          .innerJoin(users, eq(users.id, teamInvites.inviterId))
+          .where(and(
+            sql`lower(${teamInvites.inviteeEmail}) = ${userEmail}`,
+            eq(teamInvites.status, "pending"),
+          ));
+        receivedInvites = rows
+          .filter((row) => !row.invite.expiresAt || row.invite.expiresAt > now)
+          .map((row) => ({ ...row.invite, inviterEmail: row.inviterEmail, inviterName: row.inviterName }));
       }
-      
+
       res.json({ sentInvites, receivedInvites });
     } catch (error) {
       console.error("Get invites error:", error);
@@ -1436,78 +1732,106 @@ Examples:
     }
   });
 
-  app.post("/api/team/invite/accept", async (req: Request, res: Response) => {
+  app.post("/api/team/invite/accept", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { inviteCode, userId } = req.body;
-      
-      const inviteResult = await db.select().from(teamInvites).where(eq(teamInvites.inviteCode, inviteCode)).limit(1);
-      
-      if (inviteResult.length === 0) {
-        return res.status(404).json({ error: "Invite not found" });
+      if (bodyNamesOtherUser(req, "userId")) {
+        return res.status(403).json({ error: "Access denied" });
       }
-      
+      const userId = req.user!.userId;
+      const inviteCode = typeof req.body.inviteCode === "string" ? req.body.inviteCode.trim().toUpperCase() : "";
+      if (!inviteCode) {
+        return res.status(400).json({ error: "Invite code is required" });
+      }
+
+      const inviteResult = await db.select().from(teamInvites).where(eq(teamInvites.inviteCode, inviteCode)).limit(1);
+
+      if (inviteResult.length === 0) {
+        return res.status(404).json({ error: "Invite not found. Check the code and try again." });
+      }
+
       const invite = inviteResult[0];
-      
+
       if (invite.status !== "pending") {
         return res.status(400).json({ error: "Invite is no longer valid" });
       }
-      
+
       if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
-        return res.status(400).json({ error: "Invite has expired" });
+        return res.status(400).json({ error: "Invite has expired. Ask for a new code." });
       }
-      
-      if (invite.inviterId === userId) {
+
+      if (!invite.inviterId) {
+        return res.status(400).json({ error: "Invite is no longer valid" });
+      }
+      const inviterId = invite.inviterId;
+
+      if (inviterId === userId) {
         return res.status(400).json({ error: "Can't join your own team" });
       }
-      
-      const existingRelation = await db.select().from(teamMembers).where(
-        or(
-          and(eq(teamMembers.userId, invite.inviterId!), eq(teamMembers.teammateId, userId)),
-          and(eq(teamMembers.userId, userId), eq(teamMembers.teammateId, invite.inviterId!))
-        )
-      ).limit(1);
-      
-      if (existingRelation.length > 0) {
-        await db.update(teamInvites).set({ status: "accepted" }).where(eq(teamInvites.id, invite.id));
-        return res.json({ message: "Already team members", teamMember: existingRelation[0] });
-      }
-      
+
       const colors = ["#FF3B30", "#FF9500", "#007AFF", "#AF52DE", "#34C759", "#5856D6"];
-      const randomColor = colors[Math.floor(Math.random() * colors.length)];
-      
-      const inviterUser = await db.select().from(users).where(eq(users.id, invite.inviterId!)).limit(1);
-      const acceptingUser = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-      
-      await db.insert(teamMembers).values({
-        userId: invite.inviterId!,
-        teammateId: userId,
-        nickname: acceptingUser[0]?.displayName || acceptingUser[0]?.email?.split("@")[0] || "Teammate",
-        color: randomColor,
+      const pickColor = () => colors[randomInt(colors.length)];
+
+      const [inviterUser] = await db.select().from(users).where(eq(users.id, inviterId)).limit(1);
+      const [acceptingUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (!inviterUser || !acceptingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Both directions must exist for delegation to work either way. Create
+      // whichever side is missing (one side can be left over from an earlier link).
+      const teamMember = await db.transaction(async (tx) => {
+        const existing = await tx.select().from(teamMembers).where(
+          or(
+            and(eq(teamMembers.userId, inviterId), eq(teamMembers.teammateId, userId)),
+            and(eq(teamMembers.userId, userId), eq(teamMembers.teammateId, inviterId))
+          )
+        );
+        const inviterSide = existing.find((m) => m.userId === inviterId);
+        let mySide = existing.find((m) => m.userId === userId);
+
+        if (!inviterSide) {
+          await tx.insert(teamMembers).values({
+            userId: inviterId,
+            teammateId: userId,
+            nickname: displayNameFor(acceptingUser),
+            color: pickColor(),
+          });
+        }
+        if (!mySide) {
+          [mySide] = await tx.insert(teamMembers).values({
+            userId,
+            teammateId: inviterId,
+            nickname: displayNameFor(inviterUser),
+            color: pickColor(),
+          }).returning();
+        }
+
+        await tx.update(teamInvites).set({ status: "accepted" }).where(eq(teamInvites.id, invite.id));
+        return mySide;
       });
-      
-      const randomColor2 = colors[Math.floor(Math.random() * colors.length)];
-      const result = await db.insert(teamMembers).values({
-        userId: userId,
-        teammateId: invite.inviterId!,
-        nickname: inviterUser[0]?.displayName || inviterUser[0]?.email?.split("@")[0] || "Teammate",
-        color: randomColor2,
-      }).returning();
-      
-      await db.update(teamInvites).set({ status: "accepted" }).where(eq(teamInvites.id, invite.id));
-      
-      res.json({ teamMember: result[0] });
+
+      res.json({ teamMember });
     } catch (error) {
       console.error("Accept invite error:", error);
       res.status(500).json({ error: "Failed to accept invite" });
     }
   });
 
-  app.post("/api/team/invite/decline", async (req: Request, res: Response) => {
+  app.post("/api/team/invite/decline", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { inviteId } = req.body;
-      
+      if (typeof inviteId !== "string" || !inviteId) {
+        return res.status(400).json({ error: "inviteId is required" });
+      }
+
+      const myEmail = req.user!.email?.toLowerCase();
+      const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.id, inviteId)).limit(1);
+      if (!invite || !myEmail || invite.inviteeEmail?.toLowerCase() !== myEmail) {
+        return res.status(404).json({ error: "Invite not found" });
+      }
+
       await db.update(teamInvites).set({ status: "declined" }).where(eq(teamInvites.id, inviteId));
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Decline invite error:", error);
@@ -1515,12 +1839,22 @@ Examples:
     }
   });
 
-  app.delete("/api/team/invite/:id", async (req: Request, res: Response) => {
+  // Loads an invite only if the authenticated user created it.
+  async function findOwnInvite(req: AuthenticatedRequest) {
+    const [invite] = await db.select().from(teamInvites).where(eq(teamInvites.id, req.params.id)).limit(1);
+    if (!invite || invite.inviterId !== req.user!.userId) return null;
+    return invite;
+  }
+
+  app.delete("/api/team/invite/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { id } = req.params;
-      
-      await db.delete(teamInvites).where(eq(teamInvites.id, id));
-      
+      const invite = await findOwnInvite(req);
+      if (!invite) {
+        return res.status(404).json({ error: "Invite not found" });
+      }
+
+      await db.delete(teamInvites).where(eq(teamInvites.id, invite.id));
+
       res.json({ success: true });
     } catch (error) {
       console.error("Cancel invite error:", error);
@@ -1528,44 +1862,48 @@ Examples:
     }
   });
 
-  app.post("/api/team/invite/:id/resend", async (req: Request, res: Response) => {
+  app.post("/api/team/invite/:id/resend", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { id } = req.params;
-      
-      const invite = await db.select().from(teamInvites).where(eq(teamInvites.id, id)).limit(1);
-      if (invite.length === 0) {
+      const invite = await findOwnInvite(req);
+      if (!invite) {
         return res.status(404).json({ error: "Invite not found" });
       }
-      
-      res.json({ invite: invite[0] });
+
+      // Re-sharing a code should give the recipient a full week to use it.
+      const newExpiry = new Date();
+      newExpiry.setDate(newExpiry.getDate() + 7);
+      const [updated] = await db.update(teamInvites)
+        .set({ expiresAt: newExpiry, status: "pending" })
+        .where(eq(teamInvites.id, invite.id))
+        .returning();
+
+      res.json({ invite: updated });
     } catch (error) {
       console.error("Resend invite error:", error);
       res.status(500).json({ error: "Failed to resend invite" });
     }
   });
 
-  app.post("/api/team/invite/:id/regenerate", async (req: Request, res: Response) => {
+  app.post("/api/team/invite/:id/regenerate", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { id } = req.params;
-      
-      const invite = await db.select().from(teamInvites).where(eq(teamInvites.id, id)).limit(1);
-      if (invite.length === 0) {
+      const invite = await findOwnInvite(req);
+      if (!invite) {
         return res.status(404).json({ error: "Invite not found" });
       }
-      
-      const newCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+
+      const newCode = await generateUniqueInviteCode();
       const newExpiry = new Date();
       newExpiry.setDate(newExpiry.getDate() + 7);
-      
+
       const updated = await db.update(teamInvites)
-        .set({ 
-          inviteCode: newCode, 
+        .set({
+          inviteCode: newCode,
           expiresAt: newExpiry,
           status: "pending"
         })
-        .where(eq(teamInvites.id, id))
+        .where(eq(teamInvites.id, invite.id))
         .returning();
-      
+
       res.json({ invite: updated[0] });
     } catch (error) {
       console.error("Regenerate invite error:", error);
@@ -1573,24 +1911,25 @@ Examples:
     }
   });
 
-  app.get("/api/team/members/:userId", async (req: Request, res: Response) => {
+  app.get("/api/team/members/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
-      
-      const members = await db.select().from(teamMembers).where(eq(teamMembers.userId, userId));
-      
-      const membersWithDetails: any[] = [];
-      for (const member of members) {
-        const teammate = await db.select().from(users).where(eq(users.id, member.teammateId!)).limit(1);
-        if (teammate[0]) {
-          membersWithDetails.push({
-            ...member,
-            teammateEmail: teammate[0].email,
-            teammateName: teammate[0].displayName || teammate[0].email?.split("@")[0],
-          });
-        }
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
-      
+
+      const rows = await db
+        .select({ member: teamMembers, email: users.email, displayName: users.displayName })
+        .from(teamMembers)
+        .innerJoin(users, eq(users.id, teamMembers.teammateId))
+        .where(eq(teamMembers.userId, userId));
+
+      const membersWithDetails = rows.map((row) => ({
+        ...row.member,
+        teammateEmail: row.email,
+        teammateName: row.displayName || row.email?.split("@")[0],
+      }));
+
       res.json({ members: membersWithDetails });
     } catch (error) {
       console.error("Get team members error:", error);
@@ -1598,25 +1937,36 @@ Examples:
     }
   });
 
-  app.delete("/api/team/members/:id", async (req: Request, res: Response) => {
+  app.delete("/api/team/members/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const { userId } = req.body;
-      
-      const member = await db.select().from(teamMembers).where(eq(teamMembers.id, id)).limit(1);
-      if (member.length === 0) {
+      const me = req.user!.userId;
+
+      const [member] = await db.select().from(teamMembers).where(eq(teamMembers.id, id)).limit(1);
+      if (!member || member.userId !== me || !member.teammateId) {
         return res.status(404).json({ error: "Team member not found" });
       }
-      
-      await db.delete(teamMembers).where(eq(teamMembers.id, id));
-      
-      await db.delete(teamMembers).where(
-        and(
-          eq(teamMembers.userId, member[0].teammateId!),
-          eq(teamMembers.teammateId, userId)
-        )
-      );
-      
+      const them = member.teammateId;
+
+      // Unlinking is mutual, and open hand-offs between the two people end with it.
+      await db.transaction(async (tx) => {
+        await tx.delete(teamMembers).where(
+          or(
+            and(eq(teamMembers.userId, me), eq(teamMembers.teammateId, them)),
+            and(eq(teamMembers.userId, them), eq(teamMembers.teammateId, me))
+          )
+        );
+        await tx.update(tasks).set(CLEARED_DELEGATION).where(
+          and(
+            isNull(tasks.completedAt),
+            or(
+              and(eq(tasks.userId, me), eq(tasks.delegatedToUserId, them)),
+              and(eq(tasks.userId, them), eq(tasks.delegatedToUserId, me))
+            )
+          )
+        );
+      });
+
       res.json({ success: true });
     } catch (error) {
       console.error("Remove team member error:", error);
@@ -1624,37 +1974,38 @@ Examples:
     }
   });
 
-  app.get("/api/delegated-to-me/:userId", async (req: Request, res: Response) => {
+  app.get("/api/delegated-to-me/:userId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId } = req.params;
-      
-      const delegatedTasks = await db.select().from(tasks).where(
-        and(
-          eq(tasks.delegatedToUserId, userId),
-          eq(tasks.completedAt, null as any)
-        )
-      );
-      
-      const taskIds = delegatedTasks.map(t => t.id);
+      if (!req.user || req.user.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const rows = await db
+        .select({ task: tasks, ownerEmail: users.email, ownerDisplayName: users.displayName })
+        .from(tasks)
+        .innerJoin(users, eq(users.id, tasks.userId))
+        .where(and(eq(tasks.delegatedToUserId, userId), isNull(tasks.completedAt)));
+
+      const taskIds = rows.map((row) => row.task.id);
       let taskSubtasks: any[] = [];
       let taskNotes: any[] = [];
-      
+
       if (taskIds.length > 0) {
         taskSubtasks = await db.select().from(subtasks).where(inArray(subtasks.taskId, taskIds));
         taskNotes = await db.select().from(delegationNotes).where(inArray(delegationNotes.taskId, taskIds));
       }
-      
-      const tasksWithDetails = await Promise.all(delegatedTasks.map(async (task) => {
-        const owner = await db.select().from(users).where(eq(users.id, task.userId!)).limit(1);
-        return {
-          ...task,
-          subtasks: taskSubtasks.filter(s => s.taskId === task.id),
-          delegationNotes: taskNotes.filter(n => n.taskId === task.id),
-          ownerName: owner[0]?.displayName || owner[0]?.email?.split("@")[0] || "Unknown",
-          ownerEmail: owner[0]?.email,
-        };
+
+      const tasksWithDetails = rows.map(({ task, ownerEmail, ownerDisplayName }) => ({
+        ...task,
+        subtasks: taskSubtasks.filter((s) => s.taskId === task.id),
+        delegationNotes: taskNotes
+          .filter((n) => n.taskId === task.id)
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+        ownerName: ownerDisplayName || ownerEmail?.split("@")[0] || "Unknown",
+        ownerEmail,
       }));
-      
+
       res.json({ tasks: tasksWithDetails });
     } catch (error) {
       console.error("Get delegated tasks error:", error);
@@ -1662,54 +2013,98 @@ Examples:
     }
   });
 
-  app.put("/api/delegation-status/:taskId", async (req: Request, res: Response) => {
+  app.put("/api/delegation-status/:taskId", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { taskId } = req.params;
-      const { userId, status, note } = req.body;
-      
+      const { status, note } = req.body;
+      const me = req.user!.userId;
+
+      if (bodyNamesOtherUser(req, "userId")) {
+        return res.status(403).json({ error: "Not authorized to update this task" });
+      }
+      if (!DELEGATION_STATUSES.includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+
       const task = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
-      
+
       if (task.length === 0) {
         return res.status(404).json({ error: "Task not found" });
       }
-      
-      if (task[0].delegatedToUserId !== userId) {
+
+      if (task[0].delegatedToUserId !== me) {
         return res.status(403).json({ error: "Not authorized to update this task" });
       }
-      
+
       const result = await db.update(tasks).set({
         delegationStatus: status,
         lastDelegationUpdate: new Date(),
       }).where(eq(tasks.id, taskId)).returning();
-      
-      if (note) {
-        await db.insert(delegationNotes).values({
+
+      const noteText = typeof note === "string" ? note.trim().slice(0, 2000) : "";
+      let savedNote = null;
+      if (noteText) {
+        [savedNote] = await db.insert(delegationNotes).values({
           taskId,
-          authorId: userId,
+          authorId: me,
           type: "status_update",
-          text: note,
-        });
+          text: noteText,
+        }).returning();
       }
-      
-      res.json({ task: result[0] });
+
+      if (task[0].userId && task[0].delegationStatus !== status) {
+        const [delegate] = await db.select({ displayName: users.displayName, email: users.email }).from(users).where(eq(users.id, me)).limit(1);
+        sendDelegationStatusNotification(
+          task[0].userId,
+          task[0].id,
+          task[0].title,
+          displayNameFor(delegate),
+          DELEGATION_STATUS_LABELS[status],
+          noteText || undefined,
+        ).catch((err) => console.error("Delegation status notification failed:", err));
+      }
+
+      res.json({ task: result[0], note: savedNote });
     } catch (error) {
       console.error("Update delegation status error:", error);
       res.status(500).json({ error: "Failed to update delegation status" });
     }
   });
 
-  app.post("/api/delegation-notes", async (req: Request, res: Response) => {
+  app.post("/api/delegation-notes", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { taskId, authorId, type, text } = req.body;
-      
-      const result = await db.insert(delegationNotes).values({
+      const { id, taskId, type, text } = req.body;
+      const me = req.user!.userId;
+
+      if (bodyNamesOtherUser(req, "authorId")) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      if (typeof taskId !== "string" || !DELEGATION_NOTE_TYPES.includes(type)) {
+        return res.status(400).json({ error: "taskId and a valid type are required" });
+      }
+
+      const [task] = await db.select({ userId: tasks.userId, delegatedToUserId: tasks.delegatedToUserId }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      if (task.userId !== me && task.delegatedToUserId !== me) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const values: typeof delegationNotes.$inferInsert = {
         taskId,
-        authorId: authorId || null,
+        authorId: me,
         type,
-        text: text || null,
-      }).returning();
-      
-      res.json({ note: result[0] });
+        text: typeof text === "string" ? text.trim().slice(0, 2000) || null : null,
+      };
+      if (typeof id === "string" && id.length > 0 && id.length <= 255) {
+        values.id = id;
+      }
+
+      const result = await db.insert(delegationNotes).values(values).onConflictDoNothing().returning();
+      await db.update(tasks).set({ lastDelegationUpdate: new Date() }).where(eq(tasks.id, taskId));
+
+      res.json({ note: result[0] ?? null });
     } catch (error) {
       console.error("Create delegation note error:", error);
       res.status(500).json({ error: "Failed to create delegation note" });
@@ -1742,20 +2137,25 @@ Examples:
         return res.status(400).json({ error: "Password is required to delete account" });
       }
       
-      await db.delete(delegationNotes).where(eq(delegationNotes.authorId, userId));
-      await db.delete(subtasks).where(
-        inArray(subtasks.taskId, 
-          db.select({ id: tasks.id }).from(tasks).where(eq(tasks.userId, userId))
-        )
-      );
-      await db.delete(tasks).where(eq(tasks.userId, userId));
-      await db.delete(contacts).where(eq(contacts.userId, userId));
-      await db.delete(teamMembers).where(
-        or(eq(teamMembers.userId, userId), eq(teamMembers.teammateId, userId))
-      );
-      await db.delete(teamInvites).where(eq(teamInvites.inviterId, userId));
-      await db.delete(userStats).where(eq(userStats.userId, userId));
-      await db.delete(users).where(eq(users.id, userId));
+      await db.transaction(async (tx) => {
+        // Tasks other people handed to this user point at them without a
+        // cascade, so release those hand-offs first or the user row can't go.
+        await tx.update(tasks).set(CLEARED_DELEGATION).where(eq(tasks.delegatedToUserId, userId));
+        await tx.delete(delegationNotes).where(eq(delegationNotes.authorId, userId));
+        await tx.delete(subtasks).where(
+          inArray(subtasks.taskId,
+            tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.userId, userId))
+          )
+        );
+        await tx.delete(tasks).where(eq(tasks.userId, userId));
+        await tx.delete(contacts).where(eq(contacts.userId, userId));
+        await tx.delete(teamMembers).where(
+          or(eq(teamMembers.userId, userId), eq(teamMembers.teammateId, userId))
+        );
+        await tx.delete(teamInvites).where(eq(teamInvites.inviterId, userId));
+        await tx.delete(userStats).where(eq(userStats.userId, userId));
+        await tx.delete(users).where(eq(users.id, userId));
+      });
       
       res.json({ success: true, message: "Account deleted successfully" });
     } catch (error) {
@@ -1819,14 +2219,16 @@ Examples:
           console.error("[RevenueCat Webhook] Auth failed");
           return res.status(401).json({ error: "Unauthorized" });
         }
+      } else if (process.env.NODE_ENV === "production") {
+        // Without the secret anyone could grant themselves Pro with one POST.
+        console.error("[RevenueCat Webhook] REVENUECAT_WEBHOOK_SECRET is not set; rejecting webhook");
+        return res.status(503).json({ error: "Webhook not configured" });
       }
-
-      res.status(200).json({ received: true });
 
       const { event } = req.body;
       if (!event) {
         console.error("[RevenueCat Webhook] No event in payload");
-        return;
+        return res.status(200).json({ received: true });
       }
 
       const {
@@ -1838,15 +2240,36 @@ Examples:
 
       console.log(`[RevenueCat Webhook] Event: ${type}, User: ${app_user_id}`);
 
+      if (type === "TEST") {
+        console.log(`[RevenueCat Webhook] Test event received successfully`);
+        return res.status(200).json({ received: true });
+      }
+
+      if (type === "TRANSFER") {
+        // A restore moved the purchase to another account: the old ids lose it,
+        // the new one gains it.
+        const fromIds: string[] = Array.isArray(event.transferred_from) ? event.transferred_from : [];
+        const toIds: string[] = Array.isArray(event.transferred_to) ? event.transferred_to : [];
+        if (fromIds.length > 0) {
+          await db.update(users).set({ subscriptionStatus: "none", trialEndsAt: null }).where(inArray(users.id, fromIds));
+        }
+        if (toIds.length > 0) {
+          await db.update(users).set({ subscriptionStatus: "active" }).where(inArray(users.id, toIds));
+        }
+        console.log(`[RevenueCat Webhook] Transfer from ${fromIds.length} to ${toIds.length} account(s)`);
+        return res.status(200).json({ received: true });
+      }
+
       if (!app_user_id) {
         console.error("[RevenueCat Webhook] No app_user_id in event");
-        return;
+        return res.status(200).json({ received: true });
       }
 
       const userRecord = await db.select().from(users).where(eq(users.id, app_user_id)).limit(1);
       if (userRecord.length === 0) {
+        // Anonymous RevenueCat ids ($RCAnonymousID...) never match a user row.
         console.error(`[RevenueCat Webhook] User not found: ${app_user_id}`);
-        return;
+        return res.status(200).json({ received: true });
       }
 
       let newStatus: string = userRecord[0].subscriptionStatus || "none";
@@ -1868,8 +2291,10 @@ Examples:
           break;
 
         case "CANCELLATION":
-          newStatus = "canceled";
-          break;
+          // Auto-renew was turned off. The user keeps what they paid for until
+          // RevenueCat sends EXPIRATION, so access does not change here.
+          console.log(`[RevenueCat Webhook] Cancellation noted for ${app_user_id}; access continues until expiration`);
+          return res.status(200).json({ received: true });
 
         case "EXPIRATION":
           newStatus = "none";
@@ -1881,20 +2306,13 @@ Examples:
           break;
 
         case "PRODUCT_CHANGE":
-          newStatus = "active";
-          break;
-
         case "NON_RENEWING_PURCHASE":
           newStatus = "active";
           break;
 
-        case "TEST":
-          console.log(`[RevenueCat Webhook] Test event received successfully`);
-          return;
-
         default:
           console.log(`[RevenueCat Webhook] Unhandled event type: ${type}`);
-          return;
+          return res.status(200).json({ received: true });
       }
 
       await db.update(users).set({
@@ -1903,8 +2321,11 @@ Examples:
       }).where(eq(users.id, app_user_id));
 
       console.log(`[RevenueCat Webhook] Updated user ${app_user_id}: status=${newStatus}`);
+      // Acknowledge only after the write, so RevenueCat retries if it failed.
+      res.status(200).json({ received: true });
     } catch (error) {
       console.error("[RevenueCat Webhook] Processing error:", error);
+      if (!res.headersSent) res.status(500).json({ error: "Processing failed" });
     }
   });
 

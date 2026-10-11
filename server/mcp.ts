@@ -8,7 +8,7 @@ import { connectorKeys, tasks, subtasks, users, userStats } from "@shared/schema
 import { and, eq, isNull, isNotNull, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "./authMiddleware";
 import { authenticateOAuthToken } from "./oauth";
-import { applyCompletionStats } from "./taskActions";
+import { applyCompletionStats, defaultDueDate } from "./taskActions";
 
 // ---------- Connector key helpers ----------
 
@@ -161,6 +161,11 @@ function buildMcpServer(userId: string): McpServer {
         due = new Date(dueDate);
         if (isNaN(due.getTime())) return errorResult("Invalid dueDate — use ISO 8601, e.g. 2026-08-05T17:00:00Z");
       }
+      if (!due) {
+        // Without a due date a task is never flagged overdue or nudged.
+        const [owner] = await db.select({ tz: users.timezoneOffsetMinutes }).from(users).where(eq(users.id, userId)).limit(1);
+        due = defaultDueDate(lane || "now", owner?.tz);
+      }
       const [task] = await db
         .insert(tasks)
         .values({ userId, title, notes: notes || null, lane: lane || "now", dueDate: due })
@@ -199,11 +204,17 @@ function buildMcpServer(userId: string): McpServer {
       const task = await findOwnTask(userId, taskId);
       if (!task) return errorResult("Task not found");
       if (task.completedAt) return textResult({ alreadyCompleted: true, task: taskSummary(task) });
+      // isNull(completedAt) makes the completion count exactly once even if
+      // the app completes the same task at the same moment.
       const [updated] = await db
         .update(tasks)
         .set({ completedAt: new Date() })
-        .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)))
+        .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId), isNull(tasks.completedAt)))
         .returning();
+      if (!updated) {
+        const current = await findOwnTask(userId, taskId);
+        return textResult({ alreadyCompleted: true, task: current ? taskSummary(current) : null });
+      }
       await applyCompletionStats(userId);
       return textResult({ completed: taskSummary(updated) });
     }

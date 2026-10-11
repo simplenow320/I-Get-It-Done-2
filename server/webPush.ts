@@ -1,7 +1,7 @@
 import webpush from "web-push";
 import { db } from "./db";
 import { webPushSubscriptions, vapidConfig } from "@shared/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 let vapidReady: Promise<{ publicKey: string; privateKey: string }> | null = null;
 
@@ -135,5 +135,5 @@ export async function saveWebPushSubscription(
 export async function deleteWebPushSubscription(userId: string, endpoint: string): Promise<void> {
   await db
     .delete(webPushSubscriptions)
-    .where(eq(webPushSubscriptions.endpoint, endpoint));
+    .where(and(eq(webPushSubscriptions.endpoint, endpoint), eq(webPushSubscriptions.userId, userId)));
 }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, TextInput, Alert, ScrollView } from "react-native";
+import { StyleSheet, View, Pressable, TextInput, ScrollView } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,6 +18,7 @@ import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore } from "@/stores/TaskStore";
+import { showMessage } from "@/lib/alerts";
 
 type Mode = "solo" | "team";
 
@@ -106,9 +107,9 @@ export default function ModeSettingsScreen() {
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
   const navigation = useNavigation();
-  const { settings, updateSettings } = useTaskStore();
+  const { settings, updateSettings, acceptTeamInvite } = useTaskStore();
   const [selectedMode, setSelectedMode] = useState<Mode>(settings.mode);
-  const [teamCode, setTeamCode] = useState(settings.teamCode || "");
+  const [teamCode, setTeamCode] = useState("");
   const [isValidating, setIsValidating] = useState(false);
   
   let tabBarHeight = 0;
@@ -120,9 +121,17 @@ export default function ModeSettingsScreen() {
 
   const handleSave = async () => {
     if (selectedMode === "team" && teamCode.trim()) {
+      // A code here is an invite: actually join the team, don't just store it.
       setIsValidating(true);
-      updateSettings({ mode: selectedMode, teamCode: teamCode.trim() });
+      const result = await acceptTeamInvite(teamCode.trim());
       setIsValidating(false);
+      if (!result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        showMessage("Couldn't join team", result.error || "Check the code and try again.");
+        return;
+      }
+      updateSettings({ mode: selectedMode, teamCode: "" });
+      showMessage("You're on the team", "Find shared tasks in the Team tab.");
     } else if (selectedMode === "solo") {
       updateSettings({ mode: selectedMode, teamCode: "" });
     } else if (selectedMode === "team" && !teamCode.trim()) {
@@ -181,7 +190,7 @@ export default function ModeSettingsScreen() {
                   borderColor: theme.border,
                 },
               ]}
-              placeholder="Enter your team code"
+              placeholder="Invite code (optional)"
               placeholderTextColor={theme.textSecondary}
               value={teamCode}
               onChangeText={setTeamCode}

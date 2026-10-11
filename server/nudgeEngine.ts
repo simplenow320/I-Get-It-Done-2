@@ -123,7 +123,9 @@ async function runEscalatingNudges(): Promise<number> {
     .innerJoin(users, eq(tasks.userId, users.id))
     .where(
       and(
-        eq(tasks.isOverdue, true),
+        // The app flags overdue tasks when it's open. A "now" task past its due
+        // time is overdue even if the user hasn't opened the app since.
+        or(eq(tasks.isOverdue, true), and(eq(tasks.lane, "now"), lt(tasks.dueDate, now))),
         isNull(tasks.completedAt),
         eq(users.notificationsEnabled, true),
         eq(users.escalatingRemindersEnabled, true)
@@ -138,6 +140,15 @@ async function runEscalatingNudges(): Promise<number> {
   const toSend: { taskId: string; userId: string; token: string | null; title: string; body: string; nudgeCount: number }[] = [];
   const nudgedUsers = new Set<string>();
 
+  // Intensity is a per-user pace, not per-task: a user with many overdue tasks
+  // still gets at most one escalating nudge per interval.
+  const lastNudgeByUser = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.userId || !row.lastNudgeAt) continue;
+    const t = row.lastNudgeAt.getTime();
+    if (t > (lastNudgeByUser.get(row.userId) || 0)) lastNudgeByUser.set(row.userId, t);
+  }
+
   for (const row of rows) {
     if (!row.userId) continue;
     // Skip users with no delivery channel at all.
@@ -151,6 +162,8 @@ async function runEscalatingNudges(): Promise<number> {
 
     const last = row.lastNudgeAt ? row.lastNudgeAt.getTime() : 0;
     if (now.getTime() - last < NUDGE_INTERVAL_MS[intensity]) continue;
+
+    if (now.getTime() - (lastNudgeByUser.get(row.userId) || 0) < NUDGE_INTERVAL_MS[intensity]) continue;
 
     // At most one escalating nudge per user per pass — avoid notification storms.
     if (nudgedUsers.has(row.userId)) continue;
@@ -323,6 +336,10 @@ export async function sendStreakSaverNotifications(): Promise<number> {
     const today = localDateStr(local);
     if (u.lastStreakSaverDate === today) continue;
     if (u.lastActiveDate === today) continue; // already safe
+    // Only a streak that's still alive can be saved: the last active day must
+    // be yesterday. Older streaks already ended.
+    const yesterday = localDateStr(new Date(local.getTime() - 24 * 60 * 60 * 1000));
+    if (u.lastActiveDate !== yesterday) continue;
 
     sent += await deliverNudges([
       {
@@ -331,7 +348,6 @@ export async function sendStreakSaverNotifications(): Promise<number> {
         title: `Your ${u.currentStreak}-day streak dies at midnight`,
         body: "You're ONE task away from saving it. Pick the smallest thing on your list and go.",
         data: { type: "streak_saver", streak: u.currentStreak },
-        categoryId: "task_nudge",
       },
     ]);
     await db.update(users).set({ lastStreakSaverDate: today }).where(eq(users.id, u.userId));

@@ -280,9 +280,10 @@ function setupErrorHandler(app: express.Application) {
     const status = error.status || error.statusCode || 500;
     const message = error.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-
-    throw err;
+    console.error("Unhandled request error:", err);
+    if (res.headersSent) return;
+    // `error` is also set so the app's error handling shows the message.
+    res.status(status).json({ message, error: message });
   });
 }
 
@@ -307,6 +308,18 @@ function setupErrorHandler(app: express.Application) {
   app.use("/api/auth/login", authLimiter);
   app.use("/api/auth/register", authLimiter);
   app.use("/api/auth/forgot-password", authLimiter);
+  app.use("/api/auth/reset-password", authLimiter);
+  app.use("/api/auth/change-password", authLimiter);
+
+  // Invite codes are bearer secrets: slow down anyone guessing them.
+  const teamJoinLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    message: { error: "Too many attempts, please try again later" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use("/api/team/invite/accept", teamJoinLimiter);
   
   const errorReportLimiter = rateLimit({
     windowMs: 60 * 1000,

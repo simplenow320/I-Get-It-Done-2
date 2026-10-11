@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, Alert, TextInput, Modal, ActivityIndicator, Linking } from "react-native";
+import { StyleSheet, View, Pressable, TextInput, Modal, ActivityIndicator, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -23,6 +23,7 @@ import { useGamification, Level } from "@/stores/GamificationStore";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
+import { showMessage } from "@/lib/alerts";
 
 type NavigationProp = NativeStackNavigationProp<ProfileStackParamList, "Profile">;
 type ThemeMode = "light" | "dark" | "system";
@@ -129,7 +130,7 @@ export default function ProfileScreen() {
     try {
       await Linking.openURL("https://igetitdone.co/privacy");
     } catch (error) {
-      Alert.alert("Error", "Could not open Privacy Policy");
+      showMessage("Error", "Could not open Privacy Policy");
     }
   };
 

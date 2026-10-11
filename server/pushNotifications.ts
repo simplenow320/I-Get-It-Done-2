@@ -1,7 +1,7 @@
 import { Expo, ExpoPushMessage, ExpoPushTicket } from "expo-server-sdk";
 import { db } from "./db";
 import { users, tasks, userStats } from "@shared/schema";
-import { eq, and, isNotNull, lt, isNull } from "drizzle-orm";
+import { eq, and, isNotNull, isNull, gt, lte, ne } from "drizzle-orm";
 import { getUsersWithWebPush, sendWebPushNotifications, type WebPushMessage } from "./webPush";
 
 const expo = new Expo();
@@ -99,9 +99,11 @@ export async function sendBulkPushNotifications(
 
 async function clearInvalidToken(pushToken: string): Promise<void> {
   try {
+    // Only this phone's token is dead. Leave notificationsEnabled alone so the
+    // user's browser (Web Push) and future devices keep getting reminders.
     await db
       .update(users)
-      .set({ pushToken: null, notificationsEnabled: false })
+      .set({ pushToken: null })
       .where(eq(users.pushToken, pushToken));
     console.log(`Cleared invalid push token: ${pushToken}`);
   } catch (error) {
@@ -223,10 +225,18 @@ export async function sendStreakReminderNotifications(): Promise<PushResult> {
   }
 }
 
+// Each pass covers only tasks whose due time falls 90-120 minutes out. Passes
+// run every 30 minutes, so every task is announced once instead of on each pass.
+const DUE_SOON_WINDOW_START_MS = 90 * 60 * 1000;
+const DUE_SOON_WINDOW_END_MS = 120 * 60 * 1000;
+const DUE_SOON_QUIET_START = 21; // matches the nudge engine's quiet hours
+const DUE_SOON_QUIET_END = 8;
+
 export async function sendDueSoonNotifications(): Promise<PushResult> {
   try {
     const now = new Date();
-    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const windowStart = new Date(now.getTime() + DUE_SOON_WINDOW_START_MS);
+    const windowEnd = new Date(now.getTime() + DUE_SOON_WINDOW_END_MS);
 
     const dueSoonResults = await db
       .select({
@@ -235,7 +245,7 @@ export async function sendDueSoonNotifications(): Promise<PushResult> {
         taskId: tasks.id,
         dueDate: tasks.dueDate,
         pushToken: users.pushToken,
-        notificationsEnabled: users.notificationsEnabled,
+        tz: users.timezoneOffsetMinutes,
       })
       .from(tasks)
       .innerJoin(users, eq(tasks.userId, users.id))
@@ -243,33 +253,43 @@ export async function sendDueSoonNotifications(): Promise<PushResult> {
         and(
           isNull(tasks.completedAt),
           isNotNull(tasks.dueDate),
-          lt(tasks.dueDate, twoHoursFromNow),
+          gt(tasks.dueDate, windowStart),
+          lte(tasks.dueDate, windowEnd),
           eq(users.notificationsEnabled, true),
-          eq(tasks.isOverdue, false)
+          eq(tasks.isOverdue, false),
+          ne(tasks.lane, "park")
         )
       );
 
-    const eligible = dueSoonResults.filter(
-      (r): r is typeof r & { userId: string } => !!r.userId && !!r.dueDate && r.dueDate > now
-    );
+    // One notification per user per pass, outside their quiet hours.
+    const byUser = new Map<string, { token: string | null; tasks: { id: string; title: string }[] }>();
+    for (const r of dueSoonResults) {
+      if (!r.userId) continue;
+      const localHour = new Date(now.getTime() - (r.tz || 0) * 60 * 1000).getUTCHours();
+      if (localHour >= DUE_SOON_QUIET_START || localHour < DUE_SOON_QUIET_END) continue;
+      if (!byUser.has(r.userId)) byUser.set(r.userId, { token: r.pushToken, tasks: [] });
+      byUser.get(r.userId)!.tasks.push({ id: r.taskId, title: r.taskTitle });
+    }
 
-    const webUsers = await getUsersWithWebPush(
-      Array.from(new Set(eligible.map((r) => r.userId)))
-    );
+    const webUsers = await getUsersWithWebPush(Array.from(byUser.keys()));
 
     const expoNotifications: { token: string; title: string; body: string; data?: Record<string, unknown> }[] = [];
     const webMessages: WebPushMessage[] = [];
 
-    for (const r of eligible) {
-      const title = "Task Due Soon";
-      const body = `"${r.taskTitle}" is due in less than 2 hours.`;
-      const payload = { type: "due_soon", taskId: r.taskId, userId: r.userId };
+    for (const [userId, entry] of Array.from(byUser.entries())) {
+      const count = entry.tasks.length;
+      const title = count === 1 ? "Task Due Soon" : `${count} Tasks Due Soon`;
+      const body =
+        count === 1
+          ? `"${entry.tasks[0].title}" is due in less than 2 hours.`
+          : `"${entry.tasks[0].title}" and ${count - 1} more are due in less than 2 hours.`;
+      const payload = { type: "due_soon", taskId: entry.tasks[0].id, userId };
 
-      if (r.pushToken) {
-        expoNotifications.push({ token: r.pushToken, title, body, data: payload });
+      if (entry.token) {
+        expoNotifications.push({ token: entry.token, title, body, data: payload });
       }
-      if (webUsers.has(r.userId)) {
-        webMessages.push({ userId: r.userId, title, body, data: payload });
+      if (webUsers.has(userId)) {
+        webMessages.push({ userId, title, body, data: payload });
       }
     }
 
@@ -282,37 +302,69 @@ export async function sendDueSoonNotifications(): Promise<PushResult> {
   }
 }
 
+// Sends one notification to every channel a user has (phone + browsers),
+// respecting their master notifications switch.
+async function notifyUser(
+  userId: string,
+  title: string,
+  body: string,
+  data: Record<string, unknown>
+): Promise<boolean> {
+  const [user] = await db
+    .select({ pushToken: users.pushToken, notificationsEnabled: users.notificationsEnabled })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user || !user.notificationsEnabled) return false;
+
+  let delivered = false;
+  if (user.pushToken) {
+    delivered = await sendPushNotification(user.pushToken, title, body, data);
+  }
+  const webSent = await sendWebPushNotifications([{ userId, title, body, data }]);
+  return delivered || webSent > 0;
+}
+
 export async function sendDelegationNotification(
   delegatedToUserId: string,
   taskTitle: string,
-  delegatorName: string
+  delegatorName: string,
+  taskId?: string
 ): Promise<boolean> {
   try {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, delegatedToUserId))
-      .limit(1);
-
-    if (!user || !user.notificationsEnabled) return false;
-
-    const title = "New Task Assigned";
-    const body = `${delegatorName} assigned you: "${taskTitle}"`;
-    const payload = { type: "delegation", taskTitle };
-
-    let delivered = false;
-
-    if (user.pushToken) {
-      delivered = await sendPushNotification(user.pushToken, title, body, payload);
-    }
-
-    const webSent = await sendWebPushNotifications([
-      { userId: delegatedToUserId, title, body, data: payload },
-    ]);
-
-    return delivered || webSent > 0;
+    return await notifyUser(
+      delegatedToUserId,
+      "New Task Assigned",
+      `${delegatorName} assigned you: "${taskTitle}"`,
+      { type: "delegation", taskTitle, ...(taskId ? { taskId } : {}) }
+    );
   } catch (error) {
     console.error("Failed to send delegation notification:", error);
+    return false;
+  }
+}
+
+// Tells a task's owner that the teammate they handed it to moved it along.
+export async function sendDelegationStatusNotification(
+  ownerId: string,
+  taskId: string,
+  taskTitle: string,
+  delegateName: string,
+  statusLabel: string,
+  note?: string
+): Promise<boolean> {
+  try {
+    const t = taskTitle.length > 60 ? taskTitle.slice(0, 57) + "..." : taskTitle;
+    const body = note
+      ? `${delegateName} set "${t}" to ${statusLabel}: ${note.length > 80 ? note.slice(0, 77) + "..." : note}`
+      : `${delegateName} set "${t}" to ${statusLabel}.`;
+    return await notifyUser(ownerId, statusLabel === "Done" ? "Hand-off complete" : "Hand-off update", body, {
+      type: "delegation_update",
+      taskId,
+    });
+  } catch (error) {
+    console.error("Failed to send delegation status notification:", error);
     return false;
   }
 }

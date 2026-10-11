@@ -74,6 +74,17 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// The client name is self-reported at registration, so the consent page also
+// shows where the authorization code will actually be sent.
+function redirectHost(uri: string | undefined): string | null {
+  if (!uri) return null;
+  try {
+    return new URL(uri).host;
+  } catch {
+    return null;
+  }
+}
+
 function renderAuthorizePage(opts: {
   clientName: string;
   params: Record<string, string>;
@@ -120,7 +131,11 @@ function renderAuthorizePage(opts: {
 <body>
   <div class="card">
     <h1>Connect ${escapeHtml(opts.clientName)}</h1>
-    <p><strong>${escapeHtml(opts.clientName)}</strong> wants to manage your tasks on I Get It Done. It will be able to:</p>
+    <p><strong>${escapeHtml(opts.clientName)}</strong> wants to manage your tasks on I Get It Done. It will be able to:</p>${
+      redirectHost(opts.params.redirect_uri)
+        ? `\n    <p>After you allow access you'll be sent to <strong>${escapeHtml(redirectHost(opts.params.redirect_uri)!)}</strong>. Only continue if you trust that site.</p>`
+        : ""
+    }
     <ul>
       <li>Create and list your tasks</li>
       <li>Complete, snooze, and break down tasks</li>
@@ -154,6 +169,25 @@ const oauthSignInLimiter = rateLimit({
     return `${ipKeyGenerator(req.ip ?? "")}|${email}`;
   },
   message: { error: "too_many_attempts", error_description: "Too many attempts, please try again later" },
+});
+
+// Per-IP cap on top of the IP+email one, so a single IP can't try passwords
+// against many accounts.
+const oauthSignInIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_attempts", error_description: "Too many attempts, please try again later" },
+});
+
+// Dynamic client registration is unauthenticated; keep it from being flooded.
+const oauthRegisterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_requests" },
 });
 
 // Broader limiter for the token endpoint (per IP).
@@ -200,7 +234,7 @@ export function registerOAuthRoutes(app: Express) {
   app.get("/.well-known/oauth-protected-resource/mcp", prMetadata);
 
   // --- Dynamic client registration (RFC 7591) ---
-  app.post("/oauth/register", async (req: Request, res: Response) => {
+  app.post("/oauth/register", oauthRegisterLimiter, async (req: Request, res: Response) => {
     try {
       const body = req.body || {};
       const redirectUris: unknown = body.redirect_uris;
@@ -261,7 +295,7 @@ export function registerOAuthRoutes(app: Express) {
   });
 
   // --- Authorization endpoint: handle login + consent, issue code ---
-  app.post("/oauth/authorize", oauthSignInLimiter, async (req: Request, res: Response) => {
+  app.post("/oauth/authorize", oauthSignInIpLimiter, oauthSignInLimiter, async (req: Request, res: Response) => {
     try {
       const b = req.body as Record<string, string>;
       const validation = await validateAuthorizeParams(b);

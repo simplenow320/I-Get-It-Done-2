@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { StyleSheet, View, Pressable } from "react-native";
+import { StyleSheet, View, Pressable, AppState } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInUp, useAnimatedStyle, useSharedValue, withSpring, withSequence } from "react-native-reanimated";
@@ -60,57 +60,78 @@ export default function FocusTimerScreen() {
     }
   }, [timerState]);
 
+  // The countdown runs off a wall-clock end time, not tick counting: phones
+  // suspend timers when the screen locks, and the session must still finish.
+  const endTimeRef = useRef<number>(0);
+  const finishedRef = useRef(false);
+
+  const clearTick = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+  };
+
+  const finishSession = () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    clearTick();
+    setTimeRemaining(0);
+    setTimerState("complete");
+    setShowConfetti(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    addFocusTime(taskId, selectedMinutes);
+    recordFocusSession(selectedMinutes);
+  };
+
+  const tick = () => {
+    const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+    setTimeRemaining(remaining);
+    if (remaining <= 0) {
+      finishSession();
+    } else if (remaining === 60 || remaining === 30 || remaining === 10) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+  const tickRef = useRef(tick);
+  tickRef.current = tick;
+
+  const runFor = (seconds: number) => {
+    endTimeRef.current = Date.now() + seconds * 1000;
+    clearTick();
+    intervalRef.current = setInterval(() => tickRef.current(), 1000);
+  };
+
+  // Catch up immediately when the app comes back from the background.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "active" && intervalRef.current) tickRef.current();
+    });
+    return () => subscription.remove();
+  }, []);
+
   const startTimer = useCallback(() => {
+    finishedRef.current = false;
     setTimerState("running");
     startTimeRef.current = Date.now();
     elapsedRef.current = 0;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    intervalRef.current = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          setTimerState("complete");
-          setShowConfetti(true);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          addFocusTime(taskId, selectedMinutes);
-          recordFocusSession(selectedMinutes);
-          return 0;
-        }
-        if (prev === 60 || prev === 30 || prev === 10) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    setTimeRemaining(selectedMinutes * 60);
+    runFor(selectedMinutes * 60);
   }, [selectedMinutes, taskId, addFocusTime, recordFocusSession]);
 
   const pauseTimer = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    clearTick();
+    const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+    setTimeRemaining(remaining);
     setTimerState("paused");
-    elapsedRef.current = selectedMinutes * 60 - timeRemaining;
+    elapsedRef.current = selectedMinutes * 60 - remaining;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [selectedMinutes, timeRemaining]);
+  }, [selectedMinutes]);
 
   const resumeTimer = useCallback(() => {
     setTimerState("running");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    intervalRef.current = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          setTimerState("complete");
-          setShowConfetti(true);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          addFocusTime(taskId, selectedMinutes);
-          recordFocusSession(selectedMinutes);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }, [selectedMinutes, taskId, addFocusTime, recordFocusSession]);
+    runFor(timeRemaining);
+  }, [timeRemaining]);
 
   const resetTimer = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
