@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { StyleSheet, View, Pressable, Platform, Alert, useColorScheme } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { StyleSheet, View, Pressable, Platform, AppState, useColorScheme } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
-import Animated, { 
-  useAnimatedStyle, 
-  useSharedValue, 
-  withRepeat, 
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
   withTiming,
   withSpring,
-  cancelAnimation 
+  cancelAnimation
 } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
@@ -16,6 +16,7 @@ import { getInfoAsync } from "expo-file-system/legacy";
 
 import { getApiUrl } from "@/lib/query-client";
 import { getStoredAuthToken } from "@/contexts/AuthContext";
+import { showMessage } from "@/lib/alerts";
 import { LaneColors, Spacing } from "@/constants/theme";
 import { ConsentDisclosure } from "./ConsentDisclosure";
 import { ThemedText } from "./ThemedText";
@@ -34,8 +35,42 @@ interface VoiceRecorderProps {
 type RecordingState = "idle" | "recording" | "processing";
 
 const DAILY_LIMIT_SECONDS = 600;
+// One take is capped so uploads stay small and a forgotten recording can't
+// burn the whole daily quota.
+const MAX_RECORDING_SECONDS = 300;
+const MIN_RECORDING_MS = 700;
+const isWeb = Platform.OS === "web";
 
-export default function VoiceRecorder({ onTranscriptionComplete, onError, compact = false, userId, showQuota = false }: VoiceRecorderProps) {
+function browserCanRecord(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof (globalThis as any).MediaRecorder !== "undefined"
+  );
+}
+
+function extensionForType(type: string): string {
+  if (type.includes("webm")) return "webm";
+  if (type.includes("ogg")) return "ogg";
+  if (type.includes("wav")) return "wav";
+  return "m4a";
+}
+
+function formatTime(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+export default function VoiceRecorder({ onTranscriptionComplete: onTranscriptionCompleteProp, onError: onErrorProp, compact = false, userId, showQuota = false }: VoiceRecorderProps) {
+  // Timers and the AppState listener outlive a render; always call the latest props.
+  const onTranscriptionCompleteRef = useRef(onTranscriptionCompleteProp);
+  onTranscriptionCompleteRef.current = onTranscriptionCompleteProp;
+  const onErrorRef = useRef(onErrorProp);
+  onErrorRef.current = onErrorProp;
+  const onTranscriptionComplete = (text: string) => onTranscriptionCompleteRef.current(text);
+  const reportError = (message: string) => onErrorRef.current?.(message);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const [state, setState] = useState<RecordingState>("idle");
@@ -48,15 +83,32 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
   const [lastError, setLastError] = useState<string | null>(null);
   const [canRetry, setCanRetry] = useState(false);
   const [quotaLoaded, setQuotaLoaded] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const lastRecordingUriRef = useRef<string | null>(null);
   const lastRecordingDurationRef = useRef<number>(0);
   const isMountedRef = useRef(true);
   const recordingStartTimeRef = useRef<number>(0);
-  
+  const stateRef = useRef<RecordingState>("idle");
+  const startingRef = useRef(false);
+  const maxSecondsRef = useRef(MAX_RECORDING_SECONDS);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  
+
   const pulseScale = useSharedValue(1);
   const buttonScale = useSharedValue(1);
+
+  const setRecordingState = (next: RecordingState) => {
+    stateRef.current = next;
+    if (isMountedRef.current) setState(next);
+  };
+
+  const stopTicker = () => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (userId) {
@@ -94,17 +146,46 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   useEffect(() => {
     isMountedRef.current = true;
-    
-    if (Platform.OS !== "web") {
+
+    if (isWeb) {
+      // Browsers prompt for the mic themselves, and only when recording starts.
+      setAudioReady(true);
+    } else {
       initializeAudio();
       checkPriorConsent();
     }
-    
+
     return () => {
       isMountedRef.current = false;
+      stopTicker();
+      // Leaving the screen mid-recording must release the mic and restore the
+      // audio session, or iOS keeps playback routed for recording.
+      if (stateRef.current === "recording") {
+        stateRef.current = "idle";
+        try {
+          audioRecorder.stop().catch(() => {});
+        } catch {
+          // The recorder may already be released by expo-audio's own cleanup.
+        }
+        setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
+      }
     };
   }, []);
-  
+
+  // If the phone app is backgrounded mid-recording, finish and transcribe what
+  // was said instead of leaving the button stuck in "recording". Only a real
+  // background counts: iOS goes "inactive" for Notification Center or a call
+  // banner, and browsers keep recording in a hidden tab.
+  useEffect(() => {
+    if (isWeb) return;
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "background" && stateRef.current === "recording") {
+        stopRecording();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   const initializeAudio = async () => {
     try {
       const status = await AudioModule.getRecordingPermissionsAsync();
@@ -148,31 +229,29 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const checkConsentAndStart = async () => {
     if (!audioReady) {
-      onError?.("Loading voice... try again");
+      reportError("Loading voice... try again");
       return;
     }
 
     if (limitReached) {
-      onError?.("Daily voice limit reached");
+      reportError("Daily voice limit reached");
       return;
     }
-    
+
+    if (isWeb) {
+      if (!browserCanRecord()) {
+        reportError("This browser can't record audio. Try Chrome, Edge, Firefox or Safari.");
+        return;
+      }
+      await actuallyStartRecording();
+      return;
+    }
+
     if (consentDeclined) {
-      Alert.alert(
-        "Voice Capture Disabled",
-        "You previously declined voice capture. Would you like to enable it now?",
-        [
-          { text: "Not Now", style: "cancel" },
-          { 
-            text: "Enable", 
-            onPress: async () => {
-              await AsyncStorage.removeItem(MIC_CONSENT_DECLINED_KEY);
-              setConsentDeclined(false);
-              setShowConsentDisclosure(true);
-            }
-          }
-        ]
-      );
+      // Re-enabling goes straight to the disclosure screen.
+      await AsyncStorage.removeItem(MIC_CONSENT_DECLINED_KEY);
+      setConsentDeclined(false);
+      setShowConsentDisclosure(true);
       return;
     }
 
@@ -181,14 +260,12 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       return;
     }
 
-    if (Platform.OS !== "web") {
-      const consentShown = await AsyncStorage.getItem(MIC_CONSENT_KEY);
-      if (!consentShown) {
-        setShowConsentDisclosure(true);
-        return;
-      }
+    const consentShown = await AsyncStorage.getItem(MIC_CONSENT_KEY);
+    if (!consentShown) {
+      setShowConsentDisclosure(true);
+      return;
     }
-    
+
     await requestPermissionAndStart();
   };
 
@@ -198,14 +275,14 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       if (!isMountedRef.current) return;
       if (!status.granted) {
         setPermissionStatus("denied");
-        onError?.("Tap to allow mic access");
+        reportError("Microphone is off. Allow it in Settings to use voice.");
         return;
       }
       setPermissionStatus("granted");
       await actuallyStartRecording();
     } catch (error) {
       console.error("Permission request failed:", error);
-      onError?.("Couldn't request microphone permission");
+      reportError("Couldn't request microphone permission");
     }
   };
 
@@ -219,196 +296,211 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     setShowConsentDisclosure(false);
     setConsentDeclined(true);
     await AsyncStorage.setItem(MIC_CONSENT_DECLINED_KEY, "true");
-    onError?.("Voice capture declined");
+    reportError("Voice capture declined");
   };
 
   const actuallyStartRecording = async () => {
+    if (startingRef.current || stateRef.current !== "idle") return;
+    startingRef.current = true;
     try {
+      setLastError(null);
+      setCanRetry(false);
+
       await setAudioModeAsync({
         allowsRecording: true,
         playsInSilentMode: true,
       });
 
       await audioRecorder.prepareToRecordAsync();
-      recordingStartTimeRef.current = Date.now();
       audioRecorder.record();
-      
+      recordingStartTimeRef.current = Date.now();
+
       if (!isMountedRef.current) {
         try { await audioRecorder.stop(); } catch (e) {}
         return;
       }
-      
-      setState("recording");
+
+      // Stop on its own at the per-take cap or when today's quota runs out.
+      maxSecondsRef.current = Math.max(1, Math.min(MAX_RECORDING_SECONDS, secondsRemaining));
+      setElapsedSeconds(0);
+      stopTicker();
+      tickRef.current = setInterval(() => {
+        const elapsed = (Date.now() - recordingStartTimeRef.current) / 1000;
+        if (isMountedRef.current) setElapsedSeconds(Math.floor(elapsed));
+        if (elapsed >= maxSecondsRef.current && stateRef.current === "recording") {
+          stopRecording();
+        }
+      }, 250);
+
+      setRecordingState("recording");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error: any) {
       console.error("Failed to start recording:", error);
       if (isMountedRef.current) {
-        const message = error?.message?.includes("permission") 
-          ? "Microphone permission required" 
-          : "Couldn't start recording";
-        onError?.(message);
+        const text = `${error?.name || ""} ${error?.message || ""}`.toLowerCase();
+        let message = "Couldn't start recording";
+        if (text.includes("notallowed") || text.includes("permission") || text.includes("denied")) {
+          message = isWeb ? "Allow microphone access in your browser to record" : "Microphone permission required";
+        } else if (text.includes("notfound") || text.includes("no media devices")) {
+          message = "No microphone found";
+        }
+        reportError(message);
       }
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
+    } finally {
+      startingRef.current = false;
     }
   };
 
   const stopRecording = async () => {
-    if (!isMountedRef.current) return;
-    
-    setState("processing");
+    if (stateRef.current !== "recording") return;
+    stopTicker();
+    setRecordingState("processing");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const durationSeconds = Math.ceil((Date.now() - recordingStartTimeRef.current) / 1000);
+    const elapsedMs = Date.now() - recordingStartTimeRef.current;
+    const durationSeconds = Math.max(1, Math.ceil(elapsedMs / 1000));
 
     try {
       await audioRecorder.stop();
-      
+
       await setAudioModeAsync({
         allowsRecording: false,
         playsInSilentMode: false,
       });
-      
+
       const uri = audioRecorder.uri;
-      console.log("Recording URI:", uri, "Duration:", durationSeconds, "seconds");
 
       if (!uri) {
         console.error("No recording URI available");
-        if (isMountedRef.current) {
-          onError?.("Recording failed");
-          setState("idle");
-        }
+        reportError("Recording failed - try again");
+        setRecordingState("idle");
+        return;
+      }
+
+      if (elapsedMs < MIN_RECORDING_MS) {
+        reportError("Too short - tap, speak, then tap again");
+        setRecordingState("idle");
         return;
       }
 
       await transcribeAudio(uri, durationSeconds);
     } catch (error) {
       console.error("Failed to stop recorder:", error);
-      if (isMountedRef.current) {
-        onError?.("Couldn't stop recording");
-        setState("idle");
-      }
+      reportError("Couldn't stop recording");
+      setRecordingState("idle");
     }
+  };
+
+  // Builds the multipart body. Phones upload the file on disk; browsers hold
+  // the take in memory as a blob: URL.
+  const buildUploadForm = async (uri: string, durationSeconds: number): Promise<FormData> => {
+    const formData = new FormData();
+    if (isWeb) {
+      let blob: Blob;
+      try {
+        blob = await (await fetch(uri)).blob();
+      } catch (err: any) {
+        throw new Error("FILE_NOT_FOUND: " + (err?.message || String(err)));
+      }
+      if (blob.size === 0) throw new Error("FILE_EMPTY: Recording is 0 bytes");
+      const type = blob.type || "audio/webm";
+      formData.append("audio", blob, `recording.${extensionForType(type)}`);
+    } else {
+      let fileInfo: Awaited<ReturnType<typeof getInfoAsync>>;
+      try {
+        fileInfo = await getInfoAsync(uri);
+      } catch (fileErr: any) {
+        throw new Error("FILE_CHECK_FAILED: " + (fileErr?.message || String(fileErr)));
+      }
+      if (!fileInfo.exists) throw new Error("FILE_NOT_FOUND: Recording file does not exist");
+      if (fileInfo.size === 0) throw new Error("FILE_EMPTY: Recording file is 0 bytes");
+      formData.append("audio", {
+        uri,
+        type: "audio/mp4",
+        name: "recording.m4a",
+      } as any);
+    }
+    formData.append("durationSeconds", String(durationSeconds));
+    return formData;
   };
 
   const transcribeAudio = async (uri: string, durationSeconds: number) => {
     try {
-      console.log("Starting transcription for:", uri, "duration:", durationSeconds);
-      
-      let fileSize = 0;
-      try {
-        const fileInfo = await getInfoAsync(uri);
-        console.log("File info:", JSON.stringify(fileInfo));
-        if (!fileInfo.exists) {
-          throw new Error("FILE_NOT_FOUND: Recording file does not exist at " + uri);
-        }
-        if (fileInfo.size === 0) {
-          throw new Error("FILE_EMPTY: Recording file is 0 bytes");
-        }
-        fileSize = fileInfo.size;
-      } catch (fileErr: any) {
-        if (fileErr?.message?.startsWith("FILE_")) throw fileErr;
-        throw new Error("FILE_CHECK_FAILED: " + (fileErr?.message || String(fileErr)));
-      }
-
-      const apiUrl = getApiUrl();
-      const uploadUrl = `${apiUrl}/api/transcribe`;
-      console.log("Upload target:", uploadUrl, "file size:", fileSize);
-      
       let authToken: string | null = null;
       try {
         authToken = await getStoredAuthToken();
       } catch (authErr: any) {
         throw new Error("AUTH_FAILED: " + (authErr?.message || String(authErr)));
       }
-      
       if (!authToken) {
         throw new Error("NO_AUTH_TOKEN: Not logged in");
       }
-      
-      const headers: Record<string, string> = {
-        "Accept": "application/json",
-        "Authorization": `Bearer ${authToken}`,
-      };
-      
-      const formData = new FormData();
-      formData.append("audio", {
-        uri: uri,
-        type: "audio/mp4",
-        name: "recording.m4a",
-      } as any);
-      formData.append("userId", userId || "");
-      formData.append("durationSeconds", String(durationSeconds));
-      
-      console.log("Uploading audio:", fileSize, "bytes to", uploadUrl);
-      
+
+      const formData = await buildUploadForm(uri, durationSeconds);
+
       let response: Response;
       try {
-        response = await fetch(uploadUrl, {
+        response = await fetch(`${getApiUrl()}/api/transcribe`, {
           method: "POST",
-          headers,
+          headers: {
+            "Accept": "application/json",
+            "Authorization": `Bearer ${authToken}`,
+          },
           body: formData,
         });
       } catch (fetchErr: any) {
         throw new Error("FETCH_FAILED: " + (fetchErr?.message || String(fetchErr)));
       }
-      
-      console.log("Response status:", response.status);
 
       if (!isMountedRef.current) return;
 
+      let data: any = {};
+      const responseText = await response.text().catch(() => "");
+      try { data = JSON.parse(responseText); } catch {}
+
       if (response.status === 401) {
-        onError?.("Session expired - please log in again");
-        setState("idle");
+        reportError("Session expired - please log in again");
         return;
       }
 
       if (response.status === 429) {
         setLimitReached(true);
         setSecondsRemaining(0);
-        onError?.("Daily voice limit reached");
-        setState("idle");
+        reportError("Daily voice limit reached");
         return;
       }
 
-      let responseText = "";
-      try {
-        responseText = await response.text();
-      } catch (readErr: any) {
-        throw new Error("RESPONSE_READ_FAILED: " + (readErr?.message || String(readErr)));
-      }
-      
       if (!response.ok) {
-        let errorData: any = {};
-        try { errorData = JSON.parse(responseText); } catch (e) {}
-        throw new Error("SERVER_" + response.status + ": " + (errorData.error || responseText.substring(0, 100)));
+        throw new Error("SERVER_" + response.status + ": " + (data.error || responseText.substring(0, 100)));
       }
 
-      let data: any;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseErr: any) {
-        throw new Error("JSON_PARSE_FAILED: " + responseText.substring(0, 100));
+      if (typeof data.secondsRemaining === "number") {
+        setSecondsRemaining(data.secondsRemaining);
+        setQuotaLoaded(true);
       }
-      console.log("Transcription result:", data);
-      
+      if (data.limitReached === true) {
+        setLimitReached(true);
+      }
+
       if (data.text && data.text.trim()) {
+        setLastError(null);
+        setCanRetry(false);
+        lastRecordingUriRef.current = null;
         onTranscriptionComplete(data.text.trim());
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        checkVoiceUsage();
       } else {
-        console.log("Empty transcript debug:", data.debug);
-        let errorMsg = "Didn't catch that";
+        let errorMsg = "Didn't catch that - try again";
         if (data.debug) {
           if (data.debug.fileSize < 1000) {
             errorMsg = "Recording too short";
           } else if (data.debug.audioDuration < 0.5) {
             errorMsg = "Audio too brief - speak longer";
           } else {
-            const confidencePercent = Math.round((data.debug.confidence || 0) * 100);
-            errorMsg = `Couldn't hear you - try again (${confidencePercent}% confidence)`;
-            console.log("Deepgram low confidence:", data.debug.confidence);
+            errorMsg = "Couldn't hear you - move closer to the mic and try again";
           }
         }
-        onError?.(errorMsg);
+        reportError(errorMsg);
       }
     } catch (error: any) {
       const rawMsg = error?.message || String(error);
@@ -418,55 +510,56 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
         const msg = rawMsg.toLowerCase();
         if (msg.includes("fetch_failed") || msg.includes("network") || msg.includes("timeout")) {
           errorMessage = "Connection failed - check your internet";
-        } else if (msg.includes("file_not_found") || msg.includes("file_empty")) {
+        } else if (msg.includes("file_not_found") || msg.includes("file_empty") || msg.includes("file_check")) {
           errorMessage = "Recording failed - try again";
+        } else if (msg.includes("server_503")) {
+          errorMessage = "Voice isn't set up on the server yet";
+        } else if (msg.includes("server_504")) {
+          errorMessage = "Voice service timed out - try again";
         } else if (msg.includes("server_")) {
           errorMessage = "Voice service error - try again";
         } else if (msg.includes("no_auth_token")) {
           errorMessage = "Please log in to use voice";
         }
         setLastError(errorMessage);
-        setCanRetry(true);
-        lastRecordingUriRef.current = uri;
+        // Retrying re-sends the same take; a missing file means record again.
+        const recordingStillExists = !msg.includes("file_");
+        setCanRetry(recordingStillExists);
+        lastRecordingUriRef.current = recordingStillExists ? uri : null;
         lastRecordingDurationRef.current = durationSeconds;
-        onError?.(errorMessage);
+        reportError(errorMessage);
       }
     } finally {
-      if (isMountedRef.current) {
-        setState("idle");
-      }
+      setRecordingState("idle");
     }
   };
-  
+
   const retryTranscription = async () => {
     const uri = lastRecordingUriRef.current;
     const duration = lastRecordingDurationRef.current;
-    
+    setLastError(null);
+    setCanRetry(false);
+
     if (!uri) {
-      setLastError(null);
-      setCanRetry(false);
       checkConsentAndStart();
       return;
     }
-    
-    try {
-      const fileInfo = await getInfoAsync(uri);
-      if (!fileInfo.exists) {
-        setLastError(null);
-        setCanRetry(false);
+
+    if (!isWeb) {
+      try {
+        const fileInfo = await getInfoAsync(uri);
+        if (!fileInfo.exists) {
+          checkConsentAndStart();
+          return;
+        }
+      } catch {
         checkConsentAndStart();
         return;
       }
-      
-      setLastError(null);
-      setCanRetry(false);
-      setState("processing");
-      await transcribeAudio(uri, duration);
-    } catch (error) {
-      setLastError(null);
-      setCanRetry(false);
-      checkConsentAndStart();
     }
+
+    setRecordingState("processing");
+    await transcribeAudio(uri, duration);
   };
 
   const handlePress = () => {
@@ -474,32 +567,28 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
       buttonScale.value = withSpring(1);
     });
 
-    if (Platform.OS === "web") {
-      Alert.alert(
-        "Voice Recording",
-        "Voice recording works best in Expo Go. Open the app on your phone to use this feature."
-      );
+    if (!audioReady) {
+      reportError("Loading voice...");
       return;
     }
 
-    if (!audioReady) {
-      onError?.("Loading voice...");
+    if (state === "recording") {
+      stopRecording();
       return;
     }
 
     if (limitReached) {
       const minutesLimit = Math.floor(DAILY_LIMIT_SECONDS / 60);
-      Alert.alert(
+      showMessage(
         "Daily Limit Reached",
         `You've used your ${minutesLimit} minutes of voice capture for today. You can still add tasks manually. Your limit resets tomorrow.`
       );
+      reportError("Daily voice limit reached");
       return;
     }
 
     if (state === "idle") {
       checkConsentAndStart();
-    } else if (state === "recording") {
-      stopRecording();
     }
   };
 
@@ -514,13 +603,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
 
   const size = compact ? 44 : 56;
   const iconSize = compact ? 20 : 24;
-  
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-  
+
   const getQuotaColor = (): string => {
     const percentUsed = 1 - (secondsRemaining / DAILY_LIMIT_SECONDS);
     if (percentUsed >= 0.9) return LaneColors.now.primary;
@@ -536,6 +619,8 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
     return LaneColors.soon.primary;
   };
 
+  const secondsLeftInTake = maxSecondsRef.current - elapsedSeconds;
+
   return (
     <View style={styles.container}>
       {showQuota && !compact && quotaLoaded ? (
@@ -549,14 +634,14 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
             </ThemedText>
           </View>
           <View style={[styles.quotaBar, { backgroundColor: isDark ? "#333333" : "#E0E0E0" }]}>
-            <View 
+            <View
               style={[
-                styles.quotaFill, 
-                { 
+                styles.quotaFill,
+                {
                   width: `${(secondsRemaining / DAILY_LIMIT_SECONDS) * 100}%`,
                   backgroundColor: getQuotaColor(),
                 }
-              ]} 
+              ]}
             />
           </View>
           {limitReached ? (
@@ -566,7 +651,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
           ) : null}
         </View>
       ) : null}
-      
+
       <View style={styles.buttonContainer}>
         {state === "recording" ? (
           <Animated.View
@@ -582,11 +667,14 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
             ]}
           />
         ) : null}
-        
+
         <Animated.View style={buttonAnimatedStyle}>
           <Pressable
             onPress={handlePress}
             disabled={state === "processing"}
+            accessibilityRole="button"
+            accessibilityLabel={state === "recording" ? "Stop recording" : state === "processing" ? "Transcribing" : "Start voice recording"}
+            testID="voice-record-button"
             style={[
               styles.button,
               {
@@ -615,20 +703,37 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
             )}
           </Pressable>
         </Animated.View>
-        
-        {state === "idle" && !limitReached && Platform.OS !== "web" ? (
+
+        {/* In compact rows the status floats under the button so it never
+            widens the row and pushes neighbouring buttons off screen. */}
+        {state === "recording" ? (
+          <ThemedText
+            type="caption"
+            style={[
+              compact ? [styles.compactStatus, { top: size + 2 }] : styles.hint,
+              { color: LaneColors.now.primary, fontVariant: ["tabular-nums"] },
+            ]}
+            testID="voice-record-timer"
+          >
+            {secondsLeftInTake <= 10 ? `${formatTime(secondsLeftInTake)} left` : formatTime(elapsedSeconds)}
+          </ThemedText>
+        ) : state === "processing" ? (
+          <ThemedText type="caption" secondary style={compact ? [styles.compactStatus, { top: size + 2 }] : styles.hint}>
+            {compact ? "..." : "Transcribing..."}
+          </ThemedText>
+        ) : !limitReached && !compact ? (
           <ThemedText type="caption" secondary style={styles.hint}>
             Tap to record
           </ThemedText>
         ) : null}
       </View>
-      
+
       {lastError && canRetry ? (
         <View style={styles.errorContainer}>
           <ThemedText type="caption" style={{ color: LaneColors.now.primary }}>
             {lastError}
           </ThemedText>
-          <Pressable 
+          <Pressable
             onPress={retryTranscription}
             style={styles.retryButton}
           >
@@ -639,7 +744,7 @@ export default function VoiceRecorder({ onTranscriptionComplete, onError, compac
           </Pressable>
         </View>
       ) : null}
-      
+
       <ConsentDisclosure
         visible={showConsentDisclosure}
         type="microphone"
@@ -692,6 +797,12 @@ const styles = StyleSheet.create({
   hint: {
     marginTop: Spacing.sm,
     textAlign: "center",
+  },
+  compactStatus: {
+    position: "absolute",
+    width: 64,
+    textAlign: "center",
+    fontSize: 11,
   },
   errorContainer: {
     marginTop: Spacing.md,

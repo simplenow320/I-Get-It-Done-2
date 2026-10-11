@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { scheduleOverdueNotification } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiErrorMessage } from "@/lib/alerts";
 
 export type Lane = "now" | "soon" | "later" | "park";
 export type ReminderType = "soft" | "strong" | "persistent" | "none";
@@ -17,10 +18,19 @@ export interface Subtask {
 
 export interface DelegationNote {
   id: string;
-  type: "update" | "blocked" | "question" | "completed" | "custom";
+  type: "update" | "blocked" | "question" | "completed" | "custom" | "status_update";
   text: string;
   createdAt: Date;
   author: "owner" | "delegate";
+}
+
+// Notes as the server returns them on tasks handed to the current user.
+export interface RawDelegationNote {
+  id: string;
+  type: DelegationNote["type"];
+  text: string | null;
+  createdAt: string;
+  authorId: string | null;
 }
 
 export interface Contact {
@@ -62,7 +72,7 @@ export interface DelegatedToMeTask {
   dueDate?: Date;
   subtasks: Subtask[];
   delegationStatus?: DelegationStatus;
-  delegationNotes?: DelegationNote[];
+  delegationNotes?: RawDelegationNote[];
   delegatedAt?: Date;
   ownerName: string;
   ownerEmail?: string;
@@ -144,14 +154,14 @@ interface TaskStoreContext {
   deleteContact: (id: string) => void;
   getContactById: (id: string) => Contact | undefined;
   delegateTask: (taskId: string, contactId: string) => void;
-  delegateTaskToUser: (taskId: string, teammateId: string) => void;
+  delegateTaskToUser: (taskId: string, teammateId: string) => Promise<boolean>;
   undelegateTask: (taskId: string) => void;
   updateDelegationStatus: (taskId: string, status: DelegationStatus) => void;
   addDelegationNote: (taskId: string, type: DelegationNote["type"], text: string) => void;
   getDelegatedTasks: () => Task[];
   getDelegatedTasksByContact: (contactId: string) => Task[];
   checkOverdueTasks: () => { movedCount: number; tasks: Task[] };
-  createTeamInvite: (inviteeEmail?: string) => Promise<TeamInvite | null>;
+  createTeamInvite: (inviteeEmail?: string) => Promise<{ invite: TeamInvite | null; error?: string }>;
   acceptTeamInvite: (inviteCode: string) => Promise<{ success: boolean; error?: string }>;
   declineTeamInvite: (inviteId: string) => Promise<boolean>;
   cancelSentInvite: (inviteId: string) => Promise<boolean>;
@@ -160,6 +170,7 @@ interface TaskStoreContext {
   removeTeamMember: (teamMemberId: string) => Promise<boolean>;
   refreshTeamData: () => Promise<void>;
   refreshDelegatedToMe: () => Promise<void>;
+  refreshTasks: () => Promise<void>;
   updateDelegatedTaskStatus: (taskId: string, status: DelegationStatus, note?: string) => Promise<boolean>;
   getTeamMemberById: (id: string) => TeamMember | undefined;
 }
@@ -180,6 +191,17 @@ const STORAGE_KEY_PREFIX = "@task_store_";
 const SETTINGS_STORAGE_KEY_PREFIX = "@user_settings_";
 const TASKS_CACHE_KEY_PREFIX = "@tasks_cache_";
 const CONTACTS_CACHE_KEY_PREFIX = "@contacts_cache_";
+const PENDING_CREATES_KEY_PREFIX = "@pending_task_creates_";
+
+// Delegation fields are only ever sent by the explicit hand-off actions, never
+// by ordinary saves, so a stale copy of a task can't undo a hand-off.
+type TaskPatch = {
+  assignedTo?: string | null;
+  delegatedToUserId?: string | null;
+  delegationStatus?: DelegationStatus | null;
+  delegatedAt?: string | null;
+  lastDelegationUpdate?: string | null;
+};
 
 const TaskStoreContext = createContext<TaskStoreContext | null>(null);
 
@@ -196,6 +218,16 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const loadingRef = React.useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const userId = user?.id || null;
+  // Callbacks below are memoized; refs keep them reading the current user and
+  // task list instead of whatever existed when they were created.
+  const userIdRef = useRef<string | null>(userId);
+  userIdRef.current = userId;
+  const tasksRef = useRef<Task[]>(tasks);
+  tasksRef.current = tasks;
+  const settingsModeRef = useRef(settings.mode);
+  settingsModeRef.current = settings.mode;
+  // Tasks created while offline, kept until the server confirms them.
+  const pendingCreatesRef = useRef<Record<string, Task>>({});
 
   const generateId = () => {
     const timestamp = Date.now().toString(36);
@@ -204,10 +236,25 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     return `${timestamp}-${randomPart}-${randomPart2}`;
   };
 
-  const getStorageKey = () => `${STORAGE_KEY_PREFIX}${userId}`;
-  const getSettingsStorageKey = () => `${SETTINGS_STORAGE_KEY_PREFIX}${userId}`;
-  const getTasksCacheKey = () => `${TASKS_CACHE_KEY_PREFIX}${userId}`;
-  const getContactsCacheKey = () => `${CONTACTS_CACHE_KEY_PREFIX}${userId}`;
+  const getStorageKey = () => `${STORAGE_KEY_PREFIX}${userIdRef.current}`;
+  const getSettingsStorageKey = () => `${SETTINGS_STORAGE_KEY_PREFIX}${userIdRef.current}`;
+  const getTasksCacheKey = () => `${TASKS_CACHE_KEY_PREFIX}${userIdRef.current}`;
+  const getContactsCacheKey = () => `${CONTACTS_CACHE_KEY_PREFIX}${userIdRef.current}`;
+  const getPendingCreatesKey = () => `${PENDING_CREATES_KEY_PREFIX}${userIdRef.current}`;
+
+  const persistPendingCreates = async () => {
+    try {
+      const serializable = Object.values(pendingCreatesRef.current).map((t) => ({
+        ...t,
+        createdAt: serializeDate(t.createdAt),
+        dueDate: serializeDate(t.dueDate),
+        completedAt: serializeDate(t.completedAt),
+      }));
+      await AsyncStorage.setItem(getPendingCreatesKey(), JSON.stringify(Object.fromEntries(serializable.map((t) => [t.id, t]))));
+    } catch (error) {
+      console.error("Failed to persist unsynced tasks:", error);
+    }
+  };
 
   useEffect(() => {
     if (authIsLoading) return;
@@ -216,9 +263,12 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       loadState();
     } else if (!isAuthenticated && didExplicitLogout) {
       loadingRef.current = false;
+      pendingCreatesRef.current = {};
       setTasks([]);
       setUnsortedTasks([]);
       setContacts([]);
+      setTeamMembers([]);
+      setTeamInvites({ sent: [], received: [] });
       setDelegatedToMeTasks([]);
       setSettings(defaultSettings);
       setIsLoaded(false);
@@ -237,6 +287,10 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         loadFromDatabase().catch((err) =>
           console.error("Foreground refresh failed:", err)
         );
+        if (settingsModeRef.current === "team") {
+          refreshTeamDataRef.current();
+          refreshDelegatedToMeRef.current();
+        }
       }
       appStateRef.current = nextAppState;
     };
@@ -264,6 +318,11 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     return undefined;
   };
 
+  const noteAuthor = (n: any): DelegationNote["author"] => {
+    if (n.author === "owner" || n.author === "delegate") return n.author;
+    return n.authorId && n.authorId !== userIdRef.current ? "delegate" : "owner";
+  };
+
   const parseTasksFromApi = (apiTasks: any[]): Task[] => {
     return apiTasks.map((t: any) => ({
       id: t.id,
@@ -282,16 +341,19 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       focusTimeMinutes: t.focusTimeMinutes || 0,
       isOverdue: t.isOverdue || false,
       assignedTo: t.assignedTo || undefined,
+      delegatedToUserId: t.delegatedToUserId || undefined,
       delegationStatus: t.delegationStatus || undefined,
       delegatedAt: parseDateOptional(t.delegatedAt),
       lastDelegationUpdate: parseDateOptional(t.lastDelegationUpdate),
-      delegationNotes: (t.delegationNotes || []).map((n: any) => ({
-        id: n.id,
-        type: n.type,
-        text: n.text,
-        createdAt: parseDate(n.createdAt),
-        author: "owner" as const,
-      })),
+      delegationNotes: (t.delegationNotes || [])
+        .map((n: any) => ({
+          id: n.id,
+          type: n.type,
+          text: n.text || "",
+          createdAt: parseDate(n.createdAt),
+          author: noteAuthor(n),
+        }))
+        .sort((a: DelegationNote, b: DelegationNote) => a.createdAt.getTime() - b.createdAt.getTime()),
     }));
   };
 
@@ -373,17 +435,18 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         setSettings(defaultSettings);
       }
 
+      // Always replace: never let a previous account's inbox carry over.
       const storedUnsorted = await AsyncStorage.getItem(storageKey);
-      if (storedUnsorted) {
-        const parsed = JSON.parse(storedUnsorted);
-        if (parsed.unsortedTasks) setUnsortedTasks(parsed.unsortedTasks);
-      }
+      const parsedUnsorted = storedUnsorted ? JSON.parse(storedUnsorted) : null;
+      setUnsortedTasks(Array.isArray(parsedUnsorted?.unsortedTasks) ? parsedUnsorted.unsortedTasks : []);
+
+      const storedPending = await AsyncStorage.getItem(getPendingCreatesKey());
+      const parsedPending = storedPending ? parseTasksFromApi(Object.values(JSON.parse(storedPending))) : [];
+      pendingCreatesRef.current = Object.fromEntries(parsedPending.map((t) => [t.id, t]));
 
       const cached = await loadCachedTasks();
-      if (cached.tasks.length > 0) {
-        setTasks(cached.tasks);
-        setContacts(cached.contacts);
-      }
+      setTasks(cached.tasks);
+      setContacts(cached.contacts);
 
       await loadFromDatabase();
       setIsLoaded(true);
@@ -397,19 +460,39 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const loadFromDatabase = async (retryCount: number = 0) => {
     const MAX_RETRIES = 3;
+    // Read the user from the ref: memoized callers (refreshTasks) would
+    // otherwise see the user id from the render they were created in.
+    const currentUserId = userIdRef.current;
     try {
-      if (!userId) return;
+      if (!currentUserId) return;
 
-      const tasksResponse = await apiRequest("GET", `/api/tasks/${userId}`);
+      const tasksResponse = await apiRequest("GET", `/api/tasks/${currentUserId}`);
       const tasksData = await tasksResponse.json();
+      // Signed out or switched accounts while this was in flight.
+      if (userIdRef.current !== currentUserId) return;
 
-      const loadedTasks = (tasksData.tasks && tasksData.tasks.length > 0)
+      const serverTasks = (tasksData.tasks && tasksData.tasks.length > 0)
         ? parseTasksFromApi(tasksData.tasks)
         : [];
 
-      setTasks(loadedTasks);
+      // Tasks created offline aren't on the server yet. Keep them (with any
+      // local edits) instead of letting the server list wipe them, and retry.
+      const serverIds = new Set(serverTasks.map((t) => t.id));
+      const unsynced: Task[] = [];
+      for (const [id, pending] of Object.entries(pendingCreatesRef.current)) {
+        if (serverIds.has(id)) {
+          delete pendingCreatesRef.current[id];
+        } else {
+          unsynced.push(tasksRef.current.find((t) => t.id === id) || pending);
+        }
+      }
+      persistPendingCreates();
+      const loadedTasks = [...unsynced, ...serverTasks];
 
-      const contactsResponse = await apiRequest("GET", `/api/contacts/${userId}`);
+      setTasks(loadedTasks);
+      unsynced.forEach((task) => syncPendingCreate(task));
+
+      const contactsResponse = await apiRequest("GET", `/api/contacts/${currentUserId}`);
       const contactsData = await contactsResponse.json();
 
       const loadedContacts = (contactsData.contacts && contactsData.contacts.length > 0)
@@ -457,14 +540,24 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveTaskToApi = async (task: Task, isNew: boolean = false, retryCount: number = 0) => {
-    if (!userId) return;
+  const isClientError = (error: any) => {
+    const status = Number(String(error?.message || "").slice(0, 3));
+    return status >= 400 && status < 500;
+  };
+
+  const saveTaskToApi = async (task: Task, isNew: boolean = false, retryCount: number = 0): Promise<boolean> => {
+    const currentUserId = userIdRef.current;
+    if (!currentUserId) return false;
     const MAX_RETRIES = 3;
+    if (isNew && retryCount === 0) {
+      pendingCreatesRef.current[task.id] = task;
+      persistPendingCreates();
+    }
     try {
       if (isNew) {
         await apiRequest("POST", "/api/tasks", {
           id: task.id,
-          userId,
+          userId: currentUserId,
           title: task.title,
           notes: task.notes,
           lane: task.lane,
@@ -472,34 +565,56 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           dueDate: task.dueDate?.toISOString(),
           assignedTo: task.assignedTo,
         });
+        delete pendingCreatesRef.current[task.id];
+        persistPendingCreates();
       } else {
         await apiRequest("PUT", `/api/tasks/${task.id}`, {
           title: task.title,
-          notes: task.notes,
+          notes: task.notes ?? null,
           lane: task.lane,
           reminderType: task.reminderType,
           isOverdue: task.isOverdue,
           completedAt: task.completedAt?.toISOString(),
-          dueDate: task.dueDate?.toISOString(),
+          dueDate: task.dueDate?.toISOString() ?? null,
           focusTimeMinutes: task.focusTimeMinutes,
-          assignedTo: task.assignedTo,
-          delegatedToUserId: task.delegatedToUserId,
-          delegationStatus: task.delegationStatus,
-          delegatedAt: task.delegatedAt?.toISOString(),
-          lastDelegationUpdate: task.lastDelegationUpdate?.toISOString(),
         });
       }
+      return true;
     } catch (error: any) {
       const is401 = error?.message?.startsWith("401");
       console.error(`Failed to save task (attempt ${retryCount + 1}):`, error);
-      if (!is401 && retryCount < MAX_RETRIES) {
+      if (!is401 && !isClientError(error) && retryCount < MAX_RETRIES) {
         const delay = Math.min(1000 * Math.pow(2, retryCount), 8000);
         await new Promise(resolve => setTimeout(resolve, delay));
         return saveTaskToApi(task, isNew, retryCount + 1);
       }
-      if (retryCount >= MAX_RETRIES) {
-        console.error("Task save failed after all retries:", task.id, task.title);
+      console.error("Task save failed:", task.id, task.title);
+      return false;
+    }
+  };
+
+  // Re-sends a task that was created offline, then pushes any later edits.
+  const syncPendingCreate = async (task: Task) => {
+    const created = await saveTaskToApi(task, true, 1);
+    if (created && (task.completedAt || task.focusTimeMinutes > 0 || task.isOverdue)) {
+      await saveTaskToApi(task);
+    }
+  };
+
+  const patchTaskOnApi = async (taskId: string, patch: TaskPatch, retryCount: number = 0): Promise<boolean> => {
+    const MAX_RETRIES = 3;
+    try {
+      await apiRequest("PUT", `/api/tasks/${taskId}`, patch);
+      return true;
+    } catch (error: any) {
+      console.error(`Failed to update hand-off (attempt ${retryCount + 1}):`, error);
+      const is401 = error?.message?.startsWith("401");
+      if (!is401 && !isClientError(error) && retryCount < MAX_RETRIES) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 8000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return patchTaskOnApi(taskId, patch, retryCount + 1);
       }
+      return false;
     }
   };
 
@@ -553,11 +668,12 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   };
 
   const saveContactToApi = async (contact: Contact) => {
-    if (!userId) return;
+    const currentUserId = userIdRef.current;
+    if (!currentUserId) return;
     try {
       await apiRequest("POST", "/api/contacts", {
         id: contact.id,
-        userId,
+        userId: currentUserId,
         name: contact.name,
         role: contact.role,
         color: contact.color,
@@ -578,6 +694,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const saveDelegationNoteToApi = async (taskId: string, note: DelegationNote) => {
     try {
       await apiRequest("POST", "/api/delegation-notes", {
+        id: note.id,
         taskId,
         type: note.type,
         text: note.text,
@@ -589,17 +706,27 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const calculateDueDate = useCallback((lane: Lane): Date => {
     const now = new Date();
+    const DAY = 24 * 60 * 60 * 1000;
+    const endOfDay = (d: Date) => {
+      const copy = new Date(d);
+      copy.setHours(23, 59, 59, 999);
+      return copy;
+    };
     switch (lane) {
       case "now":
-        return new Date(now.setHours(23, 59, 59, 999));
-      case "soon":
-        const soonDays = settings.laneTimings.soon === "2_3_days" ? 3 : 7;
-        return new Date(now.getTime() + soonDays * 24 * 60 * 60 * 1000);
+        return settings.laneTimings.now === "24_hours" ? new Date(now.getTime() + DAY) : endOfDay(now);
+      case "soon": {
+        if (settings.laneTimings.soon === "end_of_week") {
+          // Through the coming Sunday; on Sunday, through next Sunday.
+          const daysToSunday = (7 - now.getDay()) % 7 || 7;
+          return endOfDay(new Date(now.getTime() + daysToSunday * DAY));
+        }
+        return new Date(now.getTime() + 3 * DAY);
+      }
       case "later":
-        const laterDays = settings.laneTimings.later === "1_week" ? 7 : 14;
-        return new Date(now.getTime() + laterDays * 24 * 60 * 60 * 1000);
+        return new Date(now.getTime() + (settings.laneTimings.later === "2_weeks" ? 14 : 7) * DAY);
       case "park":
-        return new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        return new Date(now.getTime() + (settings.laneTimings.park === "quarterly" ? 90 : 30) * DAY);
       default:
         return now;
     }
@@ -670,8 +797,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeTask = useCallback((id: string) => {
-    const completedTask = tasks.find(t => t.id === id);
-    if (!completedTask) return;
+    const completedTask = tasksRef.current.find(t => t.id === id);
+    // Completing twice would award points twice and move an old task to today.
+    if (!completedTask || completedTask.completedAt) return;
     
     const updated = { ...completedTask, completedAt: new Date() };
     setTasks((prev) => prev.map((task) =>
@@ -685,11 +813,16 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const deleteTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((task) => task.id !== id));
+    // A task deleted before it ever reached the server must not be re-sent.
+    if (pendingCreatesRef.current[id]) {
+      delete pendingCreatesRef.current[id];
+      persistPendingCreates();
+    }
     deleteTaskFromApi(id);
   }, []);
 
   const moveTask = useCallback((id: string, newLane: Lane) => {
-    const taskToMove = tasks.find(t => t.id === id);
+    const taskToMove = tasksRef.current.find(t => t.id === id);
     if (!taskToMove) return;
     
     const updated = { ...taskToMove, lane: newLane, dueDate: calculateDueDate(newLane), isOverdue: false };
@@ -703,7 +836,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   }, [tasks, calculateDueDate, userId]);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
-    const taskToUpdate = tasks.find(t => t.id === id);
+    const taskToUpdate = tasksRef.current.find(t => t.id === id);
     if (!taskToUpdate) return;
     
     const updated = { ...taskToUpdate, ...updates };
@@ -752,22 +885,17 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleSubtask = useCallback((taskId: string, subtaskId: string) => {
-    setTasks((prev) => {
-      const updated = prev.map((task) =>
+    const current = tasksRef.current.find(t => t.id === taskId)?.subtasks.find(st => st.id === subtaskId);
+    if (!current) return;
+    const toggled = { ...current, completed: !current.completed };
+    setTasks((prev) =>
+      prev.map((task) =>
         task.id === taskId
-          ? {
-              ...task,
-              subtasks: task.subtasks.map((st) =>
-                st.id === subtaskId ? { ...st, completed: !st.completed } : st
-              ),
-            }
+          ? { ...task, subtasks: task.subtasks.map((st) => (st.id === subtaskId ? toggled : st)) }
           : task
-      );
-      const task = updated.find(t => t.id === taskId);
-      const subtask = task?.subtasks.find(st => st.id === subtaskId);
-      if (subtask) saveSubtaskToApi(taskId, subtask);
-      return updated;
-    });
+      )
+    );
+    saveSubtaskToApi(taskId, toggled);
   }, []);
 
   const deleteSubtask = useCallback((taskId: string, subtaskId: string) => {
@@ -789,13 +917,11 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   }, [tasks]);
 
   const addFocusTime = useCallback((taskId: string, minutes: number) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId
-          ? { ...task, focusTimeMinutes: task.focusTimeMinutes + minutes }
-          : task
-      )
-    );
+    const task = tasksRef.current.find(t => t.id === taskId);
+    if (!task || minutes <= 0) return;
+    const updated = { ...task, focusTimeMinutes: (task.focusTimeMinutes || 0) + minutes };
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+    saveTaskToApi(updated);
   }, []);
 
   const addContact = useCallback((name: string, role?: string): Contact => {
@@ -812,13 +938,12 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   }, [contacts.length, userId]);
 
   const updateContact = useCallback((id: string, updates: Partial<Contact>) => {
-    setContacts((prev) => {
-      const updated = prev.map((contact) => (contact.id === id ? { ...contact, ...updates } : contact));
-      const contact = updated.find(c => c.id === id);
-      if (contact) saveContactToApi(contact);
-      return updated;
-    });
-  }, [userId]);
+    const existing = contacts.find(c => c.id === id);
+    if (!existing) return;
+    const updated = { ...existing, ...updates };
+    setContacts((prev) => prev.map((contact) => (contact.id === id ? updated : contact)));
+    saveContactToApi(updated);
+  }, [contacts]);
 
   const deleteContact = useCallback((id: string) => {
     setContacts((prev) => prev.filter((contact) => contact.id !== id));
@@ -837,20 +962,28 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   }, [contacts]);
 
   const delegateTask = useCallback((taskId: string, contactId: string) => {
+    const now = new Date();
     setTasks((prev) =>
       prev.map((task) =>
         task.id === taskId
           ? {
               ...task,
               assignedTo: contactId,
+              delegatedToUserId: undefined,
               delegationStatus: "assigned",
-              delegatedAt: new Date(),
-              lastDelegationUpdate: new Date(),
-              delegationNotes: [],
+              delegatedAt: now,
+              lastDelegationUpdate: now,
             }
           : task
       )
     );
+    patchTaskOnApi(taskId, {
+      assignedTo: contactId,
+      delegatedToUserId: null,
+      delegationStatus: "assigned",
+      delegatedAt: now.toISOString(),
+      lastDelegationUpdate: now.toISOString(),
+    });
   }, []);
 
   const undelegateTask = useCallback((taskId: string) => {
@@ -860,24 +993,33 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           ? {
               ...task,
               assignedTo: undefined,
+              delegatedToUserId: undefined,
               delegationStatus: undefined,
               delegatedAt: undefined,
               lastDelegationUpdate: undefined,
-              delegationNotes: undefined,
             }
           : task
       )
     );
+    patchTaskOnApi(taskId, {
+      assignedTo: null,
+      delegatedToUserId: null,
+      delegationStatus: null,
+      delegatedAt: null,
+      lastDelegationUpdate: null,
+    });
   }, []);
 
   const updateDelegationStatus = useCallback((taskId: string, status: DelegationStatus) => {
+    const now = new Date();
     setTasks((prev) =>
       prev.map((task) =>
         task.id === taskId
-          ? { ...task, delegationStatus: status, lastDelegationUpdate: new Date() }
+          ? { ...task, delegationStatus: status, lastDelegationUpdate: now }
           : task
       )
     );
+    patchTaskOnApi(taskId, { delegationStatus: status, lastDelegationUpdate: now.toISOString() });
   }, []);
 
   const addDelegationNote = useCallback((taskId: string, type: DelegationNote["type"], text: string) => {
@@ -899,6 +1041,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           : task
       )
     );
+    saveDelegationNoteToApi(taskId, newNote);
   }, []);
 
   const getDelegatedTasks = useCallback((): Task[] => {
@@ -913,36 +1056,31 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     const now = new Date();
     const movedTasks: Task[] = [];
     const newlyOverdueTasks: Task[] = [];
-    
-    setTasks((prev) =>
-      prev.map((task) => {
-        if (task.completedAt || !task.dueDate) return task;
-        const dueTime = new Date(task.dueDate).getTime();
-        if (now.getTime() >= dueTime) {
-          if (task.lane === "later") {
-            const updated = { ...task, lane: "soon" as Lane, dueDate: calculateDueDate("soon") };
-            movedTasks.push(updated);
-            return updated;
-          } else if (task.lane === "soon") {
-            const updated = { ...task, lane: "now" as Lane, dueDate: calculateDueDate("now") };
-            movedTasks.push(updated);
-            return updated;
-          } else if (task.lane === "now" && !task.isOverdue) {
-            const updated = { ...task, isOverdue: true };
-            movedTasks.push(updated);
-            newlyOverdueTasks.push(updated);
-            return updated;
-          }
-        }
-        return task;
-      })
-    );
-    
-    movedTasks.forEach((task) => saveTaskToApi(task));
-    newlyOverdueTasks.forEach((task) => {
-      scheduleOverdueNotification(task.title, task.id);
-    });
-    
+
+    for (const task of tasksRef.current) {
+      if (task.completedAt || !task.dueDate) continue;
+      const dueTime = new Date(task.dueDate).getTime();
+      if (now.getTime() < dueTime) continue;
+      if (task.lane === "later") {
+        movedTasks.push({ ...task, lane: "soon", dueDate: calculateDueDate("soon") });
+      } else if (task.lane === "soon") {
+        movedTasks.push({ ...task, lane: "now", dueDate: calculateDueDate("now") });
+      } else if (task.lane === "now" && !task.isOverdue) {
+        const updated = { ...task, isOverdue: true };
+        movedTasks.push(updated);
+        newlyOverdueTasks.push(updated);
+      }
+    }
+
+    if (movedTasks.length > 0) {
+      const byId = new Map(movedTasks.map((t) => [t.id, t]));
+      setTasks((prev) => prev.map((task) => byId.get(task.id) || task));
+      movedTasks.forEach((task) => saveTaskToApi(task));
+      newlyOverdueTasks.forEach((task) => {
+        scheduleOverdueNotification(task.title, task.id);
+      });
+    }
+
     return { movedCount: movedTasks.length, tasks: movedTasks };
   }, [calculateDueDate]);
 
@@ -984,6 +1122,12 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [userId]);
 
+  // The foreground listener is registered once; read the latest versions.
+  const refreshTeamDataRef = useRef(refreshTeamData);
+  refreshTeamDataRef.current = refreshTeamData;
+  const refreshDelegatedToMeRef = useRef(refreshDelegatedToMe);
+  refreshDelegatedToMeRef.current = refreshDelegatedToMe;
+
   useEffect(() => {
     if (isAuthenticated && userId && settings.mode === "team") {
       refreshTeamData();
@@ -991,22 +1135,22 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, userId, settings.mode, refreshTeamData, refreshDelegatedToMe]);
 
-  const createTeamInvite = useCallback(async (inviteeEmail?: string): Promise<TeamInvite | null> => {
-    if (!userId) return null;
+  const createTeamInvite = useCallback(async (inviteeEmail?: string): Promise<{ invite: TeamInvite | null; error?: string }> => {
+    if (!userId) return { invite: null, error: "Not logged in" };
     try {
-      const response = await apiRequest("POST", "/api/team/invite", { inviterId: userId, inviteeEmail });
+      const response = await apiRequest("POST", "/api/team/invite", { inviterId: userId, inviteeEmail: inviteeEmail?.trim() || undefined });
       const data = await response.json();
       if (data.invite) {
         setTeamInvites((prev) => ({
           ...prev,
           sent: [...prev.sent, data.invite],
         }));
-        return data.invite;
+        return { invite: data.invite };
       }
-      return null;
+      return { invite: null, error: "Failed to create invite. Please try again." };
     } catch (error) {
       console.error("Failed to create invite:", error);
-      return null;
+      return { invite: null, error: apiErrorMessage(error, "Failed to create invite. Please try again.") };
     }
   }, [userId]);
 
@@ -1023,7 +1167,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
           "Content-Type": "application/json",
           ...authHeaders,
         },
-        body: JSON.stringify({ inviteCode, userId }),
+        body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase(), userId }),
         credentials: "include",
       });
       
@@ -1032,6 +1176,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         await refreshTeamData();
         return { success: true };
+      }
+      if (response.status === 429) {
+        return { success: false, error: "Too many attempts. Wait a few minutes and try again." };
       }
       return { success: false, error: data.error || "Failed to join team" };
     } catch (error) {
@@ -1081,6 +1228,12 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       const response = await apiRequest("POST", `/api/team/invite/${inviteId}/resend`, { userId });
       if (response.ok) {
         const data = await response.json();
+        if (data.invite) {
+          setTeamInvites((prev) => ({
+            ...prev,
+            sent: prev.sent.map((inv) => (inv.id === inviteId ? data.invite : inv)),
+          }));
+        }
         return data.invite || existingInvite || null;
       }
       return existingInvite || null;
@@ -1124,38 +1277,40 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [userId]);
 
-  const delegateTaskToUser = useCallback((taskId: string, teammateId: string) => {
+  const delegateTaskToUser = useCallback(async (taskId: string, teammateId: string): Promise<boolean> => {
     const teammate = teamMembers.find((m) => m.teammateId === teammateId);
-    if (!teammate) return;
-    
+    const original = tasksRef.current.find((t) => t.id === taskId);
+    if (!teammate || !original) return false;
+
     const now = new Date();
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              assignedTo: teammate.nickname,
-              delegatedToUserId: teammateId,
-              delegationStatus: "assigned" as DelegationStatus,
-              delegatedAt: now,
-              lastDelegationUpdate: now,
-            }
-          : task
-      )
-    );
-    
-    const task = tasks.find((t) => t.id === taskId);
-    if (task) {
-      saveTaskToApi({
-        ...task,
-        assignedTo: teammate.nickname,
-        delegatedToUserId: teammateId,
-        delegationStatus: "assigned",
-        delegatedAt: now,
-        lastDelegationUpdate: now,
-      }).catch(console.error);
+    const handedOff: Task = {
+      ...original,
+      assignedTo: teammate.nickname || teammate.teammateName || "Teammate",
+      delegatedToUserId: teammateId,
+      delegationStatus: "assigned",
+      delegatedAt: now,
+      lastDelegationUpdate: now,
+    };
+    setTasks((prev) => prev.map((task) => (task.id === taskId ? handedOff : task)));
+
+    const ok = await patchTaskOnApi(taskId, {
+      assignedTo: handedOff.assignedTo,
+      delegatedToUserId: teammateId,
+      delegationStatus: "assigned",
+      delegatedAt: now.toISOString(),
+      lastDelegationUpdate: now.toISOString(),
+    });
+    if (!ok) {
+      // Don't show a hand-off the teammate will never see.
+      setTasks((prev) => prev.map((task) => (task.id === taskId ? original : task)));
     }
-  }, [teamMembers, tasks, saveTaskToApi]);
+    return ok;
+  }, [teamMembers]);
+
+  const refreshTasks = useCallback(async (): Promise<void> => {
+    if (!userIdRef.current) return;
+    await loadFromDatabase();
+  }, []);
 
   const updateDelegatedTaskStatus = useCallback(async (
     taskId: string, 
@@ -1166,10 +1321,15 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     try {
       const response = await apiRequest("PUT", `/api/delegation-status/${taskId}`, { userId, status, note });
       if (response.ok) {
+        const data = await response.json().catch(() => ({}));
         setDelegatedToMeTasks((prev) =>
           prev.map((task) =>
             task.id === taskId
-              ? { ...task, delegationStatus: status }
+              ? {
+                  ...task,
+                  delegationStatus: status,
+                  delegationNotes: data?.note ? [...(task.delegationNotes || []), data.note] : task.delegationNotes,
+                }
               : task
           )
         );
@@ -1236,6 +1396,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
         removeTeamMember,
         refreshTeamData,
         refreshDelegatedToMe,
+        refreshTasks,
         updateDelegatedTaskStatus,
         getTeamMemberById,
       }}

@@ -124,7 +124,7 @@ export default function AddTaskScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  (navigation as any).navigate("ProfileTab", { screen: "Subscription" });
+                  (navigation as any).navigate("ProfileTab", { screen: "Subscription", initial: false });
                 }}
                 style={({ pressed }) => [
                   {

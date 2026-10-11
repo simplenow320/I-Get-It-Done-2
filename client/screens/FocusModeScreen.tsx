@@ -29,20 +29,13 @@ type NavigationProp = NativeStackNavigationProp<FocusStackParamList, "FocusMode"
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.3;
 
+// The Pro gate lives in its own component so the screen's hooks always run in
+// the same order. Returning early above hooks crashed the tab whenever the
+// subscription status changed while it was open.
 export default function FocusModeScreen() {
-  const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
-  const { theme } = useTheme();
-  const navigation = useNavigation<NavigationProp>();
   const { hasProFeatures, isLoading: subscriptionLoading } = useSubscription();
-  
-  const { getTasksByLane, completeTask, moveTask, getTaskProgress } = useTaskStore();
-  const { recordTaskComplete, recordNowCleared } = useGamification();
-  
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const translateX = useSharedValue(0);
 
   if (subscriptionLoading) {
     return (
@@ -59,6 +52,23 @@ export default function FocusModeScreen() {
       </ThemedView>
     );
   }
+
+  return <FocusModeContent />;
+}
+
+function FocusModeContent() {
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const tabBarHeight = useBottomTabBarHeight();
+  const { theme } = useTheme();
+  const navigation = useNavigation<NavigationProp>();
+  
+  const { getTasksByLane, completeTask, moveTask, getTaskProgress } = useTaskStore();
+  const { recordTaskComplete, recordNowCleared } = useGamification();
+  
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const translateX = useSharedValue(0);
 
   const nowTasks = getTasksByLane("now");
   const soonTasks = getTasksByLane("soon");
@@ -229,8 +239,8 @@ export default function FocusModeScreen() {
           </GestureDetector>
 
           <Animated.View style={[styles.swipeIndicator, styles.rightIndicator, rightIndicatorStyle]}>
-            <Feather name="clock" size={32} color={LaneColors.soon.primary} />
-            <ThemedText type="small" style={{ color: LaneColors.soon.primary }}>Soon</ThemedText>
+            <Feather name="archive" size={32} color={LaneColors.park.primary} />
+            <ThemedText type="small" style={{ color: LaneColors.park.primary }}>Park</ThemedText>
           </Animated.View>
         </View>
 

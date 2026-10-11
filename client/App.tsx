@@ -30,8 +30,29 @@ import {
 } from "@/lib/notifications";
 import { apiRequest } from "@/lib/query-client";
 import { captureReferralFromUrl, subscribeToReferralLinks } from "@/lib/referral";
+import { restoreDailyReminders } from "@/components/DailyReminderSettings";
 
 const navigationRef = createNavigationContainerRef();
+
+// Navigates once the navigator is mounted (cold starts deliver the tap first).
+function navigateWhenReady(params: object, label: string) {
+  let attempts = 0;
+  const target = () => {
+    if (navigationRef.isReady()) {
+      try {
+        (navigationRef.navigate as (name: string, params?: object) => void)("Main", params);
+      } catch (error) {
+        console.log(`${label} navigation failed:`, error);
+      }
+    } else if (attempts < 40) {
+      attempts += 1;
+      setTimeout(target, 500);
+    } else {
+      console.log(`${label} navigation gave up: navigation never became ready`);
+    }
+  };
+  target();
+}
 
 function AppContent() {
   const { isDark } = useTheme();
@@ -88,25 +109,23 @@ function AppContent() {
 
       if (action === ACTION_START_FOCUS && data?.taskId) {
         // App is foregrounded by this action; navigate once ready.
-        let attempts = 0;
-        const target = () => {
-          if (navigationRef.isReady()) {
-            try {
-              (navigationRef.navigate as (name: string, params?: object) => void)("Main", {
-                screen: "FocusTab",
-                params: { screen: "FocusTimer", params: { taskId: data.taskId } },
-              });
-            } catch (error) {
-              console.log("Focus navigation failed:", error);
-            }
-          } else if (attempts < 40) {
-            attempts += 1;
-            setTimeout(target, 500);
-          } else {
-            console.log("Focus navigation gave up: navigation never became ready");
-          }
-        };
-        target();
+        navigateWhenReady(
+          { screen: "FocusTab", params: { screen: "FocusTimer", params: { taskId: data.taskId } } },
+          "Focus"
+        );
+        return;
+      }
+
+      // Plain taps on Team notifications open the relevant screen.
+      if (data?.type === "delegation") {
+        navigateWhenReady({ screen: "TeamTab", params: { screen: "DelegatedToMe", initial: false } }, "Assigned to me");
+        return;
+      }
+      if (data?.type === "delegation_update" && data.taskId) {
+        navigateWhenReady(
+          { screen: "DashboardTab", params: { screen: "TaskDetail", params: { taskId: data.taskId }, initial: false } },
+          "Hand-off update"
+        );
       }
     };
 
@@ -126,10 +145,17 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (user?.id && user.id !== lastRegisteredUserId.current) {
+    if (!user?.id) {
+      // Signing out detaches this device's push token, so the next sign-in
+      // (even to the same account) must register it again.
+      lastRegisteredUserId.current = null;
+      return;
+    }
+    if (user.id !== lastRegisteredUserId.current) {
       lastRegisteredUserId.current = user.id;
       registerPushTokenIfNeeded(user.id);
       registerWebPushIfNeeded(user.id);
+      restoreDailyReminders(user.id);
     }
   }, [user?.id]);
   

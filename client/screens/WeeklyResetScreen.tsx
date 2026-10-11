@@ -26,14 +26,11 @@ const LEVELS: { name: Level; minPoints: number; color: string }[] = [
   { name: "legendary", minPoints: 5000, color: "#AF52DE" },
 ];
 
+// Gate in its own component so the content's hooks never run conditionally.
 export default function WeeklyResetScreen() {
-  const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
   const { hasProFeatures } = useSubscription();
-  const navigation = useNavigation();
-  const { getCompletedTasks, getTasksByLane, moveTask } = useTaskStore();
-  const gamification = useGamification();
 
   if (!hasProFeatures) {
     return (
@@ -42,6 +39,17 @@ export default function WeeklyResetScreen() {
       </View>
     );
   }
+
+  return <WeeklyResetContent />;
+}
+
+function WeeklyResetContent() {
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const { theme } = useTheme();
+  const navigation = useNavigation();
+  const { getCompletedTasks, getTasksByLane, moveTask } = useTaskStore();
+  const gamification = useGamification();
 
   const completedTasks = getCompletedTasks();
   

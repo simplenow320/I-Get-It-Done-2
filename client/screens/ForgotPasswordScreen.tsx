@@ -19,6 +19,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { LaneColors, Spacing, BorderRadius } from "@/constants/theme";
 import { AuthStackParamList } from "@/navigation/AuthStackNavigator";
 import { getApiUrl } from "@/lib/query-client";
+import { passwordPolicyError } from "@/lib/password-policy";
 
 type ForgotPasswordScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "ForgotPassword">;
 
@@ -84,8 +85,9 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters");
+    const policyError = passwordPolicyError(newPassword);
+    if (policyError) {
+      setError(policyError);
       return;
     }
 

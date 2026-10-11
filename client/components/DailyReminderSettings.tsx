@@ -105,6 +105,24 @@ async function cancelDailyReminder(identifier: string): Promise<void> {
   } catch {}
 }
 
+// Sign-out cancels every scheduled local notification. On sign-in, put back
+// the reminders this account had switched on, so the toggles stay truthful.
+export async function restoreDailyReminders(userId: string): Promise<void> {
+  if (Platform.OS === "web") return;
+  try {
+    const raw = await AsyncStorage.getItem(`${STORAGE_KEY_PREFIX}${userId}`);
+    if (!raw) return;
+    const saved: ReminderState = { ...DEFAULT_STATE, ...JSON.parse(raw) };
+    const permissions = await Notifications.getPermissionsAsync();
+    if (!permissions.granted) return;
+    if (saved.morningEnabled) await scheduleDailyReminder(MORNING_ID, saved.morningHour, saved.morningMinute, MORNING_MESSAGES);
+    if (saved.middayEnabled) await scheduleDailyReminder(MIDDAY_ID, saved.middayHour, saved.middayMinute, MIDDAY_MESSAGES);
+    if (saved.eveningEnabled) await scheduleDailyReminder(EVENING_ID, saved.eveningHour, saved.eveningMinute, EVENING_MESSAGES);
+  } catch (error) {
+    console.log("Failed to restore daily reminders:", error);
+  }
+}
+
 interface DailyReminderSettingsProps {
   userId?: string;
 }

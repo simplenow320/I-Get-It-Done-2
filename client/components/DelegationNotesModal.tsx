@@ -12,6 +12,9 @@ import { useTaskStore, Task, DelegationNote, DelegationStatus } from "@/stores/T
 interface DelegationNotesModalProps {
   visible: boolean;
   task: Task;
+  assigneeName?: string;
+  assigneeColor?: string;
+  isLinkedTeammate?: boolean;
   onClose: () => void;
 }
 
@@ -31,7 +34,7 @@ const STATUS_OPTIONS: { status: DelegationStatus; label: string; color: string }
   { status: "done", label: "Done", color: "#34C759" },
 ];
 
-export default function DelegationNotesModal({ visible, task, onClose }: DelegationNotesModalProps) {
+export default function DelegationNotesModal({ visible, task, assigneeName, assigneeColor, isLinkedTeammate, onClose }: DelegationNotesModalProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { getContactById, updateDelegationStatus, addDelegationNote } = useTaskStore();
@@ -41,6 +44,11 @@ export default function DelegationNotesModal({ visible, task, onClose }: Delegat
   const [noteText, setNoteText] = useState("");
 
   const contact = task.assignedTo ? getContactById(task.assignedTo) : undefined;
+  const assignee = assigneeName
+    ? { name: assigneeName, color: assigneeColor || "#007AFF" }
+    : contact
+      ? { name: contact.name, color: contact.color }
+      : undefined;
   const notes = task.delegationNotes || [];
 
   const handleStatusChange = (status: DelegationStatus) => {
@@ -82,6 +90,7 @@ export default function DelegationNotesModal({ visible, task, onClose }: Delegat
       <View style={styles.noteContent}>
         <ThemedText type="body">{item.text}</ThemedText>
         <ThemedText type="caption" secondary>
+          {item.author === "delegate" ? `${assignee?.name || "Teammate"} · ` : ""}
           {formatDate(item.createdAt)}
         </ThemedText>
       </View>
@@ -100,15 +109,16 @@ export default function DelegationNotesModal({ visible, task, onClose }: Delegat
             <View style={styles.header}>
               <View style={styles.headerLeft}>
                 <ThemedText type="h3">Delegation Log</ThemedText>
-                {contact ? (
+                {assignee ? (
                   <View style={styles.assigneeRow}>
-                    <View style={[styles.miniAvatar, { backgroundColor: contact.color }]}>
+                    <View style={[styles.miniAvatar, { backgroundColor: assignee.color }]}>
                       <ThemedText type="caption" lightColor="#FFFFFF" darkColor="#FFFFFF" style={{ fontWeight: "600" }}>
-                        {contact.name.charAt(0)}
+                        {assignee.name.charAt(0)}
                       </ThemedText>
                     </View>
                     <ThemedText type="small" secondary>
-                      Assigned to {contact.name}
+                      Assigned to {assignee.name}
+                      {isLinkedTeammate ? " · they update the status from their app" : ""}
                     </ThemedText>
                   </View>
                 ) : null}

@@ -22,7 +22,10 @@ self.addEventListener("push", (event) => {
       data: payload.data || {},
       icon: "/favicon.ico",
       badge: "/favicon.ico",
-      tag: payload.data && payload.data.type ? String(payload.data.type) : undefined,
+      // One notification per type+task, so different tasks don't replace each other.
+      tag: payload.data && payload.data.type
+        ? String(payload.data.type) + (payload.data.taskId ? ":" + payload.data.taskId : "")
+        : undefined,
     })
   );
 });

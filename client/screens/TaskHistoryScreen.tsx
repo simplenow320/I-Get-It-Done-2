@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   filterChip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.round,
+    borderRadius: BorderRadius.full,
   },
   summaryRow: {
     flexDirection: "row",
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   lanePill: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
-    borderRadius: BorderRadius.round,
+    borderRadius: BorderRadius.full,
   },
   emptyContainer: {
     alignItems: "center",

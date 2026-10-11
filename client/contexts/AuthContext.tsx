@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "@/lib/api-url";
-import { clearAllNotificationsOnLogout } from "@/lib/notifications";
+import { clearAllNotificationsOnLogout, detachDeviceFromAccount } from "@/lib/notifications";
 
 interface AuthUser {
   id: string;
@@ -62,6 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadStoredAuth();
     forceLogoutCallback = async () => {
+      // Same reset as a manual logout, so the next account starts clean.
+      setDidExplicitLogout(true);
       setUser(null);
     };
     return () => {
@@ -193,6 +195,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      if (user?.id) {
+        // Best effort, capped so a stalled network can't freeze Log Out.
+        await Promise.race([
+          detachDeviceFromAccount(user.id),
+          new Promise((resolve) => setTimeout(resolve, 3000)),
+        ]);
+      }
       setDidExplicitLogout(true);
       try {
         await fetch(new URL("/api/auth/logout", getApiUrl()).toString(), {

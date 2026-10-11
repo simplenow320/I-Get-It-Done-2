@@ -1,4 +1,5 @@
-import { Platform, Alert, Linking } from "react-native";
+import { Platform, Linking } from "react-native";
+import { showMessage } from "@/lib/alerts";
 
 export type PlanType = "monthly" | "annual";
 
@@ -15,10 +16,10 @@ export async function openSubscriptionManagement(userId: string): Promise<void> 
     } else if (Platform.OS === "android") {
       await Linking.openURL("https://play.google.com/store/account/subscriptions");
     } else {
-      Alert.alert("Manage Subscription", "Please manage your subscription through the App Store or Google Play Store on your mobile device.");
+      showMessage("Manage Subscription", "Please manage your subscription through the App Store or Google Play Store on your mobile device.");
     }
   } catch {
-    Alert.alert("Error", "Could not open subscription settings");
+    showMessage("Error", "Could not open subscription settings");
   }
 }
 

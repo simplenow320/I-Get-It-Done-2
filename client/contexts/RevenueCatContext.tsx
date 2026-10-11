@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { Platform, Alert } from "react-native";
+import { Platform } from "react-native";
 import Purchases, {
   CustomerInfo,
   PurchasesOffering,
@@ -7,6 +7,7 @@ import Purchases, {
   LOG_LEVEL,
 } from "react-native-purchases";
 import Constants from "expo-constants";
+import { showMessage } from "@/lib/alerts";
 
 interface RevenueCatContextType {
   isReady: boolean;
@@ -86,7 +87,24 @@ export function RevenueCatProvider({ children, userId }: { children: React.React
 
   useEffect(() => {
     const loginUser = async () => {
-      if (!isReady || Platform.OS === "web" || !userId) return;
+      if (!isReady || Platform.OS === "web") return;
+
+      if (!userId) {
+        // Signed out: drop the previous account's entitlements so the next
+        // person on this device doesn't inherit Pro.
+        try {
+          if ((await Purchases.isConfigured()) && !(await Purchases.isAnonymous())) {
+            const info = await Purchases.logOut();
+            setCustomerInfo(info);
+          } else {
+            setCustomerInfo(null);
+          }
+        } catch (error) {
+          console.log("RevenueCat logout skipped:", error);
+          setCustomerInfo(null);
+        }
+        return;
+      }
       
       try {
         const isConfigured = await Purchases.isConfigured();
@@ -116,7 +134,7 @@ export function RevenueCatProvider({ children, userId }: { children: React.React
 
   const purchasePackage = useCallback(async (pkg: PurchasesPackage): Promise<boolean> => {
     if (Platform.OS === "web") {
-      Alert.alert("Not Available", "In-app purchases are only available on iOS and Android devices.");
+      showMessage("Not Available", "In-app purchases are only available on iOS and Android devices.");
       return false;
     }
 
@@ -131,7 +149,7 @@ export function RevenueCatProvider({ children, userId }: { children: React.React
     } catch (error: any) {
       if (!error.userCancelled) {
         console.error("Purchase error:", error);
-        Alert.alert("Purchase Failed", error.message || "Could not complete purchase. Please try again.");
+        showMessage("Purchase Failed", error.message || "Could not complete purchase. Please try again.");
       }
       return false;
     }
@@ -139,7 +157,7 @@ export function RevenueCatProvider({ children, userId }: { children: React.React
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === "web") {
-      Alert.alert("Not Available", "Restore is only available on iOS and Android devices.");
+      showMessage("Not Available", "Restore is only available on iOS and Android devices.");
       return false;
     }
 
@@ -148,15 +166,15 @@ export function RevenueCatProvider({ children, userId }: { children: React.React
       setCustomerInfo(info);
       
       if (info.entitlements.active[ENTITLEMENT_ID]) {
-        Alert.alert("Success", "Your purchases have been restored!");
+        showMessage("Success", "Your purchases have been restored!");
         return true;
       } else {
-        Alert.alert("No Purchases Found", "We couldn't find any previous purchases to restore.");
+        showMessage("No Purchases Found", "We couldn't find any previous purchases to restore.");
         return false;
       }
     } catch (error: any) {
       console.error("Restore error:", error);
-      Alert.alert("Restore Failed", error.message || "Could not restore purchases. Please try again.");
+      showMessage("Restore Failed", error.message || "Could not restore purchases. Please try again.");
       return false;
     }
   }, []);

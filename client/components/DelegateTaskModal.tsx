@@ -8,6 +8,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, LaneColors } from "@/constants/theme";
 import { useTaskStore, Contact, Task, TeamMember } from "@/stores/TaskStore";
+import { showMessage } from "@/lib/alerts";
 
 interface DelegateTaskModalProps {
   visible: boolean;
@@ -27,10 +28,18 @@ export default function DelegateTaskModal({ visible, task, onClose }: DelegateTa
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState("");
 
-  const handleSelectTeamMember = (member: TeamMember) => {
+  const handleSelectTeamMember = async (member: TeamMember) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    delegateTaskToUser(task.id, member.teammateId);
     onClose();
+    const ok = await delegateTaskToUser(task.id, member.teammateId);
+    if (ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      showMessage(
+        "Hand-off didn't go through",
+        `${member.nickname || member.teammateName || "Your teammate"} didn't get this task. Check your connection and that you're still linked, then try again.`
+      );
+    }
   };
 
   const handleSelectContact = (contact: Contact) => {
