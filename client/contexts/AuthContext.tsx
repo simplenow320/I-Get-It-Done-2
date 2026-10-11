@@ -196,7 +196,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       if (user?.id) {
-        await detachDeviceFromAccount(user.id);
+        // Best effort, capped so a stalled network can't freeze Log Out.
+        await Promise.race([
+          detachDeviceFromAccount(user.id),
+          new Promise((resolve) => setTimeout(resolve, 3000)),
+        ]);
       }
       setDidExplicitLogout(true);
       try {

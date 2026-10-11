@@ -32,8 +32,11 @@ export function defaultDueDate(lane: string, tzOffsetMinutes: number | null | un
 // Used by both the REST task-update route and the MCP complete_task tool so
 // completions from AI chats count exactly like in-app completions.
 //
-// Runs as a single upsert so two completions landing at once both count, and
-// dates are the user's local calendar day so streaks roll over at their midnight.
+// The UPDATE computes everything from the row's current values in one
+// statement, so completions landing at the same moment all count. It doesn't
+// rely on a unique constraint on user_stats.user_id, which older databases
+// created outside drizzle may lack. Dates are the user's local calendar day,
+// so streaks roll over at their midnight.
 export async function applyCompletionStats(userId: string): Promise<void> {
   const [user] = await db
     .select({ tz: users.timezoneOffsetMinutes })
@@ -51,20 +54,10 @@ export async function applyCompletionStats(userId: string): Promise<void> {
     ELSE 1
   END`;
 
-  await db
-    .insert(userStats)
-    .values({
-      userId,
-      points: 10,
-      totalTasksCompleted: 1,
-      currentStreak: 1,
-      longestStreak: 1,
-      level: "starter",
-      lastActiveDate: today,
-    })
-    .onConflictDoUpdate({
-      target: userStats.userId,
-      set: {
+  const increment = () =>
+    db
+      .update(userStats)
+      .set({
         points: newPoints,
         totalTasksCompleted: sql`COALESCE(${userStats.totalTasksCompleted}, 0) + 1`,
         currentStreak: newStreak,
@@ -77,6 +70,26 @@ export async function applyCompletionStats(userId: string): Promise<void> {
           ELSE 'starter'
         END`,
         lastActiveDate: today,
-      },
-    });
+      })
+      .where(eq(userStats.userId, userId))
+      .returning({ id: userStats.id });
+
+  if ((await increment()).length > 0) return;
+
+  const inserted = await db
+    .insert(userStats)
+    .values({
+      userId,
+      points: 10,
+      totalTasksCompleted: 1,
+      currentStreak: 1,
+      longestStreak: 1,
+      level: "starter",
+      lastActiveDate: today,
+    })
+    .onConflictDoNothing()
+    .returning({ id: userStats.id });
+
+  // Another completion created the row first: count this one on top of it.
+  if (inserted.length === 0) await increment();
 }

@@ -1042,6 +1042,20 @@ Examples:
         }
       }
 
+      // While a teammate holds the task, its status belongs to them. App Store
+      // builds send the whole task on every save, including the status they
+      // loaded earlier, which would silently undo the teammate's update. A
+      // full save (it carries the title) only changes the hand-off when it
+      // names a new teammate.
+      const isFullSave = body.title !== undefined;
+      if (isFullSave && current.delegatedToUserId && !newDelegateId && updates.delegatedToUserId !== null) {
+        delete updates.delegationStatus;
+        delete updates.lastDelegationUpdate;
+        delete updates.delegatedAt;
+        delete updates.assignedTo;
+        delete updates.delegatedToUserId;
+      }
+
       const isBeingCompleted = !!updates.completedAt && current.completedAt === null;
 
       if (Object.keys(updates).length === 0) {
@@ -2253,9 +2267,10 @@ Examples:
         if (fromIds.length > 0) {
           await db.update(users).set({ subscriptionStatus: "none", trialEndsAt: null }).where(inArray(users.id, fromIds));
         }
-        if (toIds.length > 0) {
-          await db.update(users).set({ subscriptionStatus: "active" }).where(inArray(users.id, toIds));
-        }
+        // A transfer carries no entitlement state (an expired receipt can be
+        // transferred too), so it never grants Pro here. The new owner's app
+        // reads the entitlement from RevenueCat directly, and the next
+        // RENEWAL/EXPIRATION event updates the server.
         console.log(`[RevenueCat Webhook] Transfer from ${fromIds.length} to ${toIds.length} account(s)`);
         return res.status(200).json({ received: true });
       }

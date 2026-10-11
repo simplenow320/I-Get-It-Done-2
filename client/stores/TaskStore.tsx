@@ -813,6 +813,11 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
 
   const deleteTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((task) => task.id !== id));
+    // A task deleted before it ever reached the server must not be re-sent.
+    if (pendingCreatesRef.current[id]) {
+      delete pendingCreatesRef.current[id];
+      persistPendingCreates();
+    }
     deleteTaskFromApi(id);
   }, []);
 

@@ -134,7 +134,9 @@ export default function FocusTimerScreen() {
   }, [timeRemaining]);
 
   const resetTimer = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    // clearTick also nulls the ref, so the foreground catch-up can't finish
+    // (and credit) a session that was reset.
+    clearTick();
     setTimerState("idle");
     setTimeRemaining(selectedMinutes * 60);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

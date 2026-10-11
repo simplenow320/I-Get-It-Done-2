@@ -192,6 +192,31 @@ async function teamTests() {
     (await call("PUT", `/api/delegation-status/${task.id}`, { token: stranger.token, body: { status: "done" } })).status === 403
   );
 
+  // An App Store build saving the whole task (with the status it loaded
+  // before the teammate's update) must not undo the teammate's status.
+  const staleSave = await call("PUT", `/api/tasks/${task.id}`, {
+    token: owner.token,
+    body: {
+      title: "Hand this off", lane: "soon", reminderType: "soft", isOverdue: false, focusTimeMinutes: 0,
+      assignedTo: "Mate", delegatedToUserId: mate.id, delegationStatus: "assigned",
+      delegatedAt: new Date(0).toISOString(), lastDelegationUpdate: new Date(0).toISOString(),
+    },
+  });
+  check(
+    "owner's full save keeps the teammate's status and applies the rest",
+    staleSave.status === 200 && staleSave.data.task.delegationStatus === "in_progress" && staleSave.data.task.lane === "soon" && staleSave.data.task.delegatedToUserId === mate.id,
+    JSON.stringify(staleSave.data)
+  );
+  const staleAfterReload = await call("PUT", `/api/tasks/${task.id}`, {
+    token: owner.token,
+    body: { title: "Hand this off", lane: "now", delegationStatus: "assigned", assignedTo: "Mate" },
+  });
+  check(
+    "full save without the teammate id (old app after reload) keeps the hand-off",
+    staleAfterReload.status === 200 && staleAfterReload.data.task.delegatedToUserId === mate.id && staleAfterReload.data.task.delegationStatus === "in_progress",
+    JSON.stringify(staleAfterReload.data)
+  );
+
   const ownerNote = await call("POST", "/api/delegation-notes", { token: owner.token, body: { taskId: task.id, type: "question", text: "ETA?" } });
   check("owner adds a note", ownerNote.status === 200 && ownerNote.data.note.authorId === owner.id);
   check(
@@ -304,6 +329,25 @@ async function teamTests() {
   check("change password", (await call("POST", "/api/auth/change-password", { token: owner.token, body: { currentPassword: PASSWORD, newPassword: "Newpass1!x" } })).status === 200);
 }
 
+async function billingTests() {
+  console.log("Billing: RevenueCat webhook (dev server, no webhook secret set)");
+  const buyer = await register("billing");
+  const status = async () => (await call("GET", `/api/subscription/${buyer.id}`, { token: buyer.token })).data.subscription;
+  const send = (event) => call("POST", "/api/webhooks/revenuecat", { body: { event } });
+
+  await send({ type: "TRANSFER", transferred_from: ["$RCAnonymousID:x"], transferred_to: [buyer.id] });
+  check("a transfer alone never grants Pro", (await status()).isActive === false);
+  await send({ type: "INITIAL_PURCHASE", app_user_id: buyer.id, period_type: "NORMAL" });
+  check("purchase grants Pro", (await status()).isActive === true);
+  await send({ type: "CANCELLATION", app_user_id: buyer.id });
+  check("cancelling keeps Pro until the paid period ends", (await status()).isActive === true);
+  await send({ type: "EXPIRATION", app_user_id: buyer.id });
+  check("expiration removes Pro", (await status()).isActive === false);
+  await send({ type: "RENEWAL", app_user_id: buyer.id, period_type: "NORMAL" });
+  await send({ type: "TRANSFER", transferred_from: [buyer.id], transferred_to: ["someone-else"] });
+  check("transferring away removes Pro from the old account", (await status()).isActive === false);
+}
+
 // ---- Voice ----
 
 let stubRequests = [];
@@ -406,6 +450,7 @@ async function main() {
     process.exit(1);
   }
   await teamTests();
+  await billingTests();
   if (process.env.VOICE_STUB === "1") {
     await voiceTests();
   } else {

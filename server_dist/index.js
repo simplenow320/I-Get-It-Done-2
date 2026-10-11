@@ -941,7 +941,22 @@ async function applyCompletionStats(userId) {
     WHEN ${userStats.lastActiveDate} = ${yesterday}::date THEN COALESCE(${userStats.currentStreak}, 0) + 1
     ELSE 1
   END`;
-  await db.insert(userStats).values({
+  const increment = () => db.update(userStats).set({
+    points: newPoints,
+    totalTasksCompleted: sql3`COALESCE(${userStats.totalTasksCompleted}, 0) + 1`,
+    currentStreak: newStreak,
+    longestStreak: sql3`GREATEST(COALESCE(${userStats.longestStreak}, 0), ${newStreak})`,
+    level: sql3`CASE
+          WHEN ${newPoints} >= 1000 THEN 'master'
+          WHEN ${newPoints} >= 500 THEN 'expert'
+          WHEN ${newPoints} >= 200 THEN 'focused'
+          WHEN ${newPoints} >= 100 THEN 'achiever'
+          ELSE 'starter'
+        END`,
+    lastActiveDate: today
+  }).where(eq4(userStats.userId, userId)).returning({ id: userStats.id });
+  if ((await increment()).length > 0) return;
+  const inserted = await db.insert(userStats).values({
     userId,
     points: 10,
     totalTasksCompleted: 1,
@@ -949,23 +964,8 @@ async function applyCompletionStats(userId) {
     longestStreak: 1,
     level: "starter",
     lastActiveDate: today
-  }).onConflictDoUpdate({
-    target: userStats.userId,
-    set: {
-      points: newPoints,
-      totalTasksCompleted: sql3`COALESCE(${userStats.totalTasksCompleted}, 0) + 1`,
-      currentStreak: newStreak,
-      longestStreak: sql3`GREATEST(COALESCE(${userStats.longestStreak}, 0), ${newStreak})`,
-      level: sql3`CASE
-          WHEN ${newPoints} >= 1000 THEN 'master'
-          WHEN ${newPoints} >= 500 THEN 'expert'
-          WHEN ${newPoints} >= 200 THEN 'focused'
-          WHEN ${newPoints} >= 100 THEN 'achiever'
-          ELSE 'starter'
-        END`,
-      lastActiveDate: today
-    }
-  });
+  }).onConflictDoNothing().returning({ id: userStats.id });
+  if (inserted.length === 0) await increment();
 }
 
 // server/mcp.ts
@@ -2430,6 +2430,14 @@ ${message}`
           delete updates.lastDelegationUpdate;
         }
       }
+      const isFullSave = body.title !== void 0;
+      if (isFullSave && current.delegatedToUserId && !newDelegateId && updates.delegatedToUserId !== null) {
+        delete updates.delegationStatus;
+        delete updates.lastDelegationUpdate;
+        delete updates.delegatedAt;
+        delete updates.assignedTo;
+        delete updates.delegatedToUserId;
+      }
       const isBeingCompleted = !!updates.completedAt && current.completedAt === null;
       if (Object.keys(updates).length === 0) {
         return res.json({ task: current });
@@ -3394,9 +3402,6 @@ ${message}`
         const toIds = Array.isArray(event.transferred_to) ? event.transferred_to : [];
         if (fromIds.length > 0) {
           await db.update(users).set({ subscriptionStatus: "none", trialEndsAt: null }).where(inArray2(users.id, fromIds));
-        }
-        if (toIds.length > 0) {
-          await db.update(users).set({ subscriptionStatus: "active" }).where(inArray2(users.id, toIds));
         }
         console.log(`[RevenueCat Webhook] Transfer from ${fromIds.length} to ${toIds.length} account(s)`);
         return res.status(200).json({ received: true });

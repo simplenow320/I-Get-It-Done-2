@@ -145,7 +145,13 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (user?.id && user.id !== lastRegisteredUserId.current) {
+    if (!user?.id) {
+      // Signing out detaches this device's push token, so the next sign-in
+      // (even to the same account) must register it again.
+      lastRegisteredUserId.current = null;
+      return;
+    }
+    if (user.id !== lastRegisteredUserId.current) {
       lastRegisteredUserId.current = user.id;
       registerPushTokenIfNeeded(user.id);
       registerWebPushIfNeeded(user.id);
