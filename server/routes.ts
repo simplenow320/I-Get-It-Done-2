@@ -87,6 +87,19 @@ async function areTeammates(userId: string, teammateId: string): Promise<boolean
   return rows.length > 0;
 }
 
+// Older App Store builds hand a task to a linked teammate by saving only the
+// teammate's nickname in assignedTo, without delegatedToUserId. Resolve that
+// nickname to the teammate's account, but only when exactly one linked
+// teammate has it, so a contact can never be mistaken for a teammate.
+async function findTeammateByNickname(userId: string, nickname: string): Promise<string | null> {
+  const rows = await db
+    .select({ teammateId: teamMembers.teammateId })
+    .from(teamMembers)
+    .where(and(eq(teamMembers.userId, userId), eq(teamMembers.nickname, nickname)))
+    .limit(2);
+  return rows.length === 1 && rows[0].teammateId ? rows[0].teammateId : null;
+}
+
 async function generateUniqueInviteCode(): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     let code = "";
@@ -1010,9 +1023,25 @@ Examples:
         if (parsed !== undefined) updates[field] = parsed;
       }
 
+      // A new hand-off from an older App Store build names the teammate only by
+      // nickname (see findTeammateByNickname). Without this the teammate's
+      // "Assigned to Me" list never shows the task.
+      let requestedDelegateId = body.delegatedToUserId;
+      if (
+        requestedDelegateId === undefined &&
+        typeof updates.assignedTo === "string" &&
+        updates.assignedTo !== current.assignedTo &&
+        updates.delegationStatus === "assigned" &&
+        !current.delegatedToUserId &&
+        !current.completedAt &&
+        !updates.completedAt
+      ) {
+        requestedDelegateId = (await findTeammateByNickname(me, updates.assignedTo)) ?? undefined;
+      }
+
       let newDelegateId: string | null = null;
-      if (body.delegatedToUserId !== undefined) {
-        const target = body.delegatedToUserId || null;
+      if (requestedDelegateId !== undefined) {
+        const target = requestedDelegateId || null;
         let validTarget = true;
         if (target && target !== current.delegatedToUserId) {
           validTarget = target !== me && (await areTeammates(me, target));

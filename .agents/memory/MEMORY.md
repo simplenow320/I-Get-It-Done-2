@@ -1,3 +1,5 @@
 - [Schema changes via SQL](schema-push-workaround.md) — drizzle-kit push prompts interactively (rename vs create) and can't be piped; apply ALTERs via SQL, keep schema.ts in sync.
 - [OpenAI account limits](openai-account-limits.md) — user's OpenAI org unverified: gpt-5 models rejected; gpt-4.1 family works.
+- [Old App Store client compat](app-store-client-compat.md) — live iOS build lags repo; e.g. it hands off by nickname only. Server must accept old shapes.
+- [GitHub sync rules](github-sync.md) — publish adds empty commits that break fast-forward; stop, list, reset only with approval; never push/merge.
 - [ADHD nudge engine](nudge-engine.md) — server-side escalating/daily/streak nudges: local-time via user tz offset, claim-before-send idempotency, per-user intensity; don't add parallel schedulers.

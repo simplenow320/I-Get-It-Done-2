@@ -293,6 +293,31 @@ async function teamTests() {
   });
   check("un-delegate clears all hand-off fields", cleared.status === 200 && cleared.data.task.delegatedToUserId === null && cleared.data.task.assignedTo === null);
 
+  // Older App Store builds hand off with the teammate's nickname only and no
+  // delegatedToUserId. The teammate must still get the task.
+  const mateNickname = (await call("GET", `/api/team/members/${owner.id}`, { token: owner.token })).data.members[0].nickname;
+  const legacyTask = await createTask(owner, "Legacy hand-off");
+  const legacy = await call("PUT", `/api/tasks/${legacyTask.id}`, {
+    token: owner.token,
+    body: {
+      title: "Legacy hand-off", lane: "now", reminderType: "soft",
+      assignedTo: mateNickname, delegationStatus: "assigned",
+      delegatedAt: new Date().toISOString(), lastDelegationUpdate: new Date().toISOString(),
+    },
+  });
+  check("old-app hand-off by nickname links the teammate", legacy.status === 200 && legacy.data.task.delegatedToUserId === mate.id, JSON.stringify(legacy.data));
+  check(
+    "teammate sees the old-app hand-off",
+    (await call("GET", `/api/delegated-to-me/${mate.id}`, { token: mate.token })).data.tasks.some((t) => t.id === legacyTask.id)
+  );
+  const oldAppContactTask = await createTask(owner, "Contact hand-off");
+  const toContact = await call("PUT", `/api/tasks/${oldAppContactTask.id}`, {
+    token: owner.token,
+    body: { title: "Contact hand-off", lane: "now", assignedTo: "contact-abc123", delegationStatus: "assigned" },
+  });
+  check("old-app contact hand-off stays a contact", toContact.status === 200 && toContact.data.task.delegatedToUserId === null && toContact.data.task.assignedTo === "contact-abc123");
+  await call("PUT", `/api/tasks/${legacyTask.id}`, { token: owner.token, body: { completedAt: new Date().toISOString() } });
+
   console.log("Team: unlinking and account deletion");
   const task3 = await createTask(owner, "Open hand-off");
   await call("PUT", `/api/tasks/${task3.id}`, { token: owner.token, body: { assignedTo: "Mate", delegatedToUserId: mate.id } });
