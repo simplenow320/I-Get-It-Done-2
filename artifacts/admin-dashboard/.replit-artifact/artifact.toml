@@ -1,0 +1,23 @@
+kind = "web"
+previewPath = "/admin/"
+title = "Admin Dashboard"
+description = "The existing Nuxt management dashboard for I GET IT DONE, with restricted administrator access to users, subscriptions, teams, analytics, and audit records."
+version = "1.0.0"
+id = "artifacts/admin-dashboard"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/admin/" ]
+localPort = 22133
+
+[services.development]
+run = "pnpm --filter @workspace/admin-dashboard run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/admin-dashboard", "run", "build" ]
+run = [ "node", "artifacts/admin-dashboard/.output/server/index.mjs" ]
+
+[services.env]
+PORT = "22133"
+BASE_PATH = "/admin/"

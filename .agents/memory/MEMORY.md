@@ -1,1 +1,2 @@
 - [Migration fidelity](migration-fidelity.md) — preserve existing navigation and offline state behavior when adapting this product to new infrastructure.
+- [Nuxt admin preview](nuxt-admin-preview.md) — preserve Nuxt; compiled preview avoids proxy failures, and generated directories must stay out of Metro.
