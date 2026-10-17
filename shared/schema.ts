@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, date } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, date, real, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -219,6 +219,45 @@ export const voiceUsage = pgTable("voice_usage", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// One row per billable AI call. Costs are computed in the admin from these units.
+export const aiUsage = pgTable("ai_usage", {
+  id: varchar("id", { length: 255 })
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  userId: varchar("user_id", { length: 255 }).references(() => users.id, { onDelete: "set null" }),
+  provider: varchar("provider", { length: 20 }).notNull(),
+  model: varchar("model", { length: 100 }).notNull(),
+  feature: varchar("feature", { length: 50 }).notNull(),
+  inputTokens: integer("input_tokens").default(0),
+  outputTokens: integer("output_tokens").default(0),
+  audioSeconds: real("audio_seconds").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [
+  index("ai_usage_created_at_idx").on(t.createdAt),
+  index("ai_usage_user_id_idx").on(t.userId, t.createdAt),
+]);
+
+// RevenueCat webhook events, kept for revenue per user. event_id makes retries idempotent.
+export const billingEvents = pgTable("billing_events", {
+  id: varchar("id", { length: 255 })
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  eventId: varchar("event_id", { length: 255 }).notNull().unique(),
+  userId: varchar("user_id", { length: 255 }).references(() => users.id, { onDelete: "set null" }),
+  type: varchar("type", { length: 50 }).notNull(),
+  productId: varchar("product_id", { length: 255 }),
+  store: varchar("store", { length: 50 }),
+  environment: varchar("environment", { length: 20 }),
+  periodType: varchar("period_type", { length: 20 }),
+  priceUsd: numeric("price_usd", { precision: 12, scale: 4 }),
+  takehomePercentage: numeric("takehome_percentage", { precision: 6, scale: 4 }),
+  eventAt: timestamp("event_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [
+  index("billing_events_user_id_idx").on(t.userId, t.eventAt),
+  index("billing_events_event_at_idx").on(t.eventAt),
+]);
 
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);

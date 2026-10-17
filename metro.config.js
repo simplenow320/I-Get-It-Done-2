@@ -1,3 +1,4 @@
+const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
 
 const config = getDefaultConfig(__dirname);
@@ -6,7 +7,11 @@ config.watchFolders = config.watchFolders || [];
 
 config.resolver = {
   ...config.resolver,
-  blockList: [/\.local\/.*/],
+  // admin/ is a separate Nuxt app with its own node_modules.
+  blockList: [
+    /\.local\/.*/,
+    new RegExp(`^${path.join(__dirname, "admin").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[/\\\\].*`),
+  ],
 };
 
 config.server = {

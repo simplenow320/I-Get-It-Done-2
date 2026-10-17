@@ -13,6 +13,7 @@ import { sendPushNotification, sendDelegationNotification, sendDelegationStatusN
 import { applyCompletionStats } from "./taskActions";
 import { registerMcpRoutes, registerConnectorKeyRoutes } from "./mcp";
 import { registerOAuthRoutes } from "./oauth";
+import { recordAiUsage, recordBillingEvent } from "./usageTracking";
 
 const DAILY_VOICE_LIMIT_SECONDS = 600;
 // Overridable so integration tests can point at a local stub.
@@ -246,6 +247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
       const confidence = result.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
       const audioDuration = result.metadata?.duration || 0;
+      await recordAiUsage({ userId, provider: "deepgram", model: "nova-3", feature: "transcribe", audioSeconds: audioDuration });
 
       console.log("[VOICE] Transcribed", {
         bytes: audioBuffer.length,
@@ -369,6 +371,14 @@ Examples:
       }
 
       const result = await response.json();
+      await recordAiUsage({
+        userId: req.user.userId,
+        provider: "openai",
+        model: result.model || "gpt-4.1-mini",
+        feature: "extract",
+        inputTokens: result.usage?.prompt_tokens || 0,
+        outputTokens: result.usage?.completion_tokens || 0,
+      });
       const content = result.choices?.[0]?.message?.content;
 
       if (!content) {
@@ -2315,6 +2325,8 @@ Examples:
         console.error(`[RevenueCat Webhook] User not found: ${app_user_id}`);
         return res.status(200).json({ received: true });
       }
+
+      await recordBillingEvent(app_user_id, event);
 
       let newStatus: string = userRecord[0].subscriptionStatus || "none";
       let trialEndsAt: Date | null = userRecord[0].trialEndsAt || null;
