@@ -3,3 +3,4 @@
 - [Old App Store client compat](app-store-client-compat.md) — live iOS build lags repo; e.g. it hands off by nickname only. Server must accept old shapes.
 - [GitHub sync rules](github-sync.md) — publish adds empty commits that break fast-forward; stop, list, reset only with approval; never push/merge.
 - [ADHD nudge engine](nudge-engine.md) — server-side escalating/daily/streak nudges: local-time via user tz offset, claim-before-send idempotency, per-user intensity; don't add parallel schedulers.
+- [Nuxt workspace startup](nuxt-workspace.md) — noninteractive startup needs telemetry disabled; Expo preview routing is separate from admin readiness.
