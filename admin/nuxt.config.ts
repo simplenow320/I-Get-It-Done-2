@@ -5,6 +5,11 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: false },
+  vite: {
+    server: {
+      allowedHosts: process.env.REPLIT_DEV_DOMAIN ? [process.env.REPLIT_DEV_DOMAIN] : []
+    }
+  },
   // Server-only. Set via NUXT_DATABASE_URL, NUXT_SESSION_PASSWORD, NUXT_ADMIN_EMAILS.
   runtimeConfig: {
     databaseUrl: process.env.DATABASE_URL || '',
