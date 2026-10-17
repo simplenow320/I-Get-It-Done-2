@@ -17,10 +17,34 @@ expertMode = true
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 20000
+timeoutMs = 180000
 
 [userenv]
 
 [userenv.shared]
 EXPO_PUBLIC_SUPABASE_URL = "${SUPABASE_URL}"
 EXPO_PUBLIC_SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}"
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
+
+[[ports]]
+localPort = 5599
+externalPort = 3002
+
+[[ports]]
+localPort = 5603
+externalPort = 3003
+
+[[ports]]
+localPort = 5604
+externalPort = 4200
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 8082
+externalPort = 3001

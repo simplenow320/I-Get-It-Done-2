@@ -1,0 +1,10 @@
+{
+  "pid": 133,
+  "startedAt": 1792230460718,
+  "interactive": false,
+  "command": "dev",
+  "cwd": "/home/runner/workspace/admin",
+  "port": 5000,
+  "hostname": "0.0.0.0",
+  "url": "http://0.0.0.0:5000"
+}
