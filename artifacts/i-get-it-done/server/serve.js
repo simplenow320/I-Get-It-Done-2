@@ -3,7 +3,7 @@
  *
  * Serves the output of build.js (static-build/) with two special routes:
  * - GET / or /manifest with expo-platform header → platform manifest JSON
- * - GET / without expo-platform → landing page HTML
+ * - GET / without expo-platform → landing page HTML (the Nuxt-built page when present)
  * Everything else falls through to static file serving from ./static-build/.
  *
  * Zero external dependencies — uses only Node.js built-ins (http, fs, path).
@@ -15,6 +15,8 @@ const path = require('path');
 
 const STATIC_ROOT = path.resolve(__dirname, '..', 'static-build');
 const TEMPLATE_PATH = path.resolve(__dirname, 'templates', 'landing-page.html');
+// Marketing page prerendered by the admin dashboard's Nuxt build (pages/landing.vue).
+const NUXT_LANDING_PATH = path.resolve(__dirname, '..', '..', 'admin-dashboard', '.output', 'public', 'landing', 'index.html');
 const basePath = (process.env.BASE_PATH || '/').replace(/\/+$/, '');
 
 const MIME_TYPES = {
@@ -84,6 +86,13 @@ function serveManifest(platform, res) {
 }
 
 function serveLandingPage(req, res, landingPageTemplate, appName) {
+  // Read per request so a fresh admin build shows up without restarting; fall back to the Expo page.
+  if (fs.existsSync(NUXT_LANDING_PATH)) {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(fs.readFileSync(NUXT_LANDING_PATH));
+    return;
+  }
+
   const forwardedProto = req.headers['x-forwarded-proto'];
   const protocol = forwardedProto || 'https';
   const host = req.headers['x-forwarded-host'] || req.headers['host'];

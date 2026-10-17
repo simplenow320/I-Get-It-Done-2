@@ -1,7 +1,8 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-01',
-  // Internal tool: no SEO need, and client rendering keeps dates in the admin's own timezone.
-  ssr: false,
+  // The dashboard renders client-side only (dates stay in the admin's own timezone, see routeRules);
+  // SSR stays on so the public landing page can be prerendered to real HTML.
+  ssr: true,
   app: { baseURL: '/admin/' },
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
@@ -30,7 +31,9 @@ export default defineNuxtConfig({
     openaiOutputUsdPerMillion: 1.6
   },
   routeRules: {
-    '/**': { headers: {
+    // Public marketing page, served at the site root by the mobile app's server/serve.js.
+    '/landing': { ssr: true, prerender: true, headers: { 'X-Robots-Tag': 'index, follow' } },
+    '/**': { ssr: false, headers: {
       'X-Robots-Tag': 'noindex, nofollow',
       ...(process.env.NODE_ENV === 'production' && process.env.ADMIN_PREVIEW_BUILD !== '1'
         ? { 'X-Frame-Options': 'DENY' }

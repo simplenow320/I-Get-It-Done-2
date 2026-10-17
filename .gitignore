@@ -47,5 +47,16 @@ Thumbs.db
 # Replit
 .cache/
 .local/
-artifacts/admin-dashboard/.nuxt/
-artifacts/admin-dashboard/.output/
+
+# Nuxt build output (any app)
+.nuxt/
+.output/
+.data/
+
+# Local env files; commit only the examples
+.env
+.env.*
+!.env.example
+
+# Pre-migration admin folder: only build output is left (source is artifacts/admin-dashboard)
+/admin/
