@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/"
+title = "I GET IT DONE"
+description = "The existing I GET IT DONE productivity app, with task lanes, focus timers, team delegation, reminders, and progress tracking, moved into the multi-app workspace without a redesign."
+version = "1.0.0"
+id = "artifacts/i-get-it-done"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 24694
+
+[services.development]
+run = "pnpm --filter @workspace/i-get-it-done run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/i-get-it-done", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/i-get-it-done", "run", "serve" ]
+
+[services.env]
+PORT = "24694"
+BASE_PATH = "/"

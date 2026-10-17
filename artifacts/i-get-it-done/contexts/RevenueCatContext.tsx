@@ -1,0 +1,219 @@
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { Platform } from "react-native";
+import Purchases, {
+  CustomerInfo,
+  PurchasesOffering,
+  PurchasesPackage,
+  LOG_LEVEL,
+} from "react-native-purchases";
+import Constants from "expo-constants";
+import { showMessage } from "@/lib/alerts";
+
+interface RevenueCatContextType {
+  isReady: boolean;
+  customerInfo: CustomerInfo | null;
+  currentOffering: PurchasesOffering | null;
+  isPro: boolean;
+  isTrialing: boolean;
+  purchasePackage: (pkg: PurchasesPackage) => Promise<boolean>;
+  restorePurchases: () => Promise<boolean>;
+  refreshCustomerInfo: () => Promise<void>;
+  monthlyPackage: PurchasesPackage | null;
+  annualPackage: PurchasesPackage | null;
+}
+
+const RevenueCatContext = createContext<RevenueCatContextType | undefined>(undefined);
+
+const REVENUECAT_API_KEY_IOS = Constants.expoConfig?.extra?.revenueCatApiKeyIOS || process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS || "";
+const REVENUECAT_API_KEY_ANDROID = Constants.expoConfig?.extra?.revenueCatApiKeyAndroid || process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID || "";
+
+const ENTITLEMENT_ID = "pro";
+
+export function RevenueCatProvider({ children, userId }: { children: React.ReactNode; userId?: string }) {
+  const [isReady, setIsReady] = useState(false);
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [currentOffering, setCurrentOffering] = useState<PurchasesOffering | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initRevenueCat = async () => {
+      if (Platform.OS === "web") {
+        if (isMounted) setIsReady(true);
+        return;
+      }
+
+      try {
+        Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+
+        const apiKey = Platform.OS === "ios" ? REVENUECAT_API_KEY_IOS : REVENUECAT_API_KEY_ANDROID;
+        
+        if (!apiKey) {
+          console.log("RevenueCat: No API key configured for", Platform.OS);
+          if (isMounted) setIsReady(true);
+          return;
+        }
+
+        await Purchases.configure({
+          apiKey,
+          appUserID: userId || undefined,
+        });
+
+        const info = await Purchases.getCustomerInfo();
+        if (isMounted) setCustomerInfo(info);
+
+        const offerings = await Purchases.getOfferings();
+        if (isMounted && offerings.current) {
+          setCurrentOffering(offerings.current);
+        }
+
+        Purchases.addCustomerInfoUpdateListener((updatedInfo) => {
+          if (isMounted) setCustomerInfo(updatedInfo);
+        });
+
+        if (isMounted) setIsReady(true);
+      } catch (error) {
+        console.error("RevenueCat initialization error:", error);
+        if (isMounted) setIsReady(true);
+      }
+    };
+
+    initRevenueCat();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const loginUser = async () => {
+      if (!isReady || Platform.OS === "web") return;
+
+      if (!userId) {
+        // Signed out: drop the previous account's entitlements so the next
+        // person on this device doesn't inherit Pro.
+        try {
+          if ((await Purchases.isConfigured()) && !(await Purchases.isAnonymous())) {
+            const info = await Purchases.logOut();
+            setCustomerInfo(info);
+          } else {
+            setCustomerInfo(null);
+          }
+        } catch (error) {
+          console.log("RevenueCat logout skipped:", error);
+          setCustomerInfo(null);
+        }
+        return;
+      }
+      
+      try {
+        const isConfigured = await Purchases.isConfigured();
+        if (!isConfigured) {
+          console.log("RevenueCat not configured, skipping login");
+          return;
+        }
+        const { customerInfo: info } = await Purchases.logIn(userId);
+        setCustomerInfo(info);
+      } catch (error: any) {
+        if (error?.message?.includes("singleton") || error?.message?.includes("configure")) {
+          console.log("RevenueCat not available in this environment (Expo Go)");
+        } else {
+          console.error("RevenueCat login error:", error);
+        }
+      }
+    };
+
+    loginUser();
+  }, [isReady, userId]);
+
+  const isPro = customerInfo?.entitlements.active[ENTITLEMENT_ID]?.isActive ?? false;
+  const isTrialing = customerInfo?.entitlements.active[ENTITLEMENT_ID]?.periodType === "TRIAL";
+
+  const monthlyPackage = currentOffering?.monthly ?? null;
+  const annualPackage = currentOffering?.annual ?? null;
+
+  const purchasePackage = useCallback(async (pkg: PurchasesPackage): Promise<boolean> => {
+    if (Platform.OS === "web") {
+      showMessage("Not Available", "In-app purchases are only available on iOS and Android devices.");
+      return false;
+    }
+
+    try {
+      const { customerInfo: info } = await Purchases.purchasePackage(pkg);
+      setCustomerInfo(info);
+      
+      if (info.entitlements.active[ENTITLEMENT_ID]) {
+        return true;
+      }
+      return false;
+    } catch (error: any) {
+      if (!error.userCancelled) {
+        console.error("Purchase error:", error);
+        showMessage("Purchase Failed", error.message || "Could not complete purchase. Please try again.");
+      }
+      return false;
+    }
+  }, []);
+
+  const restorePurchases = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === "web") {
+      showMessage("Not Available", "Restore is only available on iOS and Android devices.");
+      return false;
+    }
+
+    try {
+      const info = await Purchases.restorePurchases();
+      setCustomerInfo(info);
+      
+      if (info.entitlements.active[ENTITLEMENT_ID]) {
+        showMessage("Success", "Your purchases have been restored!");
+        return true;
+      } else {
+        showMessage("No Purchases Found", "We couldn't find any previous purchases to restore.");
+        return false;
+      }
+    } catch (error: any) {
+      console.error("Restore error:", error);
+      showMessage("Restore Failed", error.message || "Could not restore purchases. Please try again.");
+      return false;
+    }
+  }, []);
+
+  const refreshCustomerInfo = useCallback(async () => {
+    if (Platform.OS === "web") return;
+    
+    try {
+      const info = await Purchases.getCustomerInfo();
+      setCustomerInfo(info);
+    } catch (error) {
+      console.error("Error refreshing customer info:", error);
+    }
+  }, []);
+
+  return (
+    <RevenueCatContext.Provider
+      value={{
+        isReady,
+        customerInfo,
+        currentOffering,
+        isPro,
+        isTrialing,
+        purchasePackage,
+        restorePurchases,
+        refreshCustomerInfo,
+        monthlyPackage,
+        annualPackage,
+      }}
+    >
+      {children}
+    </RevenueCatContext.Provider>
+  );
+}
+
+export function useRevenueCat() {
+  const context = useContext(RevenueCatContext);
+  if (!context) {
+    throw new Error("useRevenueCat must be used within a RevenueCatProvider");
+  }
+  return context;
+}

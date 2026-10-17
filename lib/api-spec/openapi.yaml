@@ -1,0 +1,179 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+paths:
+  /auth/register:
+    post: { operationId: registerUser, requestBody: &payload { content: { application/json: { schema: { $ref: "#/components/schemas/LegacyPayload" } } } }, responses: &ok { "200": { description: Original response envelope, content: { application/json: { schema: { $ref: "#/components/schemas/LegacyPayload" } } } } } }
+  /auth/login:
+    post: { operationId: loginUser, requestBody: *payload, responses: *ok }
+  /auth/logout:
+    post: { operationId: logoutUser, responses: *ok }
+  /auth/me:
+    get: { operationId: getCurrentUser, responses: *ok }
+  /auth/change-password:
+    post: { operationId: changePassword, requestBody: *payload, responses: *ok }
+  /auth/forgot-password:
+    post: { operationId: forgotPassword, requestBody: *payload, responses: *ok }
+  /auth/reset-password:
+    post: { operationId: resetPassword, requestBody: *payload, responses: *ok }
+  /support/contact:
+    post: { operationId: contactSupport, requestBody: *payload, responses: *ok }
+  /users/init:
+    post: { operationId: initializeUser, requestBody: *payload, responses: *ok }
+  /tasks:
+    post: { operationId: createTask, requestBody: *payload, responses: *ok }
+  /tasks/{id}:
+    parameters: &id [{ name: id, in: path, required: true, schema: { type: string } }]
+    get: { operationId: getUserTasks, description: For GET the path identifier is the owner user ID, responses: *ok }
+    put: { operationId: updateTask, requestBody: *payload, responses: *ok }
+    delete: { operationId: deleteTask, responses: *ok }
+  /tasks/{id}/snooze:
+    parameters: *id
+    post: { operationId: snoozeTask, requestBody: *payload, responses: *ok }
+  /tasks/extract:
+    post: { operationId: extractTasks, requestBody: *payload, responses: *ok }
+  /subtasks:
+    post: { operationId: createSubtask, requestBody: *payload, responses: *ok }
+  /subtasks/{id}:
+    parameters: *id
+    put: { operationId: updateSubtask, requestBody: *payload, responses: *ok }
+    delete: { operationId: deleteSubtask, responses: *ok }
+  /contacts:
+    post: { operationId: createContact, requestBody: *payload, responses: *ok }
+  /contacts/{id}:
+    parameters: *id
+    get: { operationId: getUserContacts, description: GET takes the owner user ID, responses: *ok }
+    delete: { operationId: deleteContact, responses: *ok }
+  /users/{id}/push-token:
+    parameters: *id
+    put: { operationId: updatePushToken, requestBody: *payload, responses: *ok }
+  /users/{id}/web-push-subscriptions:
+    parameters: *id
+    post: { operationId: createWebPushSubscription, requestBody: *payload, responses: *ok }
+    delete: { operationId: deleteWebPushSubscription, requestBody: *payload, responses: *ok }
+  /web-push/vapid-public-key:
+    get: { operationId: getVapidPublicKey, responses: *ok }
+  /users/{id}/notification-prefs:
+    parameters: *id
+    get: { operationId: getNotificationPreferences, responses: *ok }
+    put: { operationId: updateNotificationPreferences, requestBody: *payload, responses: *ok }
+  /users/{id}/notification-settings:
+    parameters: *id
+    get: { operationId: getNotificationSettings, responses: *ok }
+  /users/{id}/display-name:
+    parameters: *id
+    put: { operationId: updateDisplayName, requestBody: *payload, responses: *ok }
+  /stats/{id}:
+    parameters: *id
+    get: { operationId: getUserStats, responses: *ok }
+    put: { operationId: updateUserStats, requestBody: *payload, responses: *ok }
+  /sync:
+    post: { operationId: syncUserData, requestBody: *payload, responses: *ok }
+  /team/invite:
+    post: { operationId: inviteTeammate, requestBody: *payload, responses: *ok }
+  /team/invites/{id}:
+    parameters: *id
+    get: { operationId: getTeamInvites, responses: *ok }
+  /team/invite/accept:
+    post: { operationId: acceptTeamInvite, requestBody: *payload, responses: *ok }
+  /team/invite/decline:
+    post: { operationId: declineTeamInvite, requestBody: *payload, responses: *ok }
+  /team/invite/{id}:
+    parameters: *id
+    delete: { operationId: deleteTeamInvite, responses: *ok }
+  /team/invite/{id}/resend:
+    parameters: *id
+    post: { operationId: resendTeamInvite, requestBody: *payload, responses: *ok }
+  /team/invite/{id}/regenerate:
+    parameters: *id
+    post: { operationId: regenerateTeamInvite, requestBody: *payload, responses: *ok }
+  /team/members/{id}:
+    parameters: *id
+    get: { operationId: getTeamMembers, description: GET takes the owner user ID, responses: *ok }
+    delete: { operationId: deleteTeamMember, responses: *ok }
+  /delegated-to-me/{id}:
+    parameters: *id
+    get: { operationId: getDelegatedTasks, responses: *ok }
+  /delegation-status/{id}:
+    parameters: *id
+    put: { operationId: updateDelegationStatus, requestBody: *payload, responses: *ok }
+  /delegation-notes:
+    post: { operationId: createDelegationNote, requestBody: *payload, responses: *ok }
+  /account/{id}:
+    parameters: *id
+    delete: { operationId: deleteAccount, requestBody: *payload, responses: *ok }
+  /subscription/{id}:
+    parameters: *id
+    get: { operationId: getSubscription, responses: *ok }
+  /webhooks/revenuecat:
+    post: { operationId: revenuecatWebhook, requestBody: *payload, responses: *ok }
+  /errors/report:
+    post: { operationId: reportClientError, requestBody: *payload, responses: *ok }
+  /notifications/test:
+    post: { operationId: testNotifications, requestBody: *payload, responses: *ok }
+  /notifications/test/escalating:
+    post: { operationId: testEscalatingNotification, responses: *ok }
+  /notifications/test/morning-kickoff:
+    post: { operationId: testMorningKickoff, responses: *ok }
+  /notifications/test/streak-saver:
+    post: { operationId: testStreakSaver, responses: *ok }
+  /voice-usage/{id}:
+    parameters: *id
+    get: { operationId: getVoiceUsage, responses: *ok }
+  /debug/voice-check:
+    get: { operationId: checkVoiceConfiguration, responses: *ok }
+  /transcribe:
+    post:
+      operationId: transcribeAudio
+      requestBody:
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/AudioInput" }
+      responses: *ok
+  /connector-keys:
+    get: { operationId: getConnectorKeys, responses: *ok }
+    post: { operationId: createConnectorKey, requestBody: *payload, responses: *ok }
+  /connector-keys/{id}:
+    parameters: *id
+    delete: { operationId: revokeConnectorKey, responses: *ok }
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+components:
+  schemas:
+    AudioInput:
+      type: object
+      properties:
+        audio: { type: string, format: binary }
+        duration: { type: string }
+    LegacyPayload:
+      description: Existing app payload; legacy handlers retain their field validation and response envelopes.
+      type: object
+      additionalProperties: true
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+

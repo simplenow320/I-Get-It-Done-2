@@ -1,91 +1,26 @@
-entrypoint = "README.md"
-modules = ["nodejs-22", "python-3.11", "postgresql-16"]
-
-[nix]
-channel = "stable-24_05"
-packages = ["poppler_utils", "tesseract", "imagemagick"]
+modules = ["nodejs-24"]
 
 [deployment]
-deploymentTarget = "cloudrun"
-build = ["sh", "-c", "npm run expo:static:build && npm run server:build"]
-run = ["npm", "run", "server:prod"]
+router = "application"
+deploymentTarget = "autoscale"
 
-[[ports]]
-localPort = 5000
-externalPort = 5000
-
-[[ports]]
-localPort = 5599
-externalPort = 3002
-
-[[ports]]
-localPort = 5603
-externalPort = 3003
-
-[[ports]]
-localPort = 5604
-externalPort = 4200
-
-[[ports]]
-localPort = 8081
-externalPort = 80
-
-[[ports]]
-localPort = 8082
-externalPort = 3001
-
-[env]
-PORT = "5000"
-
-[agent]
-stack = "EXPO"
-integrations = ["javascript_database:1.0.0", "stripe:2.0.0"]
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
 
 [workflows]
 runButton = "Project"
 
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
+[agent]
+stack = "PNPM_WORKSPACE"
+expertMode = true
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start dev servers"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Admin dashboard"
-
-[[workflows.workflow]]
-name = "Start dev servers"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run all:dev"
-waitForPort = 8081
-ensurePreviewReachable = "/status"
-
-[[workflows.workflow]]
-name = "Admin dashboard"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd admin && CI=1 NUXT_TELEMETRY_DISABLED=1 npm run dev -- --host 0.0.0.0 --port 5000"
-waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
 
 [userenv]
 
 [userenv.shared]
 EXPO_PUBLIC_SUPABASE_URL = "${SUPABASE_URL}"
 EXPO_PUBLIC_SUPABASE_ANON_KEY = "${SUPABASE_ANON_KEY}"
-
-[postMerge]
-path = "scripts/post-merge.sh"
-timeoutMs = 180000
-
